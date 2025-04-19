@@ -10,26 +10,64 @@ document.getElementById("laden").addEventListener("click", function() {
             const div = document.getElementById("termine");
             div.innerHTML = "";
             if (data.length === 0) {
-                div.innerHTML = "<div class='alert alert-info'>Keine Termine gefunden.</div>";
+                div.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Keine Termine für dieses Datum gefunden.
+                    </div>`;
                 return;
             }
-            let html = "<div class='list-group'>";
+
+            // Sortiere nach Zeit
+            data.sort((a, b) => {
+                const timeA = a.zeit.split(" - ")[0];
+                const timeB = b.zeit.split(" - ")[0];
+                return timeA.localeCompare(timeB);
+            });
+
+            let html = "";
             data.forEach(t => {
                 html += `
-                <div class="list-group-item">
-                    <strong>Zeit:</strong> ${t.zeit}<br>
-                    <strong>Kunde:</strong> ${t.kunde ? t.kunde : "-"}<br>
-                    <strong>Kunden-E-Mail:</strong> ${t.kunde_email ? t.kunde_email : "-"}<br>
-                    <strong>Firma:</strong> ${t.firma}<br>
-                    <strong>Masseur:</strong> ${t.masseur}<br>
-                    <strong>Masseur-E-Mail:</strong> ${t.masseur_email ? t.masseur_email : "-"}
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="time-badge">
+                                <i class="bi bi-clock"></i> ${t.zeit}
+                            </span>
+                            <span class="badge bg-primary">
+                                <i class="bi bi-building"></i> ${t.firma}
+                            </span>
+                        </div>
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <h5 class="card-subtitle mb-2">
+                                    <i class="bi bi-person"></i> Kunde
+                                </h5>
+                                <p class="card-text">
+                                    ${t.kunde ? t.kunde : "-"}<br>
+                                    ${t.kunde_email ? `<small class="text-muted"><i class="bi bi-envelope"></i> ${t.kunde_email}</small>` : ""}
+                                </p>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <h5 class="card-subtitle mb-2">
+                                    <i class="bi bi-person-badge"></i> Masseur
+                                </h5>
+                                <p class="card-text">
+                                    ${t.masseur}<br>
+                                    ${t.masseur_email ? `<small class="text-muted"><i class="bi bi-envelope"></i> ${t.masseur_email}</small>` : ""}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>`;
             });
-            html += "</div>";
             div.innerHTML = html;
         })
         .catch(err => {
-            document.getElementById("termine").innerHTML =
-                "<div class='alert alert-danger'>Fehler beim Laden der Termine.</div>";
+            document.getElementById("termine").innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> Fehler beim Laden der Termine.
+                </div>`;
         });
 });
