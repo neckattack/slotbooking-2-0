@@ -11,8 +11,10 @@ document.getElementById("laden").addEventListener("click", function() {
             div.innerHTML = "";
             if (data.length === 0) {
                 div.innerHTML = `
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i> Keine Termine für dieses Datum gefunden.
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> Keine Termine für dieses Datum gefunden.
+                        </div>
                     </div>`;
                 return;
             }
@@ -27,35 +29,42 @@ document.getElementById("laden").addEventListener("click", function() {
             let html = "";
             data.forEach(t => {
                 html += `
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <span class="time-badge">
-                                <i class="bi bi-clock"></i> ${t.zeit}
-                            </span>
-                            <span class="badge bg-primary">
-                                <i class="bi bi-building"></i> ${t.firma}
-                            </span>
+                <div class="col">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-header bg-white">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="time-badge">
+                                    <i class="bi bi-clock"></i> ${t.zeit}
+                                </span>
+                                <span class="badge bg-primary">
+                                    <i class="bi bi-building"></i> ${t.firma}
+                                </span>
+                            </div>
                         </div>
-                        
-                        <div class="row g-3">
-                            <div class="col-md-6">
+                        <div class="card-body">
+                            <div class="mb-3">
                                 <h5 class="card-subtitle mb-2">
                                     <i class="bi bi-person"></i> Kunde
                                 </h5>
                                 <p class="card-text">
-                                    ${t.kunde ? t.kunde : "-"}<br>
-                                    ${t.kunde_email ? `<small class="text-muted"><i class="bi bi-envelope"></i> ${t.kunde_email}</small>` : ""}
+                                    ${t.kunde ? `<strong>${t.kunde}</strong>` : "-"}<br>
+                                    ${t.kunde_email ? `
+                                        <a href="mailto:${t.kunde_email}" class="email-link">
+                                            <i class="bi bi-envelope"></i> ${t.kunde_email}
+                                        </a>` : ""}
                                 </p>
                             </div>
                             
-                            <div class="col-md-6">
+                            <div>
                                 <h5 class="card-subtitle mb-2">
                                     <i class="bi bi-person-badge"></i> Masseur
                                 </h5>
                                 <p class="card-text">
-                                    ${t.masseur}<br>
-                                    ${t.masseur_email ? `<small class="text-muted"><i class="bi bi-envelope"></i> ${t.masseur_email}</small>` : ""}
+                                    <strong>${t.masseur}</strong><br>
+                                    ${t.masseur_email ? `
+                                        <a href="mailto:${t.masseur_email}" class="email-link">
+                                            <i class="bi bi-envelope"></i> ${t.masseur_email}
+                                        </a>` : ""}
                                 </p>
                             </div>
                         </div>
@@ -66,8 +75,10 @@ document.getElementById("laden").addEventListener("click", function() {
         })
         .catch(err => {
             document.getElementById("termine").innerHTML = `
-                <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-triangle"></i> Fehler beim Laden der Termine.
+                <div class="col-12">
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Fehler beim Laden der Termine.
+                    </div>
                 </div>`;
         });
 });
