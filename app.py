@@ -119,6 +119,7 @@ def delete_termine():
                 app.logger.warning(f"Ungültige Termin-Daten (werden übersprungen): {termin}")
                 continue
 
+            app.logger.info(f"Lösche Termin: firma={firma}, time={time}, datum={datum}")
             cursor.execute(sql_select, (datum, firma, time))
             result = cursor.fetchone()
 
