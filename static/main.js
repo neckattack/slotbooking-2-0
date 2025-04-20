@@ -156,12 +156,13 @@ document.getElementById("laden").addEventListener("click", function() {
 
 // Event Listener für den Cronjob-Button
 document.getElementById("cronjob").addEventListener("click", function() {
-    // Setze das Datum auf übermorgen
-    const dayAfterTomorrow = new Date();
-    dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
-    const datum = dayAfterTomorrow.toISOString().split('T')[0];
+    const datum = document.getElementById("cronjob_datum").value;
+    if (!datum) {
+        alert("Bitte ein Datum für den Cronjob wählen!");
+        return;
+    }
     
-    // Setze das Datum im Input-Feld
+    // Setze das normale Datum auch auf das Cronjob-Datum für die Anzeige
     document.getElementById("datum").value = datum;
     
     // Zeige die Vorschau an
