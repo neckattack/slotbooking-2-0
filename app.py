@@ -93,7 +93,7 @@ def delete_termine():
         return jsonify({"error": "Ungültiges Format"}), 400
 
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(buffered=True)  # Verwende buffered Cursor
     
     try:
         # Hole alle Zeitslots für das gegebene Datum und Firma
@@ -125,7 +125,9 @@ def delete_termine():
             if firm_date_key not in processed_firms:
                 # Suche alle Zeitslots für diese Firma an diesem Tag
                 cursor.execute(sql_select, (datum, firma))
-                slots = {row['time_start']: row['id'] for row in cursor.fetchall()}
+                results = cursor.fetchall()
+                # Erstelle ein Dictionary mit den Zeitslots
+                slots = {row[1]: row[0] for row in results}  # time_start: id
                 processed_firms.add(firm_date_key)
             
             # Wenn wir einen passenden Slot finden, lösche ihn
