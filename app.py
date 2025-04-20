@@ -100,15 +100,15 @@ def delete_termine():
     
     try:
         # Hole und lösche Zeitslots für das gegebene Datum, die Firma und die exakte Zeit
-        sql_select = """
-        SELECT t.id 
-        FROM times t
-        JOIN dates d ON t.date_id = d.id
-        JOIN clients c ON d.client_id = c.id
-        WHERE d.date = %s 
-        AND c.name = %s
-        AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %s
-        """
+        sql_select = (
+            "SELECT t.id "
+            "FROM times t "
+            "JOIN dates d ON t.date_id = d.id "
+            "JOIN clients c ON d.client_id = c.id "
+            "WHERE d.date = %s "
+            "AND c.name = %s "
+            "AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %s"
+        )
         
         sql_delete = "DELETE FROM times WHERE id = %s"
         deleted_count = 0
