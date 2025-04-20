@@ -11,6 +11,10 @@ app = Flask(__name__)
 import logging
 app.logger.setLevel(logging.INFO)
 
+# Logge die Version des MySQL-Connectors
+import mysql.connector
+app.logger.info(f"mysql-connector-python Version: {mysql.connector.__version__}")
+
 def get_db_connection():
     return mysql.connector.connect(
         host=os.environ.get("DB_HOST"),
@@ -100,28 +104,33 @@ def delete_termine():
     
     try:
         # Hole und lösche Zeitslots für das gegebene Datum, die Firma und die exakte Zeit
-        sql_select = (
+        # Teste alternative Parameter-Syntax (named style)
+        sql_select_named = (
             "SELECT t.id "
             "FROM times t "
             "JOIN dates d ON t.date_id = d.id "
             "JOIN clients c ON d.client_id = c.id "
-            "WHERE d.date = %s "
-            "AND c.name = %s "
-            "AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %s"
+            "WHERE d.date = %(datum)s "
+            "AND c.name = %(firma)s "
+            "AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %(zeit)s"
         )
-        app.logger.info(f"SQL-Statement: {sql_select}")
+        app.logger.info(f"SQL-Statement (named): {sql_select_named}")
 
-        # Test: Minimaler Query mit festen Werten
+        # Test: Minimaler Query mit festen Werten (named)
         try:
-            test_sql = "SELECT t.id FROM times t JOIN dates d ON t.date_id = d.id JOIN clients c ON d.client_id = c.id WHERE d.date = %s AND c.name = %s AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %s"
-            test_params = ("2025-04-16", "BMDV Bundesministerium für Digitales und Verkehr", "10:00:00")
-            app.logger.info(f"Test-Minimal-SQL: {test_sql}")
-            app.logger.info(f"Test-Minimal-Params: {test_params}")
-            cursor.execute(test_sql, test_params)
-            test_result = cursor.fetchone()
-            app.logger.info(f"Test-Minimal-Result: {test_result}")
+            test_sql_named = "SELECT t.id FROM times t JOIN dates d ON t.date_id = d.id JOIN clients c ON d.client_id = c.id WHERE d.date = %(datum)s AND c.name = %(firma)s AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %(zeit)s"
+            test_params_named = {"datum": "2025-04-16", "firma": "BMDV Bundesministerium für Digitales und Verkehr", "zeit": "10:00:00"}
+            app.logger.info(f"Test-Minimal-SQL (named): {test_sql_named}")
+            app.logger.info(f"Test-Minimal-Params (named): {test_params_named}")
+            cursor.execute(test_sql_named, test_params_named)
+            test_result_named = cursor.fetchone()
+            app.logger.info(f"Test-Minimal-Result (named): {test_result_named}")
         except Exception as e:
-            app.logger.error(f"Test-Minimal-Query-Fehler: {e}")
+            app.logger.error(f"Test-Minimal-Query-Fehler (named): {e}")
+
+        # Für die eigentliche Schleife: auch named style verwenden
+        sql_delete = "DELETE FROM times WHERE id = %s"
+        deleted_count = 0
         
         sql_delete = "DELETE FROM times WHERE id = %s"
         deleted_count = 0
