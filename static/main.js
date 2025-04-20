@@ -1,9 +1,5 @@
-document.getElementById("laden").addEventListener("click", function() {
-    const datum = document.getElementById("datum").value;
-    if (!datum) {
-        alert("Bitte ein Datum wählen!");
-        return;
-    }
+// Hilfsfunktion zum Laden und Anzeigen der Termine
+function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
     fetch(`/api/termine?datum=${datum}`)
         .then(response => response.json())
         .then(data => {
@@ -45,8 +41,29 @@ document.getElementById("laden").addEventListener("click", function() {
             const sortedCompanies = Object.keys(groupedByCompany).sort();
 
             let html = "";
+            if (isCronjobPreview) {
+                html += `
+                    <div class="alert alert-warning mb-4">
+                        <h4 class="alert-heading">
+                            <i class="bi bi-exclamation-triangle"></i> Cronjob Vorschau
+                        </h4>
+                        <p class="mb-0">
+                            Rot markierte Termine würden gelöscht werden (freie Termine vor dem ersten besetzten Termin).
+                        </p>
+                    </div>`;
+            }
+
             sortedCompanies.forEach(firma => {
                 const { masseur, masseur_email, termine } = groupedByCompany[firma];
+                
+                // Finde den ersten besetzten Termin
+                let firstBookedSlot = null;
+                for (const time of allTimeSlots) {
+                    if (termine[time]) {
+                        firstBookedSlot = time;
+                        break;
+                    }
+                }
                 
                 html += `
                 <div class="company-section">
@@ -79,15 +96,17 @@ document.getElementById("laden").addEventListener("click", function() {
                 allTimeSlots.forEach(time => {
                     const termin = termine[time];
                     const isFree = !termin;
+                    const shouldDelete = isCronjobPreview && isFree && (!firstBookedSlot || time < firstBookedSlot);
                     
                     html += `
-                        <tr class="${isFree ? 'slot-free' : 'slot-booked'}">
+                        <tr class="${shouldDelete ? 'slot-to-delete' : (isFree ? 'slot-free' : 'slot-booked')}">
                             <td class="time-column">
                                 <i class="bi bi-clock"></i> ${time}
                             </td>
                             <td>
                                 ${isFree ? `
-                                    <i class="bi bi-calendar-check"></i> FREI
+                                    <i class="bi bi-calendar-check"></i> 
+                                    ${shouldDelete ? 'WIRD GELÖSCHT' : 'FREI'}
                                 ` : `
                                     <div>
                                         <strong>
@@ -120,4 +139,28 @@ document.getElementById("laden").addEventListener("click", function() {
                     <i class="bi bi-exclamation-triangle"></i> Fehler beim Laden der Termine.
                 </div>`;
         });
+}
+
+// Event Listener für den normalen "Termine anzeigen" Button
+document.getElementById("laden").addEventListener("click", function() {
+    const datum = document.getElementById("datum").value;
+    if (!datum) {
+        alert("Bitte ein Datum wählen!");
+        return;
+    }
+    loadAndDisplayAppointments(datum, false);
+});
+
+// Event Listener für den Cronjob-Button
+document.getElementById("cronjob").addEventListener("click", function() {
+    // Setze das Datum auf übermorgen
+    const dayAfterTomorrow = new Date();
+    dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
+    const datum = dayAfterTomorrow.toISOString().split('T')[0];
+    
+    // Setze das Datum im Input-Feld
+    document.getElementById("datum").value = datum;
+    
+    // Zeige die Vorschau an
+    loadAndDisplayAppointments(datum, true);
 });

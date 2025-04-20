@@ -46,6 +46,9 @@
         .slot-booked {
             background-color: #fff3cd !important;
         }
+        .slot-to-delete {
+            background-color: #f8d7da !important;
+        }
         .time-column {
             width: 120px;
             white-space: nowrap;
@@ -76,6 +79,11 @@
                             <div class="col-auto">
                                 <button id="laden" class="btn btn-primary btn-lg">
                                     <i class="bi bi-search"></i> Termine anzeigen
+                                </button>
+                            </div>
+                            <div class="col-auto">
+                                <button id="cronjob" class="btn btn-warning btn-lg">
+                                    <i class="bi bi-clock-history"></i> Cronjob - Termine übermorgen löschen
                                 </button>
                             </div>
                         </div>
