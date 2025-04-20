@@ -151,8 +151,8 @@ def delete_termine():
             datum = termin.get("datum")
 
             # Logge Typen und Werte der Parameter
-            param_tuple = (datum, firma, time)
-            app.logger.info(f"Parameter-Typ: {type(param_tuple)}, Länge: {len(param_tuple)}")
+            param_dict = {"datum": datum, "firma": firma, "zeit": time}
+            app.logger.info(f"Parameter-Typ: {type(param_dict)}, Keys: {list(param_dict.keys())}")
             app.logger.info(f"Parameter-Werte: datum={datum}, firma={firma}, time={time}")
 
             if not all([firma, time, datum]):
@@ -161,7 +161,7 @@ def delete_termine():
 
             app.logger.info(f"Lösche Termin: firma={firma}, time={time}, datum={datum}")
             try:
-                cursor.execute(sql_select, param_tuple)
+                cursor.execute(sql_select_named, param_dict)
                 result = cursor.fetchone()
             except Exception as e:
                 app.logger.error(f"SQL-Fehler bei execute: {e}")
