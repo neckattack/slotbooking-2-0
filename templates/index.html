@@ -24,19 +24,36 @@
         .email-link {
             color: #666;
             text-decoration: none;
+            font-size: 0.9em;
         }
         .email-link:hover {
             color: #0d6efd;
         }
         .company-header {
-            margin: 2rem 0 1rem;
-            padding: 0.5rem;
             background: #f8f9fa;
-            border-radius: 0.5rem;
             border-left: 5px solid #0d6efd;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 0.5rem;
         }
-        .company-header:first-child {
-            margin-top: 0;
+        .company-section {
+            margin-bottom: 2rem;
+            break-inside: avoid;
+        }
+        .slot-free {
+            background-color: #d1e7dd !important;
+        }
+        .slot-booked {
+            background-color: #fff3cd !important;
+        }
+        .time-column {
+            width: 120px;
+            white-space: nowrap;
+        }
+        @media print {
+            .company-section {
+                page-break-inside: avoid;
+            }
         }
     </style>
 </head>

@@ -11,101 +11,113 @@ document.getElementById("laden").addEventListener("click", function() {
             div.innerHTML = "";
             if (data.length === 0) {
                 div.innerHTML = `
-                    <div class="col-12">
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle"></i> Keine Termine für dieses Datum gefunden.
-                        </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Keine Termine für dieses Datum gefunden.
                     </div>`;
                 return;
             }
 
-            // Gruppiere nach Firma
+            // Gruppiere nach Firma und Masseur
             const groupedByCompany = {};
             data.forEach(t => {
                 if (!groupedByCompany[t.firma]) {
-                    groupedByCompany[t.firma] = [];
+                    groupedByCompany[t.firma] = {
+                        masseur: t.masseur,
+                        masseur_email: t.masseur_email,
+                        termine: {}
+                    };
                 }
-                groupedByCompany[t.firma].push(t);
+                // Speichere den Termin mit der Startzeit als Schlüssel
+                const startTime = t.zeit.split(" - ")[0];
+                groupedByCompany[t.firma].termine[startTime] = t;
             });
+
+            // Generiere alle möglichen Zeitslots (von 10:00 bis 18:00 im 20-Minuten-Takt)
+            const allTimeSlots = [];
+            for (let hour = 10; hour <= 17; hour++) {
+                for (let minute = 0; minute < 60; minute += 20) {
+                    const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
+                    allTimeSlots.push(time);
+                }
+            }
 
             // Sortiere Firmen alphabetisch
             const sortedCompanies = Object.keys(groupedByCompany).sort();
 
             let html = "";
             sortedCompanies.forEach(firma => {
-                // Sortiere Termine innerhalb der Firma nach Zeit
-                groupedByCompany[firma].sort((a, b) => {
-                    const timeA = a.zeit.split(" - ")[0];
-                    const timeB = b.zeit.split(" - ")[0];
-                    return timeA.localeCompare(timeB);
-                });
-
-                // Füge Firmen-Überschrift hinzu
+                const { masseur, masseur_email, termine } = groupedByCompany[firma];
+                
                 html += `
-                <div class="company-header">
-                    <h3 class="mb-0">
-                        <i class="bi bi-building"></i> ${firma}
-                    </h3>
-                </div>
-                <div class="row row-cols-1 row-cols-md-2 g-4 mb-4">`;
-
-                // Füge Termine für diese Firma hinzu
-                groupedByCompany[firma].forEach(t => {
-                    html += `
-                    <div class="col">
-                        <div class="card h-100 shadow-sm">
-                            <div class="card-header bg-white">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span class="time-badge">
-                                        <i class="bi bi-clock"></i> ${t.zeit}
-                                    </span>
-                                    <span class="badge bg-primary">
-                                        <i class="bi bi-building"></i> ${t.firma}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <h5 class="card-subtitle mb-2">
-                                        <i class="bi bi-person"></i> Kunde
-                                    </h5>
-                                    <p class="card-text">
-                                        ${t.kunde ? `<strong>${t.kunde}</strong>` : "-"}<br>
-                                        ${t.kunde_email ? `
-                                            <a href="mailto:${t.kunde_email}" class="email-link">
-                                                <i class="bi bi-envelope"></i> ${t.kunde_email}
-                                            </a>` : ""}
-                                    </p>
-                                </div>
-                                
-                                <div>
-                                    <h5 class="card-subtitle mb-2">
-                                        <i class="bi bi-person-badge"></i> Masseur
-                                    </h5>
-                                    <p class="card-text">
-                                        <strong>${t.masseur}</strong><br>
-                                        ${t.masseur_email ? `
-                                            <a href="mailto:${t.masseur_email}" class="email-link">
-                                                <i class="bi bi-envelope"></i> ${t.masseur_email}
-                                            </a>` : ""}
-                                    </p>
-                                </div>
-                            </div>
+                <div class="company-section">
+                    <div class="company-header">
+                        <h3 class="mb-2">
+                            <i class="bi bi-building"></i> ${firma}
+                        </h3>
+                        <div>
+                            <i class="bi bi-person-badge"></i> <strong>${masseur}</strong>
+                            ${masseur_email ? `
+                                <br>
+                                <a href="mailto:${masseur_email}" class="email-link">
+                                    <i class="bi bi-envelope"></i> ${masseur_email}
+                                </a>
+                            ` : ''}
                         </div>
-                    </div>`;
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="time-column">Zeit</th>
+                                    <th>Status / Kunde</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+
+                // Füge alle Zeitslots hinzu
+                allTimeSlots.forEach(time => {
+                    const termin = termine[time];
+                    const isFree = !termin;
+                    
+                    html += `
+                        <tr class="${isFree ? 'slot-free' : 'slot-booked'}">
+                            <td class="time-column">
+                                <i class="bi bi-clock"></i> ${time}
+                            </td>
+                            <td>
+                                ${isFree ? `
+                                    <i class="bi bi-calendar-check"></i> FREI
+                                ` : `
+                                    <div>
+                                        <strong>
+                                            <i class="bi bi-person"></i> ${termin.kunde || '-'}
+                                        </strong>
+                                        ${termin.kunde_email ? `
+                                            <br>
+                                            <a href="mailto:${termin.kunde_email}" class="email-link">
+                                                <i class="bi bi-envelope"></i> ${termin.kunde_email}
+                                            </a>
+                                        ` : ''}
+                                    </div>
+                                `}
+                            </td>
+                        </tr>`;
                 });
 
-                html += `</div>`;
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
             });
             
             div.innerHTML = html;
         })
         .catch(err => {
             document.getElementById("termine").innerHTML = `
-                <div class="col-12">
-                    <div class="alert alert-danger">
-                        <i class="bi bi-exclamation-triangle"></i> Fehler beim Laden der Termine.
-                    </div>
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> Fehler beim Laden der Termine.
                 </div>`;
         });
 });
