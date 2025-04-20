@@ -10,11 +10,14 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle"></i> Keine Termine für dieses Datum gefunden.
                     </div>`;
+                document.getElementById("delete_confirm").style.display = "none";
                 return;
             }
 
             // Gruppiere nach Firma und Masseur
             const groupedByCompany = {};
+            let hasTermineToDelete = false;
+
             data.forEach(t => {
                 if (!groupedByCompany[t.firma]) {
                     groupedByCompany[t.firma] = {
@@ -52,6 +55,9 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                         </p>
                     </div>`;
             }
+
+            // Sammle alle zu löschenden Termine
+            const termineToDelete = [];
 
             sortedCompanies.forEach(firma => {
                 const { masseur, masseur_email, termine } = groupedByCompany[firma];
@@ -98,6 +104,15 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                     const isFree = !termin;
                     const shouldDelete = isCronjobPreview && isFree && (!firstBookedSlot || time < firstBookedSlot);
                     
+                    if (shouldDelete) {
+                        hasTermineToDelete = true;
+                        termineToDelete.push({
+                            firma,
+                            time,
+                            id: termin ? termin.id : null
+                        });
+                    }
+                    
                     let rowClass = isFree ? 'free-slot' : 'booked-slot';
                     if (shouldDelete) rowClass = 'delete-slot';
                     
@@ -135,12 +150,23 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
             });
             
             div.innerHTML = html;
+
+            // Zeige oder verstecke den Löschen-Button
+            const deleteButton = document.getElementById("delete_confirm");
+            if (isCronjobPreview && hasTermineToDelete) {
+                deleteButton.style.display = "block";
+                // Speichere die zu löschenden Termine am Button
+                deleteButton.setAttribute('data-termine', JSON.stringify(termineToDelete));
+            } else {
+                deleteButton.style.display = "none";
+            }
         })
         .catch(err => {
             document.getElementById("termine").innerHTML = `
                 <div class="alert alert-danger">
                     <i class="bi bi-exclamation-triangle"></i> Fehler beim Laden der Termine.
                 </div>`;
+            document.getElementById("delete_confirm").style.display = "none";
         });
 }
 
@@ -167,4 +193,33 @@ document.getElementById("cronjob").addEventListener("click", function() {
     
     // Zeige die Vorschau an
     loadAndDisplayAppointments(datum, true);
+});
+
+// Event Listener für den Löschen bestätigen Button
+document.getElementById("delete_confirm").addEventListener("click", function() {
+    const termineToDelete = JSON.parse(this.getAttribute('data-termine') || '[]');
+    if (!termineToDelete.length) {
+        alert("Keine Termine zum Löschen gefunden!");
+        return;
+    }
+
+    if (!confirm(`Möchten Sie wirklich ${termineToDelete.length} freie Termine löschen?`)) {
+        return;
+    }
+
+    // Hier würde der API-Call zum Löschen der Termine erfolgen
+    // Beispiel:
+    // fetch('/api/termine/delete', {
+    //     method: 'POST',
+    //     headers: {
+    //         'Content-Type': 'application/json',
+    //     },
+    //     body: JSON.stringify(termineToDelete)
+    // })
+    
+    alert("Die ausgewählten Termine würden jetzt gelöscht werden.\nImplementiere hier den API-Call zum Löschen der Termine.");
+    
+    // Nach dem Löschen die Ansicht aktualisieren
+    const datum = document.getElementById("datum").value;
+    loadAndDisplayAppointments(datum, false);
 });
