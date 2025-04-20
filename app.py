@@ -8,6 +8,9 @@ load_dotenv()
 
 app = Flask(__name__)
 
+import logging
+app.logger.setLevel(logging.INFO)
+
 def get_db_connection():
     return mysql.connector.connect(
         host=os.environ.get("DB_HOST"),
