@@ -22,12 +22,13 @@
             border-radius: 0.25rem;
         }
         .email-link {
-            color: #666;
+            color: inherit;
             text-decoration: none;
             font-size: 0.9em;
         }
         .email-link:hover {
             color: #0d6efd;
+            text-decoration: underline;
         }
         .company-header {
             background: #f8f9fa;
@@ -41,17 +42,27 @@
             break-inside: avoid;
         }
         .slot-free {
-            background-color: #d1e7dd !important;
+            background-color: #198754 !important;
+            color: white !important;
         }
         .slot-booked {
-            background-color: #fff3cd !important;
+            background-color: #ffc107 !important;
+            color: black !important;
         }
         .slot-to-delete {
-            background-color: #f8d7da !important;
+            background-color: #dc3545 !important;
+            color: white !important;
         }
         .time-column {
             width: 120px;
             white-space: nowrap;
+            background-color: #f8f9fa !important;
+        }
+        .table {
+            border: 1px solid #dee2e6;
+        }
+        .table th {
+            background-color: #f8f9fa;
         }
         @media print {
             .company-section {
@@ -82,7 +93,7 @@
                                 </button>
                             </div>
                             <div class="col-auto">
-                                <button id="cronjob" class="btn btn-warning btn-lg">
+                                <button id="cronjob" class="btn btn-danger btn-lg">
                                     <i class="bi bi-clock-history"></i> Cronjob - Termine übermorgen löschen
                                 </button>
                             </div>
