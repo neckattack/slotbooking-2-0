@@ -98,7 +98,7 @@ def delete_termine():
     try:
         # Hole alle Zeitslots für das gegebene Datum und Firma
         sql_select = """
-        SELECT t.id, t.time_start
+        SELECT t.id, DATE_FORMAT(t.time_start, '%H:%i:%s') as time_start
         FROM times t
         JOIN dates d ON t.date_id = d.id
         JOIN clients c ON d.client_id = c.id
@@ -125,7 +125,7 @@ def delete_termine():
             if firm_date_key not in processed_firms:
                 # Suche alle Zeitslots für diese Firma an diesem Tag
                 cursor.execute(sql_select, (datum, firma))
-                slots = {slot[1].strftime("%H:%M:%S"): slot[0] for slot in cursor.fetchall()}
+                slots = {row['time_start']: row['id'] for row in cursor.fetchall()}
                 processed_firms.add(firm_date_key)
             
             # Wenn wir einen passenden Slot finden, lösche ihn
@@ -141,6 +141,7 @@ def delete_termine():
         
     except Exception as e:
         conn.rollback()
+        app.logger.error(f"Fehler beim Löschen der Termine: {str(e)}")
         return jsonify({"error": str(e)}), 500
         
     finally:
