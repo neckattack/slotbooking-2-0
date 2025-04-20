@@ -109,6 +109,19 @@ def delete_termine():
             "AND c.name = %s "
             "AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %s"
         )
+        app.logger.info(f"SQL-Statement: {sql_select}")
+
+        # Test: Minimaler Query mit festen Werten
+        try:
+            test_sql = "SELECT t.id FROM times t JOIN dates d ON t.date_id = d.id JOIN clients c ON d.client_id = c.id WHERE d.date = %s AND c.name = %s AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %s"
+            test_params = ("2025-04-16", "BMDV Bundesministerium für Digitales und Verkehr", "10:00:00")
+            app.logger.info(f"Test-Minimal-SQL: {test_sql}")
+            app.logger.info(f"Test-Minimal-Params: {test_params}")
+            cursor.execute(test_sql, test_params)
+            test_result = cursor.fetchone()
+            app.logger.info(f"Test-Minimal-Result: {test_result}")
+        except Exception as e:
+            app.logger.error(f"Test-Minimal-Query-Fehler: {e}")
         
         sql_delete = "DELETE FROM times WHERE id = %s"
         deleted_count = 0
