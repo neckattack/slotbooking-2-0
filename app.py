@@ -93,46 +93,37 @@ def delete_termine():
         return jsonify({"error": "Ungültiges Format"}), 400
 
     conn = get_db_connection()
-    cursor = conn.cursor(buffered=True)  # Verwende buffered Cursor
+    cursor = conn.cursor()
     
     try:
-        # Hole alle Zeitslots für das gegebene Datum und Firma
+        # Hole und lösche Zeitslots für das gegebene Datum, die Firma und die exakte Zeit
         sql_select = """
-        SELECT t.id, DATE_FORMAT(t.time_start, '%H:%i:%s') as time_start
+        SELECT t.id 
         FROM times t
         JOIN dates d ON t.date_id = d.id
         JOIN clients c ON d.client_id = c.id
-        WHERE d.date = %s AND c.name = %s
-        ORDER BY t.time_start
+        WHERE d.date = %s 
+        AND c.name = %s
+        AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %s
         """
         
-        # Lösche die Zeitslots
         sql_delete = "DELETE FROM times WHERE id = %s"
-        
         deleted_count = 0
-        processed_firms = set()  # Vermeide doppelte Abfragen für die gleiche Firma
         
         for termin in termine:
             firma = termin.get("firma")
             time = termin.get("time")
-            datum = termin.get("datum")  # Datum aus dem Frontend
+            datum = termin.get("datum")
             
             if not all([firma, time, datum]):
                 continue
+                
+            # Suche und lösche den passenden Zeitslot
+            cursor.execute(sql_select, (datum, firma, time))
+            result = cursor.fetchone()
             
-            # Vermeide doppelte Abfragen für die gleiche Firma am gleichen Tag
-            firm_date_key = f"{firma}_{datum}"
-            if firm_date_key not in processed_firms:
-                # Suche alle Zeitslots für diese Firma an diesem Tag
-                cursor.execute(sql_select, (datum, firma))
-                results = cursor.fetchall()
-                # Erstelle ein Dictionary mit den Zeitslots
-                slots = {row[1]: row[0] for row in results}  # time_start: id
-                processed_firms.add(firm_date_key)
-            
-            # Wenn wir einen passenden Slot finden, lösche ihn
-            if time in slots:
-                cursor.execute(sql_delete, (slots[time],))
+            if result:
+                cursor.execute(sql_delete, (result[0],))
                 deleted_count += 1
         
         conn.commit()
