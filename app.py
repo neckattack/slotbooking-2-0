@@ -96,35 +96,42 @@ def delete_termine():
     cursor = conn.cursor()
     
     try:
-        # Hole alle Zeitslots für das gegebene Datum
+        # Hole alle Zeitslots für das gegebene Datum und Firma
         sql_select = """
-        SELECT t.id, t.time_start, c.name
+        SELECT t.id, t.time_start
         FROM times t
         JOIN dates d ON t.date_id = d.id
         JOIN clients c ON d.client_id = c.id
         WHERE d.date = %s AND c.name = %s
+        ORDER BY t.time_start
         """
         
         # Lösche die Zeitslots
         sql_delete = "DELETE FROM times WHERE id = %s"
         
         deleted_count = 0
+        processed_firms = set()  # Vermeide doppelte Abfragen für die gleiche Firma
+        
         for termin in termine:
             firma = termin.get("firma")
             time = termin.get("time")
-            if not firma or not time:
-                continue
-                
-            # Suche den passenden Zeitslot
-            cursor.execute(sql_select, (datetime.now().strftime("%Y-%m-%d"), firma))
-            slots = cursor.fetchall()
+            datum = termin.get("datum")  # Datum aus dem Frontend
             
-            # Finde den passenden Slot und lösche ihn
-            for slot in slots:
-                if slot[1].strftime("%H:%M:%S") == time:
-                    cursor.execute(sql_delete, (slot[0],))
-                    deleted_count += 1
-                    break
+            if not all([firma, time, datum]):
+                continue
+            
+            # Vermeide doppelte Abfragen für die gleiche Firma am gleichen Tag
+            firm_date_key = f"{firma}_{datum}"
+            if firm_date_key not in processed_firms:
+                # Suche alle Zeitslots für diese Firma an diesem Tag
+                cursor.execute(sql_select, (datum, firma))
+                slots = {slot[1].strftime("%H:%M:%S"): slot[0] for slot in cursor.fetchall()}
+                processed_firms.add(firm_date_key)
+            
+            # Wenn wir einen passenden Slot finden, lösche ihn
+            if time in slots:
+                cursor.execute(sql_delete, (slots[time],))
+                deleted_count += 1
         
         conn.commit()
         return jsonify({

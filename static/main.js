@@ -109,7 +109,7 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                         termineToDelete.push({
                             firma,
                             time,
-                            id: termin ? termin.id : null
+                            datum  // Füge das Datum hinzu
                         });
                     }
                     
@@ -196,7 +196,7 @@ document.getElementById("cronjob").addEventListener("click", function() {
 });
 
 // Event Listener für den Löschen bestätigen Button
-document.getElementById("delete_confirm").addEventListener("click", function() {
+document.getElementById("delete_confirm").addEventListener("click", async function() {
     const termineToDelete = JSON.parse(this.getAttribute('data-termine') || '[]');
     if (!termineToDelete.length) {
         alert("Keine Termine zum Löschen gefunden!");
@@ -207,19 +207,32 @@ document.getElementById("delete_confirm").addEventListener("click", function() {
         return;
     }
 
-    // Hier würde der API-Call zum Löschen der Termine erfolgen
-    // Beispiel:
-    // fetch('/api/termine/delete', {
-    //     method: 'POST',
-    //     headers: {
-    //         'Content-Type': 'application/json',
-    //     },
-    //     body: JSON.stringify(termineToDelete)
-    // })
-    
-    alert("Die ausgewählten Termine würden jetzt gelöscht werden.\nImplementiere hier den API-Call zum Löschen der Termine.");
-    
-    // Nach dem Löschen die Ansicht aktualisieren
-    const datum = document.getElementById("datum").value;
-    loadAndDisplayAppointments(datum, false);
+    try {
+        const response = await fetch('/api/termine/delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(termineToDelete)
+        });
+
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || 'Fehler beim Löschen der Termine');
+        }
+
+        // Erfolgreiche Löschung
+        alert(`${result.deleted_count} Termine wurden erfolgreich gelöscht.`);
+        
+        // Aktualisiere die Ansicht
+        const datum = document.getElementById("datum").value;
+        loadAndDisplayAppointments(datum, false);
+        
+        // Verstecke den Löschen-Button
+        this.style.display = "none";
+        
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
 });
