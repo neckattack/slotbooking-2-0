@@ -113,18 +113,37 @@ def delete_termine():
         sql_delete = "DELETE FROM times WHERE id = %s"
         deleted_count = 0
         
+        # Test-Query mit festen Werten (Debugging)
+        test_params = ("2025-04-16", "BMDV Bundesministerium für Digitales und Verkehr", "10:00:00")
+        app.logger.info(f"Test-Query mit: {test_params}")
+        try:
+            cursor.execute(sql_select, test_params)
+            test_result = cursor.fetchone()
+            app.logger.info(f"Test-Result: {test_result}")
+        except Exception as e:
+            app.logger.error(f"Test-Query-Fehler: {e}")
+
         for termin in termine:
             firma = termin.get("firma")
             time = termin.get("time")
             datum = termin.get("datum")
+
+            # Logge Typen und Werte der Parameter
+            param_tuple = (datum, firma, time)
+            app.logger.info(f"Parameter-Typ: {type(param_tuple)}, Länge: {len(param_tuple)}")
+            app.logger.info(f"Parameter-Werte: datum={datum}, firma={firma}, time={time}")
 
             if not all([firma, time, datum]):
                 app.logger.warning(f"Ungültige Termin-Daten (werden übersprungen): {termin}")
                 continue
 
             app.logger.info(f"Lösche Termin: firma={firma}, time={time}, datum={datum}")
-            cursor.execute(sql_select, (datum, firma, time))
-            result = cursor.fetchone()
+            try:
+                cursor.execute(sql_select, param_tuple)
+                result = cursor.fetchone()
+            except Exception as e:
+                app.logger.error(f"SQL-Fehler bei execute: {e}")
+                continue
 
             if result:
                 cursor.execute(sql_delete, (result[0],))
