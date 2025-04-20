@@ -28,7 +28,7 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                 groupedByCompany[t.firma].termine[startTime] = t;
             });
 
-            // Generiere alle möglichen Zeitslots (von 10:00 bis 18:00 im 20-Minuten-Takt)
+            // Generiere alle möglichen Zeitslots
             const allTimeSlots = [];
             for (let hour = 10; hour <= 17; hour++) {
                 for (let minute = 0; minute < 60; minute += 20) {
@@ -83,8 +83,8 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                     </div>
                     
                     <div class="table-responsive">
-                        <table class="table table-bordered table-hover">
-                            <thead class="table-light">
+                        <table class="table table-bordered">
+                            <thead>
                                 <tr>
                                     <th class="time-column">Zeit</th>
                                     <th>Status / Kunde</th>
@@ -98,8 +98,11 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                     const isFree = !termin;
                     const shouldDelete = isCronjobPreview && isFree && (!firstBookedSlot || time < firstBookedSlot);
                     
+                    let rowClass = isFree ? 'free-slot' : 'booked-slot';
+                    if (shouldDelete) rowClass = 'delete-slot';
+                    
                     html += `
-                        <tr class="${shouldDelete ? 'slot-to-delete' : (isFree ? 'slot-free' : 'slot-booked')}">
+                        <tr class="${rowClass}">
                             <td class="time-column">
                                 <i class="bi bi-clock"></i> ${time}
                             </td>
