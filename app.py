@@ -114,14 +114,14 @@ def delete_termine():
             firma = termin.get("firma")
             time = termin.get("time")
             datum = termin.get("datum")
-            
+
             if not all([firma, time, datum]):
+                app.logger.warning(f"Ungültige Termin-Daten (werden übersprungen): {termin}")
                 continue
-                
-            # Suche und lösche den passenden Zeitslot
+
             cursor.execute(sql_select, (datum, firma, time))
             result = cursor.fetchone()
-            
+
             if result:
                 cursor.execute(sql_delete, (result[0],))
                 deleted_count += 1
