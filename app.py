@@ -165,4 +165,3 @@ def delete_termine():
 
 if __name__ == "__main__":
     app.run(debug=True)
-git status
