@@ -157,7 +157,7 @@ def delete_termine():
             app.logger.info(f"Parameter-Typ: {type(param_dict)}, Keys: {list(param_dict.keys())}")
             app.logger.info(f"Parameter-Werte: datum={datum}, firma={firma}, zeit={zeit_start}")
 
-            if not all([firma, time, datum]):
+            if not all([firma, zeit_start, datum]):
                 app.logger.warning(f"Ungültige Termin-Daten (werden übersprungen): {termin}")
                 continue
 
