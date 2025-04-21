@@ -11,16 +11,24 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                 // --- Freie Termine sammeln und Löschen-Button aktivieren ---
 let freieTermine = [];
 data.forEach(company => {
-    company.slots.forEach(slot => {
-        if (slot.frei) {
+    // Slots nach Zeit sortieren (falls nicht garantiert)
+    const slots = [...company.slots].sort((a, b) => a.time_start.localeCompare(b.time_start));
+    let firstBookedIdx = slots.findIndex(slot => !slot.frei);
+    if (firstBookedIdx === -1) {
+        // Wenn kein Termin belegt ist, lösche KEINEN Slot
+        return;
+    }
+    // Alle freien Slots vor dem ersten belegten Slot sammeln
+    for (let i = 0; i < firstBookedIdx; i++) {
+        if (slots[i].frei) {
             freieTermine.push({
                 firma: company.firma,
                 datum: datum,
-                zeit: slot.time_start,
-                time_id: slot.time_id
+                zeit: slots[i].time_start,
+                time_id: slots[i].time_id
             });
         }
-    });
+    }
 });
 const deleteButton = document.getElementById("delete_confirm");
 if (freieTermine.length > 0) {
@@ -50,16 +58,24 @@ if (freieTermine.length > 0) {
             // --- Freie Termine sammeln und Löschen-Button aktivieren ---
 let freieTermine = [];
 data.forEach(company => {
-    company.slots.forEach(slot => {
-        if (slot.frei) {
+    // Slots nach Zeit sortieren (falls nicht garantiert)
+    const slots = [...company.slots].sort((a, b) => a.time_start.localeCompare(b.time_start));
+    let firstBookedIdx = slots.findIndex(slot => !slot.frei);
+    if (firstBookedIdx === -1) {
+        // Wenn kein Termin belegt ist, lösche KEINEN Slot
+        return;
+    }
+    // Alle freien Slots vor dem ersten belegten Slot sammeln
+    for (let i = 0; i < firstBookedIdx; i++) {
+        if (slots[i].frei) {
             freieTermine.push({
                 firma: company.firma,
                 datum: datum,
-                zeit: slot.time_start,
-                time_id: slot.time_id
+                zeit: slots[i].time_start,
+                time_id: slots[i].time_id
             });
         }
-    });
+    }
 });
 const deleteButton = document.getElementById("delete_confirm");
 if (freieTermine.length > 0) {
@@ -74,16 +90,24 @@ if (freieTermine.length > 0) {
             // --- Freie Termine sammeln und Löschen-Button aktivieren ---
 let freieTermine = [];
 data.forEach(company => {
-    company.slots.forEach(slot => {
-        if (slot.frei) {
+    // Slots nach Zeit sortieren (falls nicht garantiert)
+    const slots = [...company.slots].sort((a, b) => a.time_start.localeCompare(b.time_start));
+    let firstBookedIdx = slots.findIndex(slot => !slot.frei);
+    if (firstBookedIdx === -1) {
+        // Wenn kein Termin belegt ist, lösche KEINEN Slot
+        return;
+    }
+    // Alle freien Slots vor dem ersten belegten Slot sammeln
+    for (let i = 0; i < firstBookedIdx; i++) {
+        if (slots[i].frei) {
             freieTermine.push({
                 firma: company.firma,
                 datum: datum,
-                zeit: slot.time_start,
-                time_id: slot.time_id
+                zeit: slots[i].time_start,
+                time_id: slots[i].time_id
             });
         }
-    });
+    }
 });
 const deleteButton = document.getElementById("delete_confirm");
 if (freieTermine.length > 0) {
@@ -108,16 +132,24 @@ if (freieTermine.length > 0) {
                 // --- Freie Termine sammeln und Löschen-Button aktivieren ---
 let freieTermine = [];
 data.forEach(company => {
-    company.slots.forEach(slot => {
-        if (slot.frei) {
+    // Slots nach Zeit sortieren (falls nicht garantiert)
+    const slots = [...company.slots].sort((a, b) => a.time_start.localeCompare(b.time_start));
+    let firstBookedIdx = slots.findIndex(slot => !slot.frei);
+    if (firstBookedIdx === -1) {
+        // Wenn kein Termin belegt ist, lösche KEINEN Slot
+        return;
+    }
+    // Alle freien Slots vor dem ersten belegten Slot sammeln
+    for (let i = 0; i < firstBookedIdx; i++) {
+        if (slots[i].frei) {
             freieTermine.push({
                 firma: company.firma,
                 datum: datum,
-                zeit: slot.time_start,
-                time_id: slot.time_id
+                zeit: slots[i].time_start,
+                time_id: slots[i].time_id
             });
         }
-    });
+    }
 });
 const deleteButton = document.getElementById("delete_confirm");
 if (freieTermine.length > 0) {
@@ -286,16 +318,24 @@ if (freieTermine.length > 0) {
             // --- Freie Termine sammeln und Löschen-Button aktivieren ---
 let freieTermine = [];
 data.forEach(company => {
-    company.slots.forEach(slot => {
-        if (slot.frei) {
+    // Slots nach Zeit sortieren (falls nicht garantiert)
+    const slots = [...company.slots].sort((a, b) => a.time_start.localeCompare(b.time_start));
+    let firstBookedIdx = slots.findIndex(slot => !slot.frei);
+    if (firstBookedIdx === -1) {
+        // Wenn kein Termin belegt ist, lösche KEINEN Slot
+        return;
+    }
+    // Alle freien Slots vor dem ersten belegten Slot sammeln
+    for (let i = 0; i < firstBookedIdx; i++) {
+        if (slots[i].frei) {
             freieTermine.push({
                 firma: company.firma,
                 datum: datum,
-                zeit: slot.time_start,
-                time_id: slot.time_id
+                zeit: slots[i].time_start,
+                time_id: slots[i].time_id
             });
         }
-    });
+    }
 });
 const deleteButton = document.getElementById("delete_confirm");
 if (freieTermine.length > 0) {
