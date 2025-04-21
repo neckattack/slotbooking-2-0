@@ -210,13 +210,9 @@ if (freieTermine.length > 0) {
                 const { masseur, masseur_email, termine } = groupedByCompany[firma];
                 
                 // Finde den ersten besetzten Termin
-                let firstBookedSlot = null;
-                for (const time of allTimeSlots) {
-                    if (termine[time]) {
-                        firstBookedSlot = time;
-                        break;
-                    }
-                }
+                let firstBookedSlotIdx = allTimeSlots.findIndex(time => termine[time]);
+                // Wenn kein Termin belegt ist, keine Löschkandidaten für diese Firma
+                if (firstBookedSlotIdx === -1) firstBookedSlotIdx = null;
                 
                 html += `
                 <div class="company-section">
@@ -246,10 +242,11 @@ if (freieTermine.length > 0) {
                             <tbody>`;
 
                 // Füge alle Zeitslots hinzu
-                allTimeSlots.forEach(time => {
+                allTimeSlots.forEach((time, idx) => {
                     const termin = termine[time];
                     const isFree = !termin;
-                    const shouldDelete = isCronjobPreview && isFree && (!firstBookedSlot || time < firstBookedSlot);
+                    // Löschkandidat: Slot ist frei UND liegt vor dem ersten belegten Slot dieser Firma
+                    const shouldDelete = isCronjobPreview && isFree && (firstBookedSlotIdx !== null && idx < firstBookedSlotIdx);
                     
                     if (shouldDelete) {
                         hasTermineToDelete = true;
