@@ -8,7 +8,27 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
             div.innerHTML = "";
             if (!Array.isArray(data) || data.length === 0) {
                 div.innerHTML = `<div class="alert alert-info"><i class="bi bi-info-circle"></i> Keine Slots für dieses Datum gefunden.</div>`;
-                document.getElementById("delete_confirm").style.display = "none";
+                // --- Freie Termine sammeln und Löschen-Button aktivieren ---
+let freieTermine = [];
+data.forEach(company => {
+    company.slots.forEach(slot => {
+        if (slot.frei) {
+            freieTermine.push({
+                firma: company.firma,
+                datum: datum,
+                zeit: slot.time_start,
+                time_id: slot.time_id
+            });
+        }
+    });
+});
+const deleteButton = document.getElementById("delete_confirm");
+if (freieTermine.length > 0) {
+    deleteButton.style.display = "block";
+    deleteButton.setAttribute('data-termine', JSON.stringify(freieTermine));
+} else {
+    deleteButton.style.display = "none";
+}
                 return;
             }
             let html = `<div class="alert alert-warning"><b>Testmodus:</b> Alle Slots mit Slot-ID, Status, ggf. Kunde/E-Mail</div>`;
@@ -27,11 +47,51 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                 html += `</tbody></table>`;
             });
             div.innerHTML = html;
-            document.getElementById("delete_confirm").style.display = "none";
+            // --- Freie Termine sammeln und Löschen-Button aktivieren ---
+let freieTermine = [];
+data.forEach(company => {
+    company.slots.forEach(slot => {
+        if (slot.frei) {
+            freieTermine.push({
+                firma: company.firma,
+                datum: datum,
+                zeit: slot.time_start,
+                time_id: slot.time_id
+            });
+        }
+    });
+});
+const deleteButton = document.getElementById("delete_confirm");
+if (freieTermine.length > 0) {
+    deleteButton.style.display = "block";
+    deleteButton.setAttribute('data-termine', JSON.stringify(freieTermine));
+} else {
+    deleteButton.style.display = "none";
+}
         })
         .catch(err => {
             document.getElementById("termine").innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Fehler beim Laden der Slots.</div>`;
-            document.getElementById("delete_confirm").style.display = "none";
+            // --- Freie Termine sammeln und Löschen-Button aktivieren ---
+let freieTermine = [];
+data.forEach(company => {
+    company.slots.forEach(slot => {
+        if (slot.frei) {
+            freieTermine.push({
+                firma: company.firma,
+                datum: datum,
+                zeit: slot.time_start,
+                time_id: slot.time_id
+            });
+        }
+    });
+});
+const deleteButton = document.getElementById("delete_confirm");
+if (freieTermine.length > 0) {
+    deleteButton.style.display = "block";
+    deleteButton.setAttribute('data-termine', JSON.stringify(freieTermine));
+} else {
+    deleteButton.style.display = "none";
+}
         });
     return;
 
@@ -45,7 +105,27 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle"></i> Keine Termine für dieses Datum gefunden.
                     </div>`;
-                document.getElementById("delete_confirm").style.display = "none";
+                // --- Freie Termine sammeln und Löschen-Button aktivieren ---
+let freieTermine = [];
+data.forEach(company => {
+    company.slots.forEach(slot => {
+        if (slot.frei) {
+            freieTermine.push({
+                firma: company.firma,
+                datum: datum,
+                zeit: slot.time_start,
+                time_id: slot.time_id
+            });
+        }
+    });
+});
+const deleteButton = document.getElementById("delete_confirm");
+if (freieTermine.length > 0) {
+    deleteButton.style.display = "block";
+    deleteButton.setAttribute('data-termine', JSON.stringify(freieTermine));
+} else {
+    deleteButton.style.display = "none";
+}
                 return;
             }
 
@@ -203,7 +283,27 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                 <div class="alert alert-danger">
                     <i class="bi bi-exclamation-triangle"></i> Fehler beim Laden der Termine.
                 </div>`;
-            document.getElementById("delete_confirm").style.display = "none";
+            // --- Freie Termine sammeln und Löschen-Button aktivieren ---
+let freieTermine = [];
+data.forEach(company => {
+    company.slots.forEach(slot => {
+        if (slot.frei) {
+            freieTermine.push({
+                firma: company.firma,
+                datum: datum,
+                zeit: slot.time_start,
+                time_id: slot.time_id
+            });
+        }
+    });
+});
+const deleteButton = document.getElementById("delete_confirm");
+if (freieTermine.length > 0) {
+    deleteButton.style.display = "block";
+    deleteButton.setAttribute('data-termine', JSON.stringify(freieTermine));
+} else {
+    deleteButton.style.display = "none";
+}
         });
 }
 
