@@ -209,5 +209,55 @@ def delete_termine():
         cursor.close()
         conn.close()
 
+@app.route("/api/slots")
+def slots():
+    datum = request.args.get("datum")
+    if not datum:
+        return jsonify({"error": "Kein Datum angegeben"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Hole alle Firmen (clients) für das Datum
+    sql_clients = """
+        SELECT d.id as date_id, c.id as client_id, c.name as firma
+        FROM dates d
+        JOIN clients c ON d.client_id = c.id
+        WHERE d.date = %s
+    """
+    cursor.execute(sql_clients, (datum,))
+    client_rows = cursor.fetchall()
+
+    result = []
+    for client in client_rows:
+        date_id = client['date_id']
+        firma = client['firma']
+        # Hole alle Slots für diese date_id
+        sql_slots = """
+            SELECT t.id as time_id, t.time_start, r.id as reservierungs_id, r.name as kunde, r.email as kunde_email
+            FROM times t
+            LEFT JOIN reservations r ON r.time_id = t.id
+            WHERE t.date_id = %s
+            ORDER BY t.time_start
+        """
+        cursor.execute(sql_slots, (date_id,))
+        slots = []
+        for row in cursor.fetchall():
+            slots.append({
+                "time_id": row['time_id'],
+                "time_start": str(row['time_start']),
+                "frei": row['reservierungs_id'] is None,
+                "kunde": row['kunde'] if row['kunde'] else None,
+                "kunde_email": row['kunde_email'] if row['kunde_email'] else None
+            })
+        result.append({
+            "firma": firma,
+            "date_id": date_id,
+            "slots": slots
+        })
+    cursor.close()
+    conn.close()
+    return jsonify(result)
+
 if __name__ == "__main__":
     app.run(debug=True)
