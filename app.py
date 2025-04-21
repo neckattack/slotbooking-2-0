@@ -118,7 +118,7 @@ def delete_termine():
 
         # Test: Minimaler Query mit festen Werten (named)
         try:
-            test_sql_named = "SELECT t.id FROM times t JOIN dates d ON t.date_id = d.id JOIN clients c ON d.client_id = c.id WHERE d.date = %(datum)s AND c.name = %(firma)s AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %(zeit)s"
+            test_sql_named = sql_select_named
             test_params_named = {"datum": "2025-04-16", "firma": "BMDV Bundesministerium für Digitales und Verkehr", "zeit": "10:00:00"}
             app.logger.info(f"Test-Minimal-SQL (named): {test_sql_named}")
             app.logger.info(f"Test-Minimal-Params (named): {test_params_named}")
