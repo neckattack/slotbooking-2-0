@@ -1,5 +1,40 @@
 // Hilfsfunktion zum Laden und Anzeigen der Termine
 function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
+    // TEST: Hole alle Slots inkl. Slot-ID, Status, Kunde/E-Mail
+    fetch(`/api/slots?datum=${datum}`)
+        .then(response => response.json())
+        .then(data => {
+            const div = document.getElementById("termine");
+            div.innerHTML = "";
+            if (!Array.isArray(data) || data.length === 0) {
+                div.innerHTML = `<div class="alert alert-info"><i class="bi bi-info-circle"></i> Keine Slots für dieses Datum gefunden.</div>`;
+                document.getElementById("delete_confirm").style.display = "none";
+                return;
+            }
+            let html = `<div class="alert alert-warning"><b>Testmodus:</b> Alle Slots mit Slot-ID, Status, ggf. Kunde/E-Mail</div>`;
+            data.forEach(company => {
+                html += `<h4>${company.firma} (date_id: ${company.date_id})</h4>`;
+                html += `<table class="table table-sm table-bordered"><thead><tr><th>Zeit</th><th>Slot-ID</th><th>Status</th><th>Kunde</th><th>E-Mail</th></tr></thead><tbody>`;
+                company.slots.forEach(slot => {
+                    html += `<tr>
+                        <td>${slot.time_start}</td>
+                        <td>${slot.time_id}</td>
+                        <td>${slot.frei ? '<span class="badge bg-success">frei</span>' : '<span class="badge bg-danger">belegt</span>'}</td>
+                        <td>${slot.kunde ? slot.kunde : '-'}</td>
+                        <td>${slot.kunde_email ? `<a href="mailto:${slot.kunde_email}">${slot.kunde_email}</a>` : '-'}</td>
+                    </tr>`;
+                });
+                html += `</tbody></table>`;
+            });
+            div.innerHTML = html;
+            document.getElementById("delete_confirm").style.display = "none";
+        })
+        .catch(err => {
+            document.getElementById("termine").innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Fehler beim Laden der Slots.</div>`;
+            document.getElementById("delete_confirm").style.display = "none";
+        });
+    return;
+
     fetch(`/api/termine?datum=${datum}`)
         .then(response => response.json())
         .then(data => {
