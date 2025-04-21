@@ -116,18 +116,6 @@ def delete_termine():
         )
         app.logger.info(f"SQL-Statement (named): {sql_select_named}")
 
-        # Test: Minimaler Query mit festen Werten (named)
-        try:
-            test_sql_named = sql_select_named
-            test_params_named = {"datum": "2025-04-16", "firma": "BMDV Bundesministerium für Digitales und Verkehr", "zeit": "10:00:00"}
-            app.logger.info(f"Test-Minimal-SQL (named): {test_sql_named}")
-            app.logger.info(f"Test-Minimal-Params (named): {test_params_named}")
-            cursor.execute(test_sql_named, test_params_named)
-            test_result_named = cursor.fetchone()
-            app.logger.info(f"Test-Minimal-Result (named): {test_result_named}")
-        except Exception as e:
-            app.logger.error(f"Test-Minimal-Query-Fehler (named): {e}")
-
         # Für die eigentliche Schleife: auch named style verwenden
         sql_delete = "DELETE FROM times WHERE id = %s"
         deleted_count = 0
