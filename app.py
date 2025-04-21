@@ -101,6 +101,27 @@ def delete_termine():
 
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # DEBUG: Alle Zeitslots für jedes angeforderte Datum und jede Firma (inkl. Buchungsstatus)
+    # (Mehrfache Firmen/Datums-Kombis werden mehrfach geloggt, aber das ist für Debug-Zwecke okay)
+    for termin in termine:
+        firma = termin.get("firma")
+        datum = termin.get("datum")
+        if not (firma and datum):
+            continue
+        cursor.execute(
+            """
+            SELECT t.time_start, t.id, r.id as reservation_id
+            FROM times t
+            JOIN dates d ON t.date_id = d.id
+            JOIN clients c ON d.client_id = c.id
+            LEFT JOIN reservations r ON r.time_id = t.id
+            WHERE d.date = %s AND c.name = %s
+            ORDER BY t.time_start
+            """, (datum, firma)
+        )
+        slots = cursor.fetchall()
+        app.logger.info(f"Alle Slots für {datum}, {firma}: {slots}")
     
     try:
         # Hole und lösche Zeitslots für das gegebene Datum, die Firma und die exakte Zeit
