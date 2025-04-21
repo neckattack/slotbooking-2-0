@@ -134,10 +134,10 @@ def delete_termine():
             "LEFT JOIN reservations r ON r.time_id = t.id "
             "WHERE d.date = %(datum)s "
             "AND c.name = %(firma)s "
-            "AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %(zeit)s "
+            "AND TIME_TO_SEC(t.time_start) = %(zeit_seconds)s "
             "AND r.id IS NULL"
         )
-        app.logger.info(f"SQL-Statement (named, nur freie Slots): {sql_select_named}")
+        app.logger.info(f"SQL-Statement (named, nur freie Slots, Zeit in Sekunden): {sql_select_named}")
 
         sql_delete = "DELETE FROM times WHERE id = %s"
         deleted_count = 0
@@ -148,15 +148,23 @@ def delete_termine():
             zeit_start = zeit_intervall.split(" - ")[0].strip() if zeit_intervall and " - " in zeit_intervall else zeit_intervall
             datum = termin.get("datum")
 
-            param_dict = {"datum": datum, "firma": firma, "zeit": zeit_start}
+            # Zeit in Sekunden seit Mitternacht umwandeln
+            try:
+                h, m, s = map(int, zeit_start.split(":"))
+                zeit_seconds = h * 3600 + m * 60 + s
+            except Exception as e:
+                app.logger.error(f"Zeit-Parsing-Fehler für '{zeit_start}': {e}")
+                continue
+
+            param_dict = {"datum": datum, "firma": firma, "zeit_seconds": zeit_seconds}
             app.logger.info(f"Parameter-Typ: {type(param_dict)}, Keys: {list(param_dict.keys())}")
-            app.logger.info(f"Parameter-Werte: datum={datum}, firma={firma}, zeit={zeit_start}")
+            app.logger.info(f"Parameter-Werte: datum={datum}, firma={firma}, zeit_start={zeit_start}, zeit_seconds={zeit_seconds}")
 
             if not all([firma, zeit_start, datum]):
                 app.logger.warning(f"Ungültige Termin-Daten (werden übersprungen): {termin}")
                 continue
 
-            app.logger.info(f"Lösche Termin: firma={firma}, zeit_start={zeit_start}, datum={datum}")
+            app.logger.info(f"Lösche Termin: firma={firma}, zeit_start={zeit_start} ({zeit_seconds}s), datum={datum}")
             try:
                 cursor.execute(sql_select_named, param_dict)
                 result = cursor.fetchone()
