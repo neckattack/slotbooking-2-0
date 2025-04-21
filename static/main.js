@@ -14,11 +14,11 @@ data.forEach(company => {
     // Slots nach Zeit sortieren (falls nicht garantiert)
     const slots = [...company.slots].sort((a, b) => a.time_start.localeCompare(b.time_start));
     let firstBookedIdx = slots.findIndex(slot => !slot.frei);
+    // Wenn kein Termin belegt ist, KEINE freien Slots zum Löschen vorschlagen
     if (firstBookedIdx === -1) {
-        // Wenn kein Termin belegt ist, lösche KEINEN Slot
         return;
     }
-    // Alle freien Slots vor dem ersten belegten Slot sammeln
+    // Für jede Firma: Alle freien Slots vor dem ersten belegten Slot sammeln
     for (let i = 0; i < firstBookedIdx; i++) {
         if (slots[i].frei) {
             freieTermine.push({
@@ -61,11 +61,11 @@ data.forEach(company => {
     // Slots nach Zeit sortieren (falls nicht garantiert)
     const slots = [...company.slots].sort((a, b) => a.time_start.localeCompare(b.time_start));
     let firstBookedIdx = slots.findIndex(slot => !slot.frei);
+    // Wenn kein Termin belegt ist, KEINE freien Slots zum Löschen vorschlagen
     if (firstBookedIdx === -1) {
-        // Wenn kein Termin belegt ist, lösche KEINEN Slot
         return;
     }
-    // Alle freien Slots vor dem ersten belegten Slot sammeln
+    // Für jede Firma: Alle freien Slots vor dem ersten belegten Slot sammeln
     for (let i = 0; i < firstBookedIdx; i++) {
         if (slots[i].frei) {
             freieTermine.push({
@@ -93,11 +93,11 @@ data.forEach(company => {
     // Slots nach Zeit sortieren (falls nicht garantiert)
     const slots = [...company.slots].sort((a, b) => a.time_start.localeCompare(b.time_start));
     let firstBookedIdx = slots.findIndex(slot => !slot.frei);
+    // Wenn kein Termin belegt ist, KEINE freien Slots zum Löschen vorschlagen
     if (firstBookedIdx === -1) {
-        // Wenn kein Termin belegt ist, lösche KEINEN Slot
         return;
     }
-    // Alle freien Slots vor dem ersten belegten Slot sammeln
+    // Für jede Firma: Alle freien Slots vor dem ersten belegten Slot sammeln
     for (let i = 0; i < firstBookedIdx; i++) {
         if (slots[i].frei) {
             freieTermine.push({
@@ -135,11 +135,11 @@ data.forEach(company => {
     // Slots nach Zeit sortieren (falls nicht garantiert)
     const slots = [...company.slots].sort((a, b) => a.time_start.localeCompare(b.time_start));
     let firstBookedIdx = slots.findIndex(slot => !slot.frei);
+    // Wenn kein Termin belegt ist, KEINE freien Slots zum Löschen vorschlagen
     if (firstBookedIdx === -1) {
-        // Wenn kein Termin belegt ist, lösche KEINEN Slot
         return;
     }
-    // Alle freien Slots vor dem ersten belegten Slot sammeln
+    // Für jede Firma: Alle freien Slots vor dem ersten belegten Slot sammeln
     for (let i = 0; i < firstBookedIdx; i++) {
         if (slots[i].frei) {
             freieTermine.push({
@@ -321,11 +321,11 @@ data.forEach(company => {
     // Slots nach Zeit sortieren (falls nicht garantiert)
     const slots = [...company.slots].sort((a, b) => a.time_start.localeCompare(b.time_start));
     let firstBookedIdx = slots.findIndex(slot => !slot.frei);
+    // Wenn kein Termin belegt ist, KEINE freien Slots zum Löschen vorschlagen
     if (firstBookedIdx === -1) {
-        // Wenn kein Termin belegt ist, lösche KEINEN Slot
         return;
     }
-    // Alle freien Slots vor dem ersten belegten Slot sammeln
+    // Für jede Firma: Alle freien Slots vor dem ersten belegten Slot sammeln
     for (let i = 0; i < firstBookedIdx; i++) {
         if (slots[i].frei) {
             freieTermine.push({
