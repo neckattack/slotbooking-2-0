@@ -131,19 +131,6 @@ def delete_termine():
         # Für die eigentliche Schleife: auch named style verwenden
         sql_delete = "DELETE FROM times WHERE id = %s"
         deleted_count = 0
-        
-        sql_delete = "DELETE FROM times WHERE id = %s"
-        deleted_count = 0
-        
-        # Test-Query mit festen Werten (Debugging)
-        test_params = ("2025-04-16", "BMDV Bundesministerium für Digitales und Verkehr", "10:00:00")
-        app.logger.info(f"Test-Query mit: {test_params}")
-        try:
-            cursor.execute(sql_select, test_params)
-            test_result = cursor.fetchone()
-            app.logger.info(f"Test-Result: {test_result}")
-        except Exception as e:
-            app.logger.error(f"Test-Query-Fehler: {e}")
 
         for termin in termine:
             firma = termin.get("firma")
