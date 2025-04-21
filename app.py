@@ -147,13 +147,15 @@ def delete_termine():
 
         for termin in termine:
             firma = termin.get("firma")
-            time = termin.get("time")
+            # Extrahiere Startzeit aus Intervall (z.B. '9:00:00 - 9:30:00' -> '9:00:00')
+            zeit_intervall = termin.get("zeit") or termin.get("time")
+            zeit_start = zeit_intervall.split(" - ")[0].strip() if zeit_intervall and " - " in zeit_intervall else zeit_intervall
             datum = termin.get("datum")
 
             # Logge Typen und Werte der Parameter
-            param_dict = {"datum": datum, "firma": firma, "zeit": time}
+            param_dict = {"datum": datum, "firma": firma, "zeit": zeit_start}
             app.logger.info(f"Parameter-Typ: {type(param_dict)}, Keys: {list(param_dict.keys())}")
-            app.logger.info(f"Parameter-Werte: datum={datum}, firma={firma}, time={time}")
+            app.logger.info(f"Parameter-Werte: datum={datum}, firma={firma}, zeit={zeit_start}")
 
             if not all([firma, time, datum]):
                 app.logger.warning(f"Ungültige Termin-Daten (werden übersprungen): {termin}")
