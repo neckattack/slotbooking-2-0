@@ -359,6 +359,8 @@ document.getElementById("laden").addEventListener("click", function() {
 
 // Event Listener für den Cronjob-Button
 document.getElementById("cronjob").addEventListener("click", function() {
+    // Zeige den Löschen bestätigen Button IMMER an
+    document.getElementById("delete_confirm").style.display = "block";
     const datum = document.getElementById("cronjob_datum").value;
     if (!datum) {
         alert("Bitte ein Datum für den Cronjob wählen!");
