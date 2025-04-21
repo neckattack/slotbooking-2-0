@@ -121,7 +121,18 @@ def delete_termine():
             """, (datum, firma)
         )
         slots = cursor.fetchall()
-        app.logger.info(f"Alle Slots für {datum}, {firma}: {slots}")
+        # DEBUG: Alle Zeitslots für das angeforderte Datum und die Firma (explizit für den User-Check)
+        cursor.execute(
+            "SELECT t.time_start, t.id, r.id as reservation_id "
+            "FROM times t "
+            "JOIN dates d ON t.date_id = d.id "
+            "JOIN clients c ON d.client_id = c.id "
+            "LEFT JOIN reservations r ON r.time_id = t.id "
+            "WHERE d.date = %s AND c.name = %s ",
+            (datum, firma)
+        )
+        all_slots = cursor.fetchall()
+        app.logger.info(f"[DEBUG-USER] Alle Slots für {datum}, {firma}: {[ (str(row[0]), row[1], row[2]) for row in all_slots ]}")
     
     try:
         # Hole und lösche Zeitslots für das gegebene Datum, die Firma und die exakte Zeit
