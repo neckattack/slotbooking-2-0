@@ -31,11 +31,11 @@ data.forEach(company => {
     }
 });
 const deleteButton = document.getElementById("delete_confirm");
+deleteButton.style.display = "block";
 if (freieTermine.length > 0) {
-    deleteButton.style.display = "block";
     deleteButton.setAttribute('data-termine', JSON.stringify(freieTermine));
 } else {
-    deleteButton.style.display = "none";
+    deleteButton.setAttribute('data-termine', '[]');
 }
                 return;
             }
@@ -78,11 +78,11 @@ data.forEach(company => {
     }
 });
 const deleteButton = document.getElementById("delete_confirm");
+deleteButton.style.display = "block";
 if (freieTermine.length > 0) {
-    deleteButton.style.display = "block";
     deleteButton.setAttribute('data-termine', JSON.stringify(freieTermine));
 } else {
-    deleteButton.style.display = "none";
+    deleteButton.setAttribute('data-termine', '[]');
 }
         })
         .catch(err => {
@@ -110,11 +110,11 @@ data.forEach(company => {
     }
 });
 const deleteButton = document.getElementById("delete_confirm");
+deleteButton.style.display = "block";
 if (freieTermine.length > 0) {
-    deleteButton.style.display = "block";
     deleteButton.setAttribute('data-termine', JSON.stringify(freieTermine));
 } else {
-    deleteButton.style.display = "none";
+    deleteButton.setAttribute('data-termine', '[]');
 }
         });
     return;
@@ -152,11 +152,11 @@ data.forEach(company => {
     }
 });
 const deleteButton = document.getElementById("delete_confirm");
+deleteButton.style.display = "block";
 if (freieTermine.length > 0) {
-    deleteButton.style.display = "block";
     deleteButton.setAttribute('data-termine', JSON.stringify(freieTermine));
 } else {
-    deleteButton.style.display = "none";
+    deleteButton.setAttribute('data-termine', '[]');
 }
                 return;
             }
@@ -338,11 +338,11 @@ data.forEach(company => {
     }
 });
 const deleteButton = document.getElementById("delete_confirm");
+deleteButton.style.display = "block";
 if (freieTermine.length > 0) {
-    deleteButton.style.display = "block";
     deleteButton.setAttribute('data-termine', JSON.stringify(freieTermine));
 } else {
-    deleteButton.style.display = "none";
+    deleteButton.setAttribute('data-termine', '[]');
 }
         });
 }
