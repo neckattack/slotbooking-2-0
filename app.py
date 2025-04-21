@@ -132,6 +132,12 @@ def delete_termine():
             (datum, firma)
         )
         all_slots = cursor.fetchall()
+        for row in all_slots:
+            zeit = str(row[0])
+            time_id = row[1]
+            reserv_id = row[2]
+            status = "frei" if reserv_id is None else "belegt"
+            app.logger.info(f"Slot: {zeit} (time_id: {time_id}) - {status}")
         app.logger.info(f"[DEBUG-USER] Alle Slots für {datum}, {firma}: {[ (str(row[0]), row[1], row[2]) for row in all_slots ]}")
     
     try:

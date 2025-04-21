@@ -92,7 +92,7 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                         <table class="table table-bordered">
                             <thead>
                                 <tr>
-                                    <th class="time-column">Zeit</th>
+                                    <th class="time-column">Zeit / Slot-ID</th>
                                     <th>Status / Kunde</th>
                                 </tr>
                             </thead>
@@ -119,7 +119,9 @@ function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
                     html += `
                         <tr class="${rowClass}">
                             <td class="time-column">
-                                <i class="bi bi-clock"></i> ${time}
+                                <span class="time-badge">${time}</span>
+                                <br>
+                                <small class="text-muted">ID: ${termin.time_id || '-'}</small>
                             </td>
                             <td>
                                 ${isFree ? `
