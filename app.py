@@ -110,24 +110,23 @@ def delete_termine():
             "FROM times t "
             "JOIN dates d ON t.date_id = d.id "
             "JOIN clients c ON d.client_id = c.id "
+            "LEFT JOIN reservations r ON r.time_id = t.id "
             "WHERE d.date = %(datum)s "
             "AND c.name = %(firma)s "
-            "AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %(zeit)s"
+            "AND TIME_FORMAT(t.time_start, '%H:%i:%s') = %(zeit)s "
+            "AND r.id IS NULL"
         )
-        app.logger.info(f"SQL-Statement (named): {sql_select_named}")
+        app.logger.info(f"SQL-Statement (named, nur freie Slots): {sql_select_named}")
 
-        # Für die eigentliche Schleife: auch named style verwenden
         sql_delete = "DELETE FROM times WHERE id = %s"
         deleted_count = 0
 
         for termin in termine:
             firma = termin.get("firma")
-            # Extrahiere Startzeit aus Intervall (z.B. '9:00:00 - 9:30:00' -> '9:00:00')
             zeit_intervall = termin.get("zeit") or termin.get("time")
             zeit_start = zeit_intervall.split(" - ")[0].strip() if zeit_intervall and " - " in zeit_intervall else zeit_intervall
             datum = termin.get("datum")
 
-            # Logge Typen und Werte der Parameter
             param_dict = {"datum": datum, "firma": firma, "zeit": zeit_start}
             app.logger.info(f"Parameter-Typ: {type(param_dict)}, Keys: {list(param_dict.keys())}")
             app.logger.info(f"Parameter-Werte: datum={datum}, firma={firma}, zeit={zeit_start}")
@@ -140,6 +139,7 @@ def delete_termine():
             try:
                 cursor.execute(sql_select_named, param_dict)
                 result = cursor.fetchone()
+                app.logger.info(f"SQL-Select-Result für {param_dict}: {result}")
             except Exception as e:
                 app.logger.error(f"SQL-Fehler bei execute: {e}")
                 continue
