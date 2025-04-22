@@ -409,15 +409,51 @@ document.getElementById("cronjob").addEventListener("click", function() {
         chatClose.addEventListener('click', () => {
             chatWidget.style.display = 'none';
         });
-        function sendChatMsg() {
+        async function sendChatMsg() {
             const msg = chatInput.value.trim();
             if (!msg) return;
+            // Nutzer-Nachricht anzeigen
             const msgDiv = document.createElement('div');
             msgDiv.className = 'mb-2';
             msgDiv.innerHTML = `<span class="badge bg-primary me-2">Du</span> ${msg}`;
             chatMessages.appendChild(msgDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
             chatInput.value = '';
+            // Lade-Indikator
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'mb-2 text-muted';
+            loadingDiv.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> ChatGPT schreibt ...';
+            chatMessages.appendChild(loadingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: msg})
+                });
+                const data = await response.json();
+                loadingDiv.remove();
+                if (data.answer) {
+                    const botDiv = document.createElement('div');
+                    botDiv.className = 'mb-2';
+                    botDiv.innerHTML = `<span class=\"badge bg-success me-2\">ChatGPT</span> ${data.answer}`;
+                    chatMessages.appendChild(botDiv);
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                } else if (data.error) {
+                    const errDiv = document.createElement('div');
+                    errDiv.className = 'mb-2 text-danger';
+                    errDiv.innerHTML = `<span class=\"badge bg-danger me-2\">Fehler</span> ${data.error}`;
+                    chatMessages.appendChild(errDiv);
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            } catch (err) {
+                loadingDiv.remove();
+                const errDiv = document.createElement('div');
+                errDiv.className = 'mb-2 text-danger';
+                errDiv.innerHTML = `<span class=\"badge bg-danger me-2\">Fehler</span> ${err.message}`;
+                chatMessages.appendChild(errDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
         }
         chatSend.addEventListener('click', sendChatMsg);
         chatInput.addEventListener('keydown', function(e) {

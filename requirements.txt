@@ -1,4 +1,5 @@
 Flask==2.3.3
-mysql-connector-python==8.0.26
+mysql-connector-python
+openai==8.0.26
 python-dotenv==1.0.1
 gunicorn==21.2.0

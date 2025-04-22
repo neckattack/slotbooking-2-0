@@ -3,6 +3,7 @@ from flask import Flask, render_template, request, jsonify
 import mysql.connector
 from dotenv import load_dotenv
 from datetime import datetime
+import openai
 
 load_dotenv()
 
@@ -258,6 +259,46 @@ def slots():
     cursor.close()
     conn.close()
     return jsonify(result)
+
+# --- ChatGPT-API-Endpunkt ---
+@app.route('/api/chat', methods=['POST'])
+def chat_api():
+    data = request.get_json()
+    user_msg = data.get('message', '').strip()
+    if not user_msg:
+        return jsonify({'error': 'Keine Nachricht erhalten.'}), 400
+
+    # Beispiel: Bei bestimmten Schlüsselwörtern Datenbankabfrage machen
+    db_info = ""
+    if any(kw in user_msg.lower() for kw in ["termin", "slot", "buchung", "frei", "belegt"]):
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT date, id FROM dates ORDER BY date DESC LIMIT 5")
+            termine = cursor.fetchall()
+            db_info = f"Letzte Termine: {termine}"
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            db_info = f"[DB-Fehler: {e}]"
+
+    prompt = (
+        "Du bist ein hilfreicher Assistent für Terminbuchungen. "
+        "Wenn der Nutzer nach Terminen fragt, beantworte auf Basis folgender Datenbankinfos: "
+        f"{db_info}\n"
+        f"Nutzer: {user_msg}\nAssistent:"
+    )
+    openai.api_key = os.environ.get("OPENAI_API_KEY")
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "system", "content": "Du bist ein Termin-Assistent."},
+                      {"role": "user", "content": prompt}]
+        )
+        answer = response.choices[0].message['content'].strip()
+        return jsonify({'answer': answer})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
