@@ -277,9 +277,16 @@ def chat_api():
         if m.get('role') == 'user':
             last_user_msg = m.get('content', '')
             break
+    from datetime import datetime, timedelta
+    import pytz
+    berlin = pytz.timezone('Europe/Berlin')
+    now_berlin = datetime.now(berlin)
+    today_str = now_berlin.strftime('%Y-%m-%d')
+
     name_match = None
     firmen_fuer_datum = None
     antwort_datum = None
+    next_termin_name = None
     if last_user_msg:
         # Suche nach Mustern wie "letzter Termin von ..." oder "Wann war der letzte Termin von ..."
         match = re.search(r'letzte[rn]? termin (von|für) ([\w\s.\-]+)', last_user_msg, re.IGNORECASE)
@@ -287,12 +294,17 @@ def chat_api():
             match = re.search(r'wann war der letzte termin (von|für) ([\w\s.\-]+)', last_user_msg, re.IGNORECASE)
         if match:
             name_match = match.group(2).strip()
+        # Nächster Termin für ...
+        match_next = re.search(r'nächste[rsn]? termin (von|für) ([\w\s.\-]+)', last_user_msg, re.IGNORECASE)
+        if not match_next:
+            match_next = re.search(r'wann.*nächste[rsn]? termin (von|für) ([\w\s.\-]+)', last_user_msg, re.IGNORECASE)
+        if match_next:
+            next_termin_name = match_next.group(2).strip()
         # Firmen mit Terminen an einem bestimmten Tag
         match_firmen = re.search(r'firmen.*(morgen|am ([0-9]{1,2})[.\-/]([0-9]{1,2})[.\-/]([0-9]{2,4}))', last_user_msg, re.IGNORECASE)
         if match_firmen:
-            from datetime import datetime, timedelta
             if 'morgen' in match_firmen.group(1).lower():
-                antwort_datum = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+                antwort_datum = (now_berlin + timedelta(days=1)).strftime('%Y-%m-%d')
             else:
                 # Versuche, ein Datum zu extrahieren
                 try:
@@ -318,7 +330,24 @@ def chat_api():
                     conn.close()
                 except Exception as e:
                     db_context += f" [DB-Fehler bei Firmenabfrage: {e}]"
-    if name_match:
+    if next_termin_name:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT MIN(datum) as naechster_termin, kunde FROM termine
+                WHERE kunde LIKE %s AND datum >= %s
+            """, (f"%{next_termin_name}%", today_str))
+            row = cursor.fetchone()
+            if row and row['naechster_termin']:
+                db_context += f" Nächster Termin für {next_termin_name}: {row['naechster_termin']}."
+            else:
+                db_context += f" Für {next_termin_name} wurde kein zukünftiger Termin gefunden."
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            db_context += f" [DB-Fehler: {e}]"
+    elif name_match:
         try:
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
@@ -338,7 +367,8 @@ def chat_api():
             db_context += f" [DB-Fehler: {e}]"
     # --- System-Prompt klarstellen ---
     system_prompt = (
-        "Du bist ein KI-Assistent für Terminbuchungen. Du hast Zugriff auf die aktuelle Datenbank und bekommst bei jeder Nutzerfrage die relevanten Daten im Kontext übermittelt. "
+        f"Du bist ein KI-Assistent für Terminbuchungen. Das heutige Datum ist {today_str} (Europe/Berlin). "
+        "Du hast Zugriff auf die aktuelle Datenbank und bekommst bei jeder Nutzerfrage die relevanten Daten im Kontext übermittelt. "
         "Nutze diese Daten, um die Nutzerfrage korrekt und freundlich zu beantworten. Antworte niemals, dass du keinen Zugriff auf Daten hast. "
         "Wenn keine passenden Daten gefunden wurden, erkläre das höflich."
     )
