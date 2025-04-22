@@ -391,6 +391,43 @@ document.getElementById("cronjob").addEventListener("click", function() {
     loadAndDisplayAppointments(datum, true);
 });
 
+// --- Chat Button & Widget ---
+(function() {
+    const chatBtn = document.getElementById('chat_button');
+    const chatWidget = document.getElementById('chat_widget');
+    const chatClose = document.getElementById('chat_close');
+    const chatSend = document.getElementById('chat_send');
+    const chatInput = document.getElementById('chat_input');
+    const chatMessages = document.getElementById('chat_messages');
+
+    if (chatBtn && chatWidget && chatClose && chatSend && chatInput && chatMessages) {
+        chatBtn.addEventListener('click', () => {
+            chatWidget.style.display = 'block';
+            chatInput.focus();
+        });
+        chatClose.addEventListener('click', () => {
+            chatWidget.style.display = 'none';
+        });
+        function sendChatMsg() {
+            const msg = chatInput.value.trim();
+            if (!msg) return;
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'mb-2';
+            msgDiv.innerHTML = `<span class="badge bg-primary me-2">Du</span> ${msg}`;
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            chatInput.value = '';
+        }
+        chatSend.addEventListener('click', sendChatMsg);
+        chatInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                sendChatMsg();
+                e.preventDefault();
+            }
+        });
+    }
+})();
+
 // Event Listener für den Löschen bestätigen Button
 document.getElementById("delete_confirm").addEventListener("click", async function() {
     const termineToDelete = JSON.parse(this.getAttribute('data-termine') || '[]');
