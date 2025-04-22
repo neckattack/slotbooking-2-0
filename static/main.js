@@ -409,15 +409,34 @@ document.getElementById("cronjob").addEventListener("click", function() {
         chatClose.addEventListener('click', () => {
             chatWidget.style.display = 'none';
         });
+        // Chatverlauf als Array
+        let chatHistory = [
+            {role: "system", content: "Du bist ein hilfreicher, freundlicher und kompetenter Termin-Assistent. Antworte möglichst ausführlich und verständlich."}
+        ];
+
+        function renderChat() {
+            chatMessages.innerHTML = '';
+            for (const msg of chatHistory) {
+                if (msg.role === 'user') {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'mb-2';
+                    msgDiv.innerHTML = `<span class="badge bg-primary me-2">Du</span> ${msg.content}`;
+                    chatMessages.appendChild(msgDiv);
+                } else if (msg.role === 'assistant') {
+                    const botDiv = document.createElement('div');
+                    botDiv.className = 'mb-2';
+                    botDiv.innerHTML = `<span class="badge bg-success me-2">ChatGPT</span> ${msg.content}`;
+                    chatMessages.appendChild(botDiv);
+                }
+            }
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
         async function sendChatMsg() {
             const msg = chatInput.value.trim();
             if (!msg) return;
-            // Nutzer-Nachricht anzeigen
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'mb-2';
-            msgDiv.innerHTML = `<span class="badge bg-primary me-2">Du</span> ${msg}`;
-            chatMessages.appendChild(msgDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            chatHistory.push({role: 'user', content: msg});
+            renderChat();
             chatInput.value = '';
             // Lade-Indikator
             const loadingDiv = document.createElement('div');
@@ -429,20 +448,17 @@ document.getElementById("cronjob").addEventListener("click", function() {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: msg})
+                    body: JSON.stringify({messages: chatHistory})
                 });
                 const data = await response.json();
                 loadingDiv.remove();
                 if (data.answer) {
-                    const botDiv = document.createElement('div');
-                    botDiv.className = 'mb-2';
-                    botDiv.innerHTML = `<span class=\"badge bg-success me-2\">ChatGPT</span> ${data.answer}`;
-                    chatMessages.appendChild(botDiv);
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                    chatHistory.push({role: 'assistant', content: data.answer});
+                    renderChat();
                 } else if (data.error) {
                     const errDiv = document.createElement('div');
                     errDiv.className = 'mb-2 text-danger';
-                    errDiv.innerHTML = `<span class=\"badge bg-danger me-2\">Fehler</span> ${data.error}`;
+                    errDiv.innerHTML = `<span class="badge bg-danger me-2">Fehler</span> ${data.error}`;
                     chatMessages.appendChild(errDiv);
                     chatMessages.scrollTop = chatMessages.scrollHeight;
                 }
@@ -450,11 +466,13 @@ document.getElementById("cronjob").addEventListener("click", function() {
                 loadingDiv.remove();
                 const errDiv = document.createElement('div');
                 errDiv.className = 'mb-2 text-danger';
-                errDiv.innerHTML = `<span class=\"badge bg-danger me-2\">Fehler</span> ${err.message}`;
+                errDiv.innerHTML = `<span class="badge bg-danger me-2">Fehler</span> ${err.message}`;
                 chatMessages.appendChild(errDiv);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             }
         }
+        // Initial-Render
+        renderChat();
         chatSend.addEventListener('click', sendChatMsg);
         chatInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
