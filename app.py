@@ -263,20 +263,66 @@ def slots():
 # --- ChatGPT-API-Endpunkt ---
 @app.route('/api/chat', methods=['POST'])
 def chat_api():
+    import re
     data = request.get_json()
     messages = data.get('messages', [])
     if not messages or not isinstance(messages, list):
         return jsonify({'error': 'Kein Nachrichtenverlauf erhalten.'}), 400
 
-    # Optional: Datenbank-Kontext einbauen, falls gewünscht
-    # (Hier könnte man nach bestimmten Schlüsselwörtern im Verlauf suchen und Kontext ergänzen)
-    # Für maximale ChatGPT-Intelligenz lassen wir den Verlauf wie gesendet!
-
+    # --- Dynamische Kontext-Erweiterung für gezielte Fragen ---
+    # Prüfe, ob letzte User-Nachricht nach "letzter Termin von <Name>" fragt
+    db_context = ""
+    last_user_msg = None
+    for m in reversed(messages):
+        if m.get('role') == 'user':
+            last_user_msg = m.get('content', '')
+            break
+    name_match = None
+    if last_user_msg:
+        # Suche nach Mustern wie "letzter Termin von ..." oder "Wann war der letzte Termin von ..."
+        match = re.search(r'letzte[rn]? termin (von|für) ([\w\s.\-]+)', last_user_msg, re.IGNORECASE)
+        if not match:
+            match = re.search(r'wann war der letzte termin (von|für) ([\w\s.\-]+)', last_user_msg, re.IGNORECASE)
+        if match:
+            name_match = match.group(2).strip()
+    if name_match:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            # Suche nach dem letzten Termin für diesen Kunden (nach Name)
+            cursor.execute("""
+                SELECT MAX(datum) as letzter_termin, kunde
+                FROM termine
+                WHERE kunde LIKE %s
+            """, (f"%{name_match}%",))
+            row = cursor.fetchone()
+            if row and row['letzter_termin']:
+                db_context = f"Letzter Termin für {name_match}: {row['letzter_termin']}"
+            else:
+                db_context = f"Für {name_match} wurde kein Termin gefunden."
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            db_context = f"[DB-Fehler: {e}]"
+    # --- System-Prompt ggf. anreichern ---
+    system_prompt = "Du bist ein hilfreicher, freundlicher und kompetenter Termin-Assistent."
+    if db_context:
+        system_prompt += f" Kontext: {db_context}"
+    # Ersetze die erste system-Nachricht im Verlauf (falls vorhanden), sonst füge sie vorn an
+    new_messages = messages[:]
+    found_system = False
+    for i, m in enumerate(new_messages):
+        if m.get('role') == 'system':
+            new_messages[i]['content'] = system_prompt
+            found_system = True
+            break
+    if not found_system:
+        new_messages = [{'role': 'system', 'content': system_prompt}] + new_messages
     openai.api_key = os.environ.get("OPENAI_API_KEY")
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-            messages=messages
+            messages=new_messages
         )
         answer = response.choices[0].message['content'].strip()
         return jsonify({'answer': answer})
