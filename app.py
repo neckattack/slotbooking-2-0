@@ -270,7 +270,7 @@ def chat_api():
         return jsonify({'error': 'Kein Nachrichtenverlauf erhalten.'}), 400
 
     # --- Dynamische Kontext-Erweiterung für gezielte Fragen ---
-    # Prüfe, ob letzte User-Nachricht nach "letzter Termin von <Name>" fragt
+    # Prüfe, ob letzte User-Nachricht nach bestimmten Mustern fragt
     db_context = ""
     last_user_msg = None
     for m in reversed(messages):
@@ -278,6 +278,8 @@ def chat_api():
             last_user_msg = m.get('content', '')
             break
     name_match = None
+    firmen_fuer_datum = None
+    antwort_datum = None
     if last_user_msg:
         # Suche nach Mustern wie "letzter Termin von ..." oder "Wann war der letzte Termin von ..."
         match = re.search(r'letzte[rn]? termin (von|für) ([\w\s.\-]+)', last_user_msg, re.IGNORECASE)
@@ -285,11 +287,41 @@ def chat_api():
             match = re.search(r'wann war der letzte termin (von|für) ([\w\s.\-]+)', last_user_msg, re.IGNORECASE)
         if match:
             name_match = match.group(2).strip()
+        # Firmen mit Terminen an einem bestimmten Tag
+        match_firmen = re.search(r'firmen.*(morgen|am ([0-9]{1,2})[.\-/]([0-9]{1,2})[.\-/]([0-9]{2,4}))', last_user_msg, re.IGNORECASE)
+        if match_firmen:
+            from datetime import datetime, timedelta
+            if 'morgen' in match_firmen.group(1).lower():
+                antwort_datum = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+            else:
+                # Versuche, ein Datum zu extrahieren
+                try:
+                    tag, monat, jahr = match_firmen.group(2), match_firmen.group(3), match_firmen.group(4)
+                    if len(jahr) == 2:
+                        jahr = '20' + jahr
+                    antwort_datum = f"{jahr}-{monat.zfill(2)}-{tag.zfill(2)}"
+                except Exception:
+                    antwort_datum = None
+            if antwort_datum:
+                try:
+                    conn = get_db_connection()
+                    cursor = conn.cursor(dictionary=True)
+                    cursor.execute("""
+                        SELECT DISTINCT firma FROM termine WHERE datum = %s
+                    """, (antwort_datum,))
+                    firmen = [row['firma'] for row in cursor.fetchall() if row.get('firma')]
+                    if firmen:
+                        db_context += f" Firmen mit Termin am {antwort_datum}: {', '.join(firmen)}."
+                    else:
+                        db_context += f" Für {antwort_datum} wurden keine Firmen mit Terminen gefunden."
+                    cursor.close()
+                    conn.close()
+                except Exception as e:
+                    db_context += f" [DB-Fehler bei Firmenabfrage: {e}]"
     if name_match:
         try:
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
-            # Suche nach dem letzten Termin für diesen Kunden (nach Name)
             cursor.execute("""
                 SELECT MAX(datum) as letzter_termin, kunde
                 FROM termine
@@ -297,17 +329,21 @@ def chat_api():
             """, (f"%{name_match}%",))
             row = cursor.fetchone()
             if row and row['letzter_termin']:
-                db_context = f"Letzter Termin für {name_match}: {row['letzter_termin']}"
+                db_context += f" Letzter Termin für {name_match}: {row['letzter_termin']}."
             else:
-                db_context = f"Für {name_match} wurde kein Termin gefunden."
+                db_context += f" Für {name_match} wurde kein Termin gefunden."
             cursor.close()
             conn.close()
         except Exception as e:
-            db_context = f"[DB-Fehler: {e}]"
-    # --- System-Prompt ggf. anreichern ---
-    system_prompt = "Du bist ein hilfreicher, freundlicher und kompetenter Termin-Assistent."
+            db_context += f" [DB-Fehler: {e}]"
+    # --- System-Prompt klarstellen ---
+    system_prompt = (
+        "Du bist ein KI-Assistent für Terminbuchungen. Du hast Zugriff auf die aktuelle Datenbank und bekommst bei jeder Nutzerfrage die relevanten Daten im Kontext übermittelt. "
+        "Nutze diese Daten, um die Nutzerfrage korrekt und freundlich zu beantworten. Antworte niemals, dass du keinen Zugriff auf Daten hast. "
+        "Wenn keine passenden Daten gefunden wurden, erkläre das höflich."
+    )
     if db_context:
-        system_prompt += f" Kontext: {db_context}"
+        system_prompt += f" Datenbank-Info: {db_context}"
     # Ersetze die erste system-Nachricht im Verlauf (falls vorhanden), sonst füge sie vorn an
     new_messages = messages[:]
     found_system = False
