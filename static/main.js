@@ -1,3 +1,4 @@
+console.log('main.js geladen!');
 // Hilfsfunktion zum Laden und Anzeigen der Termine
 function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
     // TEST: Hole alle Slots inkl. Slot-ID, Status, Kunde/E-Mail
