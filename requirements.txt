@@ -3,3 +3,4 @@ mysql-connector-python
 openai==0.28.1
 python-dotenv==1.0.1
 gunicorn==21.2.0
+pytz
