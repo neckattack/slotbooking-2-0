@@ -394,9 +394,12 @@ def chat_api():
         "Nutze diese Daten, um die Nutzerfrage korrekt und freundlich zu beantworten. Antworte niemals, dass du keinen Zugriff auf Daten hast. "
         "Wenn keine passenden Daten gefunden wurden, erkläre das höflich."
     )
-    if db_context:
+    if not db_context:
+        db_context = "[Achtung: Keine passenden Datenbankdaten zur Nutzerfrage gefunden.]"
+        app.logger.info("[DB-KONTEXT] Kein passender Kontext aus DB generiert.")
+    else:
         app.logger.info(f"[DB-KONTEXT] {db_context}")
-        system_prompt += f" Datenbank-Info: {db_context}"
+    system_prompt += f" Datenbank-Info: {db_context}"
     # Ersetze die erste system-Nachricht im Verlauf (falls vorhanden), sonst füge sie vorn an
     new_messages = messages[:]
     found_system = False
