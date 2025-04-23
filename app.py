@@ -404,6 +404,18 @@ def chat_api():
             if row and row['letzter_termin']:
                 db_context += f" Letzter Termin für {name_match}: {row['letzter_termin']}."
             else:
+                # Fuzzy-Suche für Firmenname
+                cursor.execute("SELECT name FROM clients")
+                alle_firmen = [r['name'] for r in cursor.fetchall()]
+                from difflib import get_close_matches
+                vorschlaege_firma = get_close_matches(name_match, alle_firmen, n=3, cutoff=0.4)
+                app.logger.info(f"[DB-ABFRAGE] Firmen-Fuzzy-Vorschläge für '{name_match}': {vorschlaege_firma}")
+                if not alle_firmen:
+                    db_context += " Es sind keine Firmen in der Datenbank hinterlegt."
+                elif vorschlaege_firma:
+                    db_context += f" Kein exakter Firmenname gefunden. Ähnliche Firmennamen: {', '.join(vorschlaege_firma)}."
+                else:
+                    db_context += f" Kein Firmenname oder ähnliche Firmen gefunden."
                 # Suche nach ähnlichen Namen
                 cursor.execute("SELECT DISTINCT kunde FROM termine WHERE kunde IS NOT NULL")
                 alle_kunden = [r['kunde'] for r in cursor.fetchall()]
