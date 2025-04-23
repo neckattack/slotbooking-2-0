@@ -389,14 +389,21 @@ def chat_api():
             db_context += f" [DB-Fehler: {e}]"
     # --- System-Prompt klarstellen ---
     system_prompt = (
-        f"Du bist ein KI-Assistent für Terminbuchungen. Das heutige Datum ist {today_str} (Europe/Berlin). "
-        "Du hast Zugriff auf die aktuelle Datenbank und bekommst bei jeder Nutzerfrage die relevanten Daten im Kontext übermittelt. "
-        "Nutze diese Daten, um die Nutzerfrage korrekt und freundlich zu beantworten. Antworte niemals, dass du keinen Zugriff auf Daten hast. "
-        "Wenn keine passenden Daten gefunden wurden, erkläre das höflich."
-    )
-    if not db_context:
-        db_context = "[Achtung: Keine passenden Datenbankdaten zur Nutzerfrage gefunden.]"
-        app.logger.info("[DB-KONTEXT] Kein passender Kontext aus DB generiert.")
+        f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str} (Europe/Berlin). "
+        "\n\nDatenbankstruktur und Zusammenhänge:\n"
+        "- clients: Firmenkunden. Spalten: id, name (Firmenname).\n"
+        "- dates: Termine pro Firma. Spalten: id, client_id (verknüpft mit clients.id), date (Datum), masseur_id (verknüpft mit admin.id).\n"
+        "- times: Zeit-Slots an einem Tag. Spalten: id, date_id (verknüpft mit dates.id), time_start, time_end.\n"
+        "- reservations: Buchungen eines Slots. Spalten: id, time_id (verknüpft mit times.id), name (Kundenname), email.\n"
+        "- admin: Masseure und Ansprechpartner. Spalten: id, first_name, last_name, email.\n"
+        "\nVerknüpfungen:\n"
+        "Jede Firma (clients) hat Termine (dates) an bestimmten Tagen. Jeder Termin kann mehrere Zeit-Slots (times) haben. Jeder Slot kann von einem Kunden (reservations) gebucht werden. Masseure (admin) können einem Termin zugeordnet sein.\n"
+        "\nSlotbuchung bei neckattack:\n"
+        "Wir, die Firma neckattack, bieten Massagen an verschiedenen Standorten für Firmenkunden an. In der Datenbank werden für jede Firma die einzelnen Mitarbeiter, deren Buchungen, sowie die jeweiligen Daten und Uhrzeiten gespeichert, wann welcher Kunde einen Massagetermin hat.\n"
+        "\nBeantworte alle Nutzerfragen stets auf Basis dieser Struktur und der echten Datenbankdaten. Wenn keine passenden Daten gefunden werden, erkläre das höflich und weise darauf hin, dass keine passenden Datenbankdaten vorhanden sind.\n"
+    )    
+    db_context = "[Achtung: Keine passenden Datenbankdaten zur Nutzerfrage gefunden.]"
+    app.logger.info("[DB-KONTEXT] Kein passender Kontext aus DB generiert.")
     else:
         app.logger.info(f"[DB-KONTEXT] {db_context}")
     system_prompt += f" Datenbank-Info: {db_context}"
