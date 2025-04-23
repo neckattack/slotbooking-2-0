@@ -402,8 +402,9 @@ def chat_api():
         "Wir, die Firma neckattack, bieten Massagen an verschiedenen Standorten für Firmenkunden an. In der Datenbank werden für jede Firma die einzelnen Mitarbeiter, deren Buchungen, sowie die jeweiligen Daten und Uhrzeiten gespeichert, wann welcher Kunde einen Massagetermin hat.\n"
         "\nBeantworte alle Nutzerfragen stets auf Basis dieser Struktur und der echten Datenbankdaten. Wenn keine passenden Daten gefunden werden, erkläre das höflich und weise darauf hin, dass keine passenden Datenbankdaten vorhanden sind.\n"
     )    
-    db_context = "[Achtung: Keine passenden Datenbankdaten zur Nutzerfrage gefunden.]"
-    app.logger.info("[DB-KONTEXT] Kein passender Kontext aus DB generiert.")
+    if not db_context:
+        db_context = "[Achtung: Keine passenden Datenbankdaten zur Nutzerfrage gefunden.]"
+        app.logger.info("[DB-KONTEXT] Kein passender Kontext aus DB generiert.")
     else:
         app.logger.info(f"[DB-KONTEXT] {db_context}")
     system_prompt += f" Datenbank-Info: {db_context}"
