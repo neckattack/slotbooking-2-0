@@ -352,6 +352,13 @@ def chat_api():
         try:
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
+            # Zuerst: Firmensuche
+            cursor.execute("SELECT id, name FROM clients WHERE name LIKE %s", (f"%{next_termin_name}%",))
+            firmen_treffer = cursor.fetchall()
+            if firmen_treffer:
+                db_context += f" Firmenname gefunden: {', '.join([f['name'] for f in firmen_treffer])}."
+                app.logger.info(f"[DB-ABFRAGE] Firmenname gefunden: {', '.join([f['name'] for f in firmen_treffer])}")
+            # Danach wie gehabt: Kundensuche
             app.logger.info(f"[DB-QUERY] Suche nächsten Termin: SELECT MIN(datum) as naechster_termin, kunde FROM termine WHERE kunde LIKE '%{next_termin_name}%' AND datum >= {today_str}")
             cursor.execute("""
                 SELECT MIN(datum) as naechster_termin, kunde FROM termine
@@ -359,7 +366,7 @@ def chat_api():
             """, (f"%{next_termin_name}%", today_str))
             row = cursor.fetchone()
             if row and row['naechster_termin']:
-                db_context += f" Nächster Termin für {next_termin_name}: {row['naechster_termin']}."
+                db_context += f" Nächster Termin für {next_termin_name}: {row['naechster_termin']} ."
             else:
                 # Suche nach ähnlichen Namen
                 cursor.execute("SELECT DISTINCT kunde FROM termine WHERE kunde IS NOT NULL")
@@ -380,6 +387,13 @@ def chat_api():
         try:
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
+            # Zuerst: Firmensuche
+            cursor.execute("SELECT id, name FROM clients WHERE name LIKE %s", (f"%{name_match}%",))
+            firmen_treffer = cursor.fetchall()
+            if firmen_treffer:
+                db_context += f" Firmenname gefunden: {', '.join([f['name'] for f in firmen_treffer])}."
+                app.logger.info(f"[DB-ABFRAGE] Firmenname gefunden: {', '.join([f['name'] for f in firmen_treffer])}")
+            # Danach wie gehabt: Kundensuche
             app.logger.info(f"[DB-QUERY] Suche letzten Termin: SELECT MAX(datum) as letzter_termin, kunde FROM termine WHERE kunde LIKE '%{name_match}%'")
             cursor.execute("""
                 SELECT MAX(datum) as letzter_termin, kunde
