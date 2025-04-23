@@ -16,13 +16,22 @@ app.logger.setLevel(logging.INFO)
 import mysql.connector
 app.logger.info(f"mysql-connector-python Version: {mysql.connector.__version__}")
 
+# Prüfe und logge die wichtigsten DB-Umgebungsvariablen beim Start
+app.logger.info(f"[DB-UMGEBUNG] DB_HOST={os.environ.get('DB_HOST')}, DB_USER={os.environ.get('DB_USER')}, DB_NAME={os.environ.get('DB_NAME')}, DB_PORT={os.environ.get('DB_PORT')}")
+
 def get_db_connection():
+    host = os.environ.get("DB_HOST")
+    user = os.environ.get("DB_USER")
+    password = os.environ.get("DB_PASSWORD")
+    database = os.environ.get("DB_NAME")
+    port = int(os.environ.get("DB_PORT", 3306))
+    app.logger.info(f"[DB-CONNECT] host={host}, user={user}, db={database}, port={port}")
     return mysql.connector.connect(
-        host=os.environ.get("DB_HOST"),
-        user=os.environ.get("DB_USER"),
-        password=os.environ.get("DB_PASSWORD"),
-        database=os.environ.get("DB_NAME"),
-        port=int(os.environ.get("DB_PORT", 3306))
+        host=host,
+        user=user,
+        password=password,
+        database=database,
+        port=port
     )
 
 @app.route("/")
@@ -64,32 +73,36 @@ def termine():
     WHERE d.date = %s
     ORDER BY t.time_start
     """
-    cursor.execute(sql, (datum,))
-    result = cursor.fetchall()
-    termine = []
-    for row in result:
-        masseur = (
-            f"{row['masseur_vorname']} {row['masseur_nachname']}"
-            if row['masseur_vorname'] else
-            f"{row['kontakt_vorname']} {row['kontakt_nachname']}"
-            if row['kontakt_vorname'] else "Kein Masseur zugewiesen"
-        )
-        masseur_email = (
-            row['masseur_email'] if row['masseur_email'] else row['kontakt_email']
-        )
-        termine.append({
-            "zeit": f"{row['time_start']} - {row['time_end']}",
-            "kunde": row['kunde'],
-            "kunde_email": row['kunde_email'],
-            "firma": row['firma'],
-            "masseur": masseur,
-            "masseur_email": masseur_email,
-            "reservierungs_id": row['reservierungs_id'],
-            "time_id": row['time_id']  # Wichtig für das Löschen
-        })
-    cursor.close()
-    conn.close()
-    return jsonify(termine)
+    try:
+        cursor.execute(sql, (datum,))
+        result = cursor.fetchall()
+        termine = []
+        for row in result:
+            masseur = (
+                f"{row['masseur_vorname']} {row['masseur_nachname']}"
+                if row['masseur_vorname'] else
+                f"{row['kontakt_vorname']} {row['kontakt_nachname']}"
+                if row['kontakt_vorname'] else "Kein Masseur zugewiesen"
+            )
+            masseur_email = (
+                row['masseur_email'] if row['masseur_email'] else row['kontakt_email']
+            )
+            termine.append({
+                "zeit": f"{row['time_start']} - {row['time_end']}",
+                "kunde": row['kunde'],
+                "kunde_email": row['kunde_email'],
+                "firma": row['firma'],
+                "masseur": masseur,
+                "masseur_email": masseur_email,
+                "reservierungs_id": row['reservierungs_id'],
+                "time_id": row['time_id']  # Wichtig für das Löschen
+            })
+        cursor.close()
+        conn.close()
+        return jsonify(termine)
+    except Exception as e:
+        app.logger.error(f"[DB-Fehler bei Terminabfrage]: {e}")
+        return jsonify({"error": "DB-Fehler bei Terminabfrage"}), 500
 
 @app.route("/api/termine/delete", methods=["POST"])
 def delete_termine():
@@ -226,39 +239,42 @@ def slots():
         JOIN clients c ON d.client_id = c.id
         WHERE d.date = %s
     """
-    cursor.execute(sql_clients, (datum,))
-    client_rows = cursor.fetchall()
-
-    result = []
-    for client in client_rows:
-        date_id = client['date_id']
-        firma = client['firma']
-        # Hole alle Slots für diese date_id
-        sql_slots = """
-            SELECT t.id as time_id, t.time_start, r.id as reservierungs_id, r.name as kunde, r.email as kunde_email
-            FROM times t
-            LEFT JOIN reservations r ON r.time_id = t.id
-            WHERE t.date_id = %s
-            ORDER BY t.time_start
-        """
-        cursor.execute(sql_slots, (date_id,))
-        slots = []
-        for row in cursor.fetchall():
-            slots.append({
-                "time_id": row['time_id'],
-                "time_start": str(row['time_start']),
-                "frei": row['reservierungs_id'] is None,
-                "kunde": row['kunde'] if row['kunde'] else None,
-                "kunde_email": row['kunde_email'] if row['kunde_email'] else None
+    try:
+        cursor.execute(sql_clients, (datum,))
+        client_rows = cursor.fetchall()
+        result = []
+        for client in client_rows:
+            date_id = client['date_id']
+            firma = client['firma']
+            # Hole alle Slots für diese date_id
+            sql_slots = """
+                SELECT t.id as time_id, t.time_start, r.id as reservierungs_id, r.name as kunde, r.email as kunde_email
+                FROM times t
+                LEFT JOIN reservations r ON r.time_id = t.id
+                WHERE t.date_id = %s
+                ORDER BY t.time_start
+            """
+            cursor.execute(sql_slots, (date_id,))
+            slots = []
+            for row in cursor.fetchall():
+                slots.append({
+                    "time_id": row['time_id'],
+                    "time_start": str(row['time_start']),
+                    "frei": row['reservierungs_id'] is None,
+                    "kunde": row['kunde'] if row['kunde'] else None,
+                    "kunde_email": row['kunde_email'] if row['kunde_email'] else None
+                })
+            result.append({
+                "firma": firma,
+                "date_id": date_id,
+                "slots": slots
             })
-        result.append({
-            "firma": firma,
-            "date_id": date_id,
-            "slots": slots
-        })
-    cursor.close()
-    conn.close()
-    return jsonify(result)
+        cursor.close()
+        conn.close()
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"[DB-Fehler bei Slotabfrage]: {e}")
+        return jsonify({"error": "DB-Fehler bei Slotabfrage"}), 500
 
 # --- ChatGPT-API-Endpunkt ---
 @app.route('/api/chat', methods=['POST'])
@@ -328,7 +344,9 @@ def chat_api():
                         db_context += f" Für {antwort_datum} wurden keine Firmen mit Terminen gefunden."
                     cursor.close()
                     conn.close()
+                    app.logger.info(f"[DB-ABFRAGE] Firmen für {antwort_datum}: {', '.join(firmen)}")
                 except Exception as e:
+                    app.logger.error(f"[DB-Fehler bei Firmenabfrage]: {e}")
                     db_context += f" [DB-Fehler bei Firmenabfrage: {e}]"
     if next_termin_name:
         try:
@@ -345,8 +363,10 @@ def chat_api():
                 db_context += f" Für {next_termin_name} wurde kein zukünftiger Termin gefunden."
             cursor.close()
             conn.close()
+            app.logger.info(f"[DB-ABFRAGE] Nächster Termin für {next_termin_name}: {row['naechster_termin']}")
         except Exception as e:
             db_context += f" [DB-Fehler: {e}]"
+            app.logger.error(f"[DB-Fehler bei Terminabfrage]: {e}")
     elif name_match:
         try:
             conn = get_db_connection()
@@ -363,7 +383,9 @@ def chat_api():
                 db_context += f" Für {name_match} wurde kein Termin gefunden."
             cursor.close()
             conn.close()
+            app.logger.info(f"[DB-ABFRAGE] Letzter Termin für {name_match}: {row['letzter_termin']}")
         except Exception as e:
+            app.logger.error(f"[DB-Fehler bei Terminabfrage]: {e}")
             db_context += f" [DB-Fehler: {e}]"
     # --- System-Prompt klarstellen ---
     system_prompt = (
@@ -373,6 +395,7 @@ def chat_api():
         "Wenn keine passenden Daten gefunden wurden, erkläre das höflich."
     )
     if db_context:
+        app.logger.info(f"[DB-KONTEXT] {db_context}")
         system_prompt += f" Datenbank-Info: {db_context}"
     # Ersetze die erste system-Nachricht im Verlauf (falls vorhanden), sonst füge sie vorn an
     new_messages = messages[:]
