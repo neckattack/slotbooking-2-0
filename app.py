@@ -4,6 +4,8 @@ import mysql.connector
 from dotenv import load_dotenv
 from datetime import datetime
 import openai
+from agent_core import find_next_appointment_for_name
+from agent_gpt import agent_respond
 
 load_dotenv()
 
@@ -349,41 +351,17 @@ def chat_api():
                     app.logger.error(f"[DB-Fehler bei Firmenabfrage]: {e}")
                     db_context += f" [DB-Fehler bei Firmenabfrage: {e}]"
     if next_termin_name:
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor(dictionary=True)
-            # Zuerst: Firmensuche
-            cursor.execute("SELECT id, name FROM clients WHERE name LIKE %s", (f"%{next_termin_name}%",))
-            firmen_treffer = cursor.fetchall()
-            if firmen_treffer:
-                db_context += f" Firmenname gefunden: {', '.join([f['name'] for f in firmen_treffer])}."
-                app.logger.info(f"[DB-ABFRAGE] Firmenname gefunden: {', '.join([f['name'] for f in firmen_treffer])}")
-            # Danach wie gehabt: Kundensuche
-            app.logger.info(f"[DB-QUERY] Suche nächsten Termin: SELECT MIN(datum) as naechster_termin, kunde FROM termine WHERE kunde LIKE '%{next_termin_name}%' AND datum >= {today_str}")
-            cursor.execute("""
-                SELECT MIN(datum) as naechster_termin, kunde FROM termine
-                WHERE kunde LIKE %s AND datum >= %s
-            """, (f"%{next_termin_name}%", today_str))
-            row = cursor.fetchone()
-            if row and row['naechster_termin']:
-                db_context += f" Nächster Termin für {next_termin_name}: {row['naechster_termin']} ."
-            else:
-                # Suche nach ähnlichen Namen
-                cursor.execute("SELECT DISTINCT kunde FROM termine WHERE kunde IS NOT NULL")
-                alle_kunden = [r['kunde'] for r in cursor.fetchall()]
-                from difflib import get_close_matches
-                vorschlaege = get_close_matches(next_termin_name, alle_kunden, n=3, cutoff=0.4)
-                if vorschlaege:
-                    db_context += f" Für {next_termin_name} wurde kein zukünftiger Termin gefunden. Ähnliche Kundennamen: {', '.join(vorschlaege)}."
-                else:
-                    db_context += f" Für {next_termin_name} wurde kein zukünftiger Termin gefunden und keine ähnlichen Namen entdeckt."
-            cursor.close()
-            conn.close()
+        # Gemeinsame Agentenlogik nutzen (wie beim E-Mail-Agenten)
+        db_context += find_next_appointment_for_name(next_termin_name)
+
             app.logger.info(f"[DB-ABFRAGE] Nächster Termin für {next_termin_name}: {row['naechster_termin'] if row else None}")
         except Exception as e:
             db_context += f" [DB-Fehler: {e}]"
             app.logger.error(f"[DB-Fehler bei Terminabfrage]: {e}")
     elif name_match:
+        # Auch hier: Gemeinsame Agentenlogik nutzen
+        db_context += find_next_appointment_for_name(name_match)
+
         try:
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
@@ -432,46 +410,10 @@ def chat_api():
             app.logger.error(f"[DB-Fehler bei Terminabfrage]: {e}")
             db_context += f" [DB-Fehler: {e}]"
     # --- System-Prompt klarstellen ---
-    system_prompt = (
-        f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str} (Europe/Berlin). "
-        "\n\nDatenbankstruktur und Zusammenhänge:\n"
-        "- clients: Firmenkunden. Spalten: id, name (Firmenname).\n"
-        "- dates: Termine pro Firma. Spalten: id, client_id (verknüpft mit clients.id), date (Datum), masseur_id (verknüpft mit admin.id).\n"
-        "- times: Zeit-Slots an einem Tag. Spalten: id, date_id (verknüpft mit dates.id), time_start, time_end.\n"
-        "- reservations: Buchungen eines Slots. Spalten: id, time_id (verknüpft mit times.id), name (Kundenname), email.\n"
-        "- admin: Masseure und Ansprechpartner. Spalten: id, first_name, last_name, email.\n"
-        "\nVerknüpfungen:\n"
-        "Jede Firma (clients) hat Termine (dates) an bestimmten Tagen. Jeder Termin kann mehrere Zeit-Slots (times) haben. Jeder Slot kann von einem Kunden (reservations) gebucht werden. Masseure (admin) können einem Termin zugeordnet sein.\n"
-        "\nSlotbuchung bei neckattack:\n"
-        "Wir, die Firma neckattack, bieten Massagen an verschiedenen Standorten für Firmenkunden an. In der Datenbank werden für jede Firma die einzelnen Mitarbeiter, deren Buchungen, sowie die jeweiligen Daten und Uhrzeiten gespeichert, wann welcher Kunde einen Massagetermin hat.\n"
-        "\nBeantworte alle Nutzerfragen stets auf Basis dieser Struktur und der echten Datenbankdaten. Wenn keine passenden Daten gefunden werden, erkläre das höflich und weise darauf hin, dass keine passenden Datenbankdaten vorhanden sind.\n"
-    )    
-    if not db_context:
-        db_context = "[Achtung: Keine passenden Datenbankdaten zur Nutzerfrage gefunden.]"
-        app.logger.info("[DB-KONTEXT] Kein passender Kontext aus DB generiert.")
-    else:
-        app.logger.info(f"[DB-KONTEXT] {db_context}")
-    system_prompt += f" Datenbank-Info: {db_context}"
-    # Ersetze die erste system-Nachricht im Verlauf (falls vorhanden), sonst füge sie vorn an
-    new_messages = messages[:]
-    found_system = False
-    for i, m in enumerate(new_messages):
-        if m.get('role') == 'system':
-            new_messages[i]['content'] = system_prompt
-            found_system = True
-            break
-    if not found_system:
-        new_messages = [{'role': 'system', 'content': system_prompt}] + new_messages
-    openai.api_key = os.environ.get("OPENAI_API_KEY")
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=new_messages
-        )
-        answer = response.choices[0].message['content'].strip()
-        return jsonify({'answer': answer})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    # Nutze zentrale Agentenfunktion für die Antwortgenerierung
+    user_msg = last_user_msg or ""
+    answer = agent_respond(user_msg, channel="chat")
+    return jsonify({'answer': answer})
 
 if __name__ == "__main__":
     app.run(debug=True)
