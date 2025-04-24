@@ -61,7 +61,7 @@ def check_mail_and_reply():
 
     mail.logout()
 
-def send_test_reply(to_addr, orig_subject):
+def send_test_reply(to_addr, orig_subject, body):
     # SMTP-Verbindung herstellen
     import smtplib
     with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
@@ -70,9 +70,10 @@ def send_test_reply(to_addr, orig_subject):
         msg['From'] = EMAIL_USER
         msg['To'] = to_addr
         msg['Subject'] = f"Re: {orig_subject}"
-        msg.set_content("Dies ist eine automatische Testantwort vom Agenten.")
+        msg.set_content(body)
         server.send_message(msg)
         print(f"Antwort an {to_addr} gesendet.")
+
 
 import time
 import logging
