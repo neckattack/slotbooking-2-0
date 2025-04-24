@@ -234,9 +234,12 @@ def slots():
 
     # Hole alle Firmen (clients) für das Datum
     sql_clients = """
-        SELECT d.id as date_id, c.id as client_id, c.name as firma
+        SELECT d.id as date_id, c.id as client_id, c.name as firma,
+               d.masseur_id,
+               a1.first_name AS masseur_vorname, a1.last_name AS masseur_nachname, a1.email AS masseur_email
         FROM dates d
         JOIN clients c ON d.client_id = c.id
+        LEFT JOIN admin a1 ON d.masseur_id = a1.id
         WHERE d.date = %s
     """
     try:
@@ -264,9 +267,17 @@ def slots():
                     "kunde": row['kunde'] if row['kunde'] else None,
                     "kunde_email": row['kunde_email'] if row['kunde_email'] else None
                 })
+            # Masseurname und E-Mail wie in /api/termine bauen
+            masseur = (
+                f"{client['masseur_vorname']} {client['masseur_nachname']}"
+                if client.get('masseur_vorname') else "Kein Masseur zugewiesen"
+            )
+            masseur_email = client.get('masseur_email')
             result.append({
                 "firma": firma,
                 "date_id": date_id,
+                "masseur": masseur,
+                "masseur_email": masseur_email,
                 "slots": slots
             })
         cursor.close()
