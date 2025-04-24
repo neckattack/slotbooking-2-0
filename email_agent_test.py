@@ -3,10 +3,6 @@ import smtplib
 import email
 from email.header import decode_header
 import os
-from dotenv import load_dotenv
-
-# Lade Umgebungsvariablen (für Mail-Login)
-load_dotenv()
 
 IMAP_SERVER = os.environ.get('IMAP_SERVER')  # z.B. 'imap.gmail.com'
 IMAP_PORT = int(os.environ.get('IMAP_PORT', 993))
@@ -19,15 +15,22 @@ SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
 from agent_core import find_next_appointment_for_name
 
 def check_mail_and_reply():
-    # Verbinde mit IMAP-Server
-    mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
-    mail.login(EMAIL_USER, EMAIL_PASS)
-    mail.select('inbox')
+    import logging
+    logger = logging.getLogger()
+    try:
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+        mail.login(EMAIL_USER, EMAIL_PASS)
+        logger.info(f"[IMAP] Login erfolgreich für {EMAIL_USER}")
+        mail.select('inbox')
+    except Exception as e:
+        logger.error(f"[IMAP] Login/Verbindung fehlgeschlagen: {e}")
+        return
 
     # Suche nach ungelesenen Mails
     status, messages = mail.search(None, 'UNSEEN')
     if status != 'OK':
-        print('Keine neuen Mails gefunden.')
+        logger.info('Keine neuen Mails gefunden.')
+        mail.logout()
         return
 
     for num in messages[0].split():
@@ -39,7 +42,7 @@ def check_mail_and_reply():
         if isinstance(subject, bytes):
             subject = subject.decode(encoding or 'utf-8')
         from_addr = msg.get('From')
-        print(f"Neue Mail von {from_addr} mit Betreff '{subject}'")
+        logger.info(f"Neue Mail von {from_addr} mit Betreff '{subject}'")
 
         # --- E-Mail-Inhalt analysieren ---
         body = ""
@@ -52,27 +55,40 @@ def check_mail_and_reply():
         else:
             charset = msg.get_content_charset() or 'utf-8'
             body = msg.get_payload(decode=True).decode(charset, errors='ignore')
-        print(f"Mail-Body: {body}")
+        logger.info(f"Mail-Body: {body}")
 
         # Sende echte neckattack-GPT-Antwort zurück
         from agent_gpt import agent_respond
-        antwort = agent_respond(body, channel="email", user_email=from_addr)
-        send_test_reply(from_addr, subject, antwort)
+        try:
+            antwort = agent_respond(body, channel="email", user_email=from_addr)
+            logger.info(f"Antwort generiert: {antwort}")
+        except Exception as e:
+            logger.error(f"Fehler bei agent_respond: {e}")
+            antwort = f"[Fehler bei der Antwortgenerierung: {e}]"
+        try:
+            send_test_reply(from_addr, subject, antwort)
+            logger.info(f"Antwort an {from_addr} gesendet.")
+        except Exception as e:
+            logger.error(f"Fehler beim Senden der Antwort an {from_addr}: {e}")
 
     mail.logout()
 
 def send_test_reply(to_addr, orig_subject, body):
-    # SMTP-Verbindung herstellen
     import smtplib
-    with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-        server.login(EMAIL_USER, EMAIL_PASS)
-        msg = email.message.EmailMessage()
-        msg['From'] = EMAIL_USER
-        msg['To'] = to_addr
-        msg['Subject'] = f"Re: {orig_subject}"
-        msg.set_content(body)
-        server.send_message(msg)
-        print(f"Antwort an {to_addr} gesendet.")
+    import logging
+    logger = logging.getLogger()
+    try:
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
+            server.login(EMAIL_USER, EMAIL_PASS)
+            msg = email.message.EmailMessage()
+            msg['From'] = EMAIL_USER
+            msg['To'] = to_addr
+            msg['Subject'] = f"Re: {orig_subject}"
+            msg.set_content(body)
+            server.send_message(msg)
+            logger.info(f"Antwort an {to_addr} gesendet.")
+    except Exception as e:
+        logger.error(f"Fehler beim SMTP-Versand an {to_addr}: {e}")
 
 
 import time
