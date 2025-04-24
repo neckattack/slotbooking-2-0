@@ -36,6 +36,33 @@ def get_db_connection():
         port=port
     )
 
+
+def get_reservations_for_today():
+    """
+    Returns a list of reservations (customer name and email) for today's date.
+    """
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    sql = """
+        SELECT r.name AS kunde, r.email AS kunde_email
+        FROM reservations r
+        JOIN times t ON r.time_id = t.id
+        JOIN dates d ON t.date_id = d.id
+        WHERE d.date = %s
+    """
+    try:
+        cursor.execute(sql, (today_str,))
+        rows = cursor.fetchall()
+        reservations = [{"name": row["kunde"], "email": row["kunde_email"]} for row in rows if row["kunde"]]
+        return reservations
+    except Exception as e:
+        app.logger.error(f"[DB-Fehler bei get_reservations_for_today]: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
 @app.route("/")
 def index():
     return render_template("index.html")
