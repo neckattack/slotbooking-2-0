@@ -21,20 +21,7 @@ app.logger.info(f"mysql-connector-python Version: {mysql.connector.__version__}"
 # Prüfe und logge die wichtigsten DB-Umgebungsvariablen beim Start
 app.logger.info(f"[DB-UMGEBUNG] DB_HOST={os.environ.get('DB_HOST')}, DB_USER={os.environ.get('DB_USER')}, DB_NAME={os.environ.get('DB_NAME')}, DB_PORT={os.environ.get('DB_PORT')}")
 
-def get_db_connection():
-    host = os.environ.get("DB_HOST")
-    user = os.environ.get("DB_USER")
-    password = os.environ.get("DB_PASSWORD")
-    database = os.environ.get("DB_NAME")
-    port = int(os.environ.get("DB_PORT", 3306))
-    app.logger.info(f"[DB-CONNECT] host={host}, user={user}, db={database}, port={port}")
-    return mysql.connector.connect(
-        host=host,
-        user=user,
-        password=password,
-        database=database,
-        port=port
-    )
+from db_utils import get_db_connection
 
 
 def get_reservations_for_today():

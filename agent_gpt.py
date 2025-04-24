@@ -2,7 +2,7 @@ import os
 import openai
 from datetime import datetime
 from agent_core import find_next_appointment_for_name
-from app import get_db_connection
+from db_utils import get_db_connection
 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
