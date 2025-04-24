@@ -22,7 +22,6 @@ def agent_respond(user_message, channel="chat", user_email=None):
     """
     today_str = datetime.now().strftime('%Y-%m-%d')
     db_context = ""
-    # Lade das Datenbankschema aus den Knowledge-Docs
     knowledge = load_knowledge()
     system_prompt = (
         f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str}.\n"
@@ -33,6 +32,47 @@ def agent_respond(user_message, channel="chat", user_email=None):
         f"(Kanal: {channel})\n"
         f"Datenbank-Kontext: {db_context}\n"
     )
+    # Chain-of-Thought für komplexe Masseur-Fragen (z.B. "Welche Termine habe ich morgen?")
+    if user_email and any(kw in user_message.lower() for kw in ["meine termine", "welche termine habe ich", "slots morgen", "freie termine morgen", "meine buchungen morgen", "welche kunden habe ich morgen"]):
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            # Schritt 1: Masseur-ID zur E-Mail
+            cursor.execute("SELECT id FROM admin WHERE email = %s", (user_email,))
+            masseur = cursor.fetchone()
+            if not masseur:
+                return "Keine Masseur-ID zur angegebenen E-Mail gefunden."
+            masseur_id = masseur["id"]
+            # Schritt 2: Firmen/Date-IDs für morgen
+            from datetime import timedelta
+            morgen = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+            cursor.execute("SELECT id, client_id FROM dates WHERE masseur_id = %s AND date = %s", (masseur_id, morgen))
+            date_rows = cursor.fetchall()
+            if not date_rows:
+                return "Für morgen sind Sie keinem Unternehmen zugeordnet."
+            results = []
+            for date in date_rows:
+                date_id = date["id"]
+                # Schritt 3: Alle Slots und Reservierungen für diese Date-ID
+                cursor.execute("""
+                    SELECT t.time_start, t.time_end, r.name AS kunde, r.email AS kunde_email
+                    FROM times t
+                    LEFT JOIN reservations r ON t.id = r.time_id
+                    WHERE t.date_id = %s
+                    ORDER BY t.time_start
+                """, (date_id,))
+                slots = cursor.fetchall()
+                for slot in slots:
+                    kunde = slot["kunde"] if slot["kunde"] else "FREI"
+                    results.append(f"{slot['time_start']}-{slot['time_end']}: {kunde}")
+            cursor.close()
+            conn.close()
+            if not results:
+                return "Für morgen sind keine Slots oder Reservierungen vorhanden."
+            return "Ihre Termine und freie Slots für morgen:\n" + "\n".join(results)
+        except Exception as e:
+            return f"[Fehler bei der Chain-of-Thought-Abfrage: {e}]"
+    # Standard: Text-zu-SQL-Flow
     # 1. Frage GPT nach passendem SQL-Query für die Nutzerfrage
     sql_prompt = (
         system_prompt +
