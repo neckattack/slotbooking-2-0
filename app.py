@@ -382,7 +382,7 @@ def chat_api():
                 # Suche nach ähnlichen Namen
                 cursor.execute("SELECT DISTINCT kunde FROM termine WHERE kunde IS NOT NULL")
                 alle_kunden = [r['kunde'] for r in cursor.fetchall()]
-                from difflib import get_close_matches
+from difflib import get_close_matches
                 vorschlaege = get_close_matches(next_termin_name, alle_kunden, n=3, cutoff=0.4)
                 if vorschlaege:
                     db_context += f" Für {next_termin_name} wurde kein zukünftiger Termin gefunden. Ähnliche Kundennamen: {', '.join(vorschlaege)}."
