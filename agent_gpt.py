@@ -32,46 +32,64 @@ def agent_respond(user_message, channel="chat", user_email=None):
         f"(Kanal: {channel})\n"
         f"Datenbank-Kontext: {db_context}\n"
     )
-    # Chain-of-Thought für komplexe Masseur-Fragen (z.B. "Welche Termine habe ich morgen?")
-    if user_email and any(kw in user_message.lower() for kw in ["meine termine", "welche termine habe ich", "slots morgen", "freie termine morgen", "meine buchungen morgen", "welche kunden habe ich morgen"]):
+    # Globale Terminübersicht für neckattack (z.B. "Welche Termine haben wir morgen?" oder "Welche Termine hat neckattack am <Datum>?")
+    import re
+    if channel == "email":
+        # Suche nach einem Datum in der Frage (z.B. "morgen", "am 25.04.2025", "am 25.4.")
+        msg_lc = user_message.lower()
+        # 1. "morgen"
+        if "morgen" in msg_lc:
+            from datetime import timedelta
+            datum = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+            datum_nice = (datetime.now() + timedelta(days=1)).strftime('%d.%m.%Y')
+        else:
+            # 2. explizites Datum suchen
+            match = re.search(r'am (\d{1,2})[\./](\d{1,2})(?:[\./](\d{2,4}))?', msg_lc)
+            if match:
+                tag, monat, jahr = match.groups()
+                if not jahr:
+                    jahr = str(datetime.now().year)
+                if len(jahr) == 2:
+                    jahr = '20' + jahr
+                datum = f"{jahr}-{int(monat):02d}-{int(tag):02d}"
+                datum_nice = f"{int(tag):02d}.{int(monat):02d}.{jahr}"
+            else:
+                datum = datetime.now().strftime('%Y-%m-%d')
+                datum_nice = datetime.now().strftime('%d.%m.%Y')
         try:
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
-            # Schritt 1: Masseur-ID zur E-Mail
-            cursor.execute("SELECT id FROM admin WHERE email = %s", (user_email,))
-            masseur = cursor.fetchone()
-            if not masseur:
-                return "Keine Masseur-ID zur angegebenen E-Mail gefunden."
-            masseur_id = masseur["id"]
-            # Schritt 2: Firmen/Date-IDs für morgen
-            from datetime import timedelta
-            morgen = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-            cursor.execute("SELECT id, client_id FROM dates WHERE masseur_id = %s AND date = %s", (masseur_id, morgen))
-            date_rows = cursor.fetchall()
-            if not date_rows:
-                return "Für morgen sind Sie keinem Unternehmen zugeordnet."
-            results = []
-            for date in date_rows:
-                date_id = date["id"]
-                # Schritt 3: Alle Slots und Reservierungen für diese Date-ID
-                cursor.execute("""
-                    SELECT t.time_start, t.time_end, r.name AS kunde, r.email AS kunde_email
-                    FROM times t
-                    LEFT JOIN reservations r ON t.id = r.time_id
-                    WHERE t.date_id = %s
-                    ORDER BY t.time_start
-                """, (date_id,))
-                slots = cursor.fetchall()
-                for slot in slots:
-                    kunde = slot["kunde"] if slot["kunde"] else "FREI"
-                    results.append(f"{slot['time_start']}-{slot['time_end']}: {kunde}")
+            sql = """
+                SELECT c.name AS firma, t.time_start, t.time_end, r.name AS kunde, r.email AS kunde_email
+                FROM dates d
+                JOIN clients c ON d.client_id = c.id
+                JOIN times t ON t.date_id = d.id
+                LEFT JOIN reservations r ON r.time_id = t.id
+                WHERE d.date = %s
+                ORDER BY c.name, t.time_start
+            """
+            cursor.execute(sql, (datum,))
+            rows = cursor.fetchall()
             cursor.close()
             conn.close()
-            if not results:
-                return "Für morgen sind keine Slots oder Reservierungen vorhanden."
-            return "Ihre Termine und freie Slots für morgen:\n" + "\n".join(results)
+            if not rows:
+                antwort = f"Hallo,\n\nfür den {datum_nice} sind keine Termine oder Anmeldungen im System eingetragen.\n\nViele Grüße\nIhr neckattack-Team"
+            else:
+                antwort = f"Hallo,\n\nhier sind alle Termine und Anmeldungen für den {datum_nice}:\n"
+                aktuelle_firma = None
+                for row in rows:
+                    if row['firma'] != aktuelle_firma:
+                        antwort += f"\nFirma: {row['firma']}\n"
+                        aktuelle_firma = row['firma']
+                    kunde = row['kunde'] if row['kunde'] else "FREI"
+                    antwort += f"  {row['time_start']}-{row['time_end']}: {kunde}"
+                    if row['kunde_email']:
+                        antwort += f" ({row['kunde_email']})"
+                    antwort += "\n"
+                antwort += "\nViele Grüße\nIhr neckattack-Team"
+            return antwort
         except Exception as e:
-            return f"[Fehler bei der Chain-of-Thought-Abfrage: {e}]"
+            return f"Hallo,\n\nes gab einen Fehler bei der Terminabfrage: {e}\n\nViele Grüße\nIhr neckattack-Team"
     # Standard: Text-zu-SQL-Flow
     # 1. Frage GPT nach passendem SQL-Query für die Nutzerfrage
     sql_prompt = (
