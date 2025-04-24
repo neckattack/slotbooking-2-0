@@ -379,16 +379,16 @@ def chat_api():
                     db_context += f" [DB-Fehler bei Firmenabfrage: {e}]"
     if next_termin_name:
         # Gemeinsame Agentenlogik nutzen (wie beim E-Mail-Agenten)
-        db_context += find_next_appointment_for_name(next_termin_name)
-
-            app.logger.info(f"[DB-ABFRAGE] Nächster Termin für {next_termin_name}: {row['naechster_termin'] if row else None}")
+        try:
+            db_context += find_next_appointment_for_name(next_termin_name)
         except Exception as e:
+            app.logger.info(f"[DB-ABFRAGE] Nächster Termin für {next_termin_name}: {row['naechster_termin'] if row else None}")
             db_context += f" [DB-Fehler: {e}]"
             app.logger.error(f"[DB-Fehler bei Terminabfrage]: {e}")
     elif name_match:
         # Auch hier: Gemeinsame Agentenlogik nutzen
         db_context += find_next_appointment_for_name(name_match)
-
+{{ ... }}
         try:
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
