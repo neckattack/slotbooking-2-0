@@ -35,61 +35,123 @@ def agent_respond(user_message, channel="chat", user_email=None):
     # Globale Terminübersicht für neckattack (z.B. "Welche Termine haben wir morgen?" oder "Welche Termine hat neckattack am <Datum>?")
     import re
     if channel == "email":
-        # Suche nach einem Datum in der Frage (z.B. "morgen", "am 25.04.2025", "am 25.4.")
+        import re
         msg_lc = user_message.lower()
-        # 1. "morgen"
-        if "morgen" in msg_lc:
-            from datetime import timedelta
-            datum = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-            datum_nice = (datetime.now() + timedelta(days=1)).strftime('%d.%m.%Y')
-        else:
-            # 2. explizites Datum suchen
-            match = re.search(r'am (\d{1,2})[\./](\d{1,2})(?:[\./](\d{2,4}))?', msg_lc)
+        # Schlüsselwörter für Terminabfragen
+        termin_keywords = ["termin", "anmeldung", "buchung", "slot", "reservierung"]
+        masseur_keywords = ["masseur", "wer ist morgen", "eingeteilt", "nächste(r|s)? termin", "kunde für masseur"]
+        # 1. Flexible Terminabfrage
+        if any(kw in msg_lc for kw in termin_keywords):
+            # Datum erkennen
+            if "morgen" in msg_lc:
+                from datetime import timedelta
+                datum = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+                datum_nice = (datetime.now() + timedelta(days=1)).strftime('%d.%m.%Y')
+            else:
+                match = re.search(r'am (\d{1,2})[\./](\d{1,2})(?:[\./](\d{2,4}))?', msg_lc)
+                if match:
+                    tag, monat, jahr = match.groups()
+                    if not jahr:
+                        jahr = str(datetime.now().year)
+                    if len(jahr) == 2:
+                        jahr = '20' + jahr
+                    datum = f"{jahr}-{int(monat):02d}-{int(tag):02d}"
+                    datum_nice = f"{int(tag):02d}.{int(monat):02d}.{jahr}"
+                else:
+                    # Kein Datum erkannt: Rückfrage
+                    return "Hallo,\n\nfür welches Datum möchtest du die Termine oder Anmeldungen wissen? Bitte gib das Datum an (z.B. 'am 25.04.2025').\n\nViele Grüße\nIhr neckattack-Team"
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor(dictionary=True)
+                sql = """
+                    SELECT c.name AS firma, t.time_start, t.time_end, r.name AS kunde, r.email AS kunde_email
+                    FROM dates d
+                    JOIN clients c ON d.client_id = c.id
+                    JOIN times t ON t.date_id = d.id
+                    LEFT JOIN reservations r ON r.time_id = t.id
+                    WHERE d.date = %s
+                    ORDER BY c.name, t.time_start
+                """
+                cursor.execute(sql, (datum,))
+                rows = cursor.fetchall()
+                cursor.close()
+                conn.close()
+                if not rows:
+                    antwort = f"Hallo,\n\nfür den {datum_nice} sind keine Termine oder Anmeldungen im System eingetragen.\n\nViele Grüße\nIhr neckattack-Team"
+                else:
+                    antwort = f"Hallo,\n\nhier sind alle Termine und Anmeldungen für den {datum_nice}:\n"
+                    aktuelle_firma = None
+                    for row in rows:
+                        if row['firma'] != aktuelle_firma:
+                            antwort += f"\nFirma: {row['firma']}\n"
+                            aktuelle_firma = row['firma']
+                        kunde = row['kunde'] if row['kunde'] else "FREI"
+                        antwort += f"  {row['time_start']}-{row['time_end']}: {kunde}"
+                        if row['kunde_email']:
+                            antwort += f" ({row['kunde_email']})"
+                        antwort += "\n"
+                    antwort += "\nViele Grüße\nIhr neckattack-Team"
+                return antwort
+            except Exception as e:
+                return f"Hallo,\n\nes gab einen Fehler bei der Terminabfrage: {e}\n\nViele Grüße\nIhr neckattack-Team"
+        # 2. Flexible Masseur-Abfragen
+        elif any(re.search(kw, msg_lc) for kw in masseur_keywords):
+            # Wer ist morgen eingeteilt?
+            if "wer ist morgen" in msg_lc or ("masseur" in msg_lc and "morgen" in msg_lc):
+                from datetime import timedelta
+                datum = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+                datum_nice = (datetime.now() + timedelta(days=1)).strftime('%d.%m.%Y')
+                try:
+                    conn = get_db_connection()
+                    cursor = conn.cursor(dictionary=True)
+                    sql = """
+                        SELECT DISTINCT a.first_name, a.last_name, a.email
+                        FROM dates d
+                        JOIN admin a ON d.masseur_id = a.id
+                        WHERE d.date = %s
+                    """
+                    cursor.execute(sql, (datum,))
+                    rows = cursor.fetchall()
+                    cursor.close()
+                    conn.close()
+                    if not rows:
+                        return f"Hallo,\n\nam {datum_nice} ist kein Masseur eingeteilt.\n\nViele Grüße\nIhr neckattack-Team"
+                    masseure = [f"{row['first_name']} {row['last_name']} ({row['email']})" for row in rows]
+                    return f"Hallo,\n\nam {datum_nice} sind folgende Masseure eingeteilt:\n" + "\n".join(masseure) + "\n\nViele Grüße\nIhr neckattack-Team"
+                except Exception as e:
+                    return f"Hallo,\n\nes gab einen Fehler bei der Masseur-Abfrage: {e}\n\nViele Grüße\nIhr neckattack-Team"
+            # Nächster Termin/Kunde für Masseur XY
+            match = re.search(r'masseur(?:in)? ([a-zA-Zäöüß]+)', msg_lc)
             if match:
-                tag, monat, jahr = match.groups()
-                if not jahr:
-                    jahr = str(datetime.now().year)
-                if len(jahr) == 2:
-                    jahr = '20' + jahr
-                datum = f"{jahr}-{int(monat):02d}-{int(tag):02d}"
-                datum_nice = f"{int(tag):02d}.{int(monat):02d}.{jahr}"
-            else:
-                datum = datetime.now().strftime('%Y-%m-%d')
-                datum_nice = datetime.now().strftime('%d.%m.%Y')
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor(dictionary=True)
-            sql = """
-                SELECT c.name AS firma, t.time_start, t.time_end, r.name AS kunde, r.email AS kunde_email
-                FROM dates d
-                JOIN clients c ON d.client_id = c.id
-                JOIN times t ON t.date_id = d.id
-                LEFT JOIN reservations r ON r.time_id = t.id
-                WHERE d.date = %s
-                ORDER BY c.name, t.time_start
-            """
-            cursor.execute(sql, (datum,))
-            rows = cursor.fetchall()
-            cursor.close()
-            conn.close()
-            if not rows:
-                antwort = f"Hallo,\n\nfür den {datum_nice} sind keine Termine oder Anmeldungen im System eingetragen.\n\nViele Grüße\nIhr neckattack-Team"
-            else:
-                antwort = f"Hallo,\n\nhier sind alle Termine und Anmeldungen für den {datum_nice}:\n"
-                aktuelle_firma = None
-                for row in rows:
-                    if row['firma'] != aktuelle_firma:
-                        antwort += f"\nFirma: {row['firma']}\n"
-                        aktuelle_firma = row['firma']
-                    kunde = row['kunde'] if row['kunde'] else "FREI"
-                    antwort += f"  {row['time_start']}-{row['time_end']}: {kunde}"
-                    if row['kunde_email']:
-                        antwort += f" ({row['kunde_email']})"
-                    antwort += "\n"
-                antwort += "\nViele Grüße\nIhr neckattack-Team"
-            return antwort
-        except Exception as e:
-            return f"Hallo,\n\nes gab einen Fehler bei der Terminabfrage: {e}\n\nViele Grüße\nIhr neckattack-Team"
+                masseur_name = match.group(1)
+                try:
+                    conn = get_db_connection()
+                    cursor = conn.cursor(dictionary=True)
+                    sql = """
+                        SELECT d.date, t.time_start, t.time_end, r.name AS kunde, r.email AS kunde_email
+                        FROM dates d
+                        JOIN admin a ON d.masseur_id = a.id
+                        JOIN times t ON t.date_id = d.id
+                        LEFT JOIN reservations r ON r.time_id = t.id
+                        WHERE (a.first_name LIKE %s OR a.last_name LIKE %s)
+                          AND d.date >= CURDATE()
+                        ORDER BY d.date, t.time_start
+                        LIMIT 1
+                    """
+                    cursor.execute(sql, (f"%{masseur_name}%", f"%{masseur_name}%"))
+                    row = cursor.fetchone()
+                    cursor.close()
+                    conn.close()
+                    if not row:
+                        return f"Hallo,\n\nFür Masseur {masseur_name} ist kein nächster Termin im System eingetragen.\n\nViele Grüße\nIhr neckattack-Team"
+                    return f"Hallo,\n\nDer nächste Termin für Masseur {masseur_name} ist am {row['date']} von {row['time_start']} bis {row['time_end']} mit Kunde: {row['kunde'] or 'FREI'}\n\nViele Grüße\nIhr neckattack-Team"
+                except Exception as e:
+                    return f"Hallo,\n\nes gab einen Fehler bei der Masseur-Terminabfrage: {e}\n\nViele Grüße\nIhr neckattack-Team"
+            return "Hallo,\n\nBitte gib den Namen des Masseurs an, für den du den nächsten Termin wissen möchtest (z.B. 'nächster Termin für Masseur Müller').\n\nViele Grüße\nIhr neckattack-Team"
+        # 3. Sonstige Fragen
+        else:
+            return "Hallo,\n\nBitte stelle eine konkrete Frage zu Terminen, Anmeldungen oder Masseuren, damit ich dir weiterhelfen kann.\n\nViele Grüße\nIhr neckattack-Team"
+
     # Standard: Text-zu-SQL-Flow
     # 1. Frage GPT nach passendem SQL-Query für die Nutzerfrage
     sql_prompt = (
