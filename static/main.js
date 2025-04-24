@@ -46,7 +46,10 @@ if (freieTermine.length > 0) {
             }
             let html = `<div class="alert alert-warning"><b>Testmodus:</b> Alle Slots mit Slot-ID, Status, ggf. Kunde/E-Mail</div>`;
             data.forEach(company => {
-                html += `<h4>${company.firma} (date_id: ${company.date_id})</h4>`;
+                html += `<h4>${company.firma} (date_id: ${company.date_id})` +
+    (company.masseur ? `<br><span class='text-secondary'><i class='bi bi-person-badge'></i> ${company.masseur}</span>` : '') +
+    (company.masseur_email ? `<br><a href='mailto:${company.masseur_email}' class='email-link'><i class='bi bi-envelope'></i> ${company.masseur_email}</a>` : '') +
+    `</h4>`;
                 html += `<table class="table table-sm table-bordered"><thead><tr><th>Zeit</th><th>Slot-ID</th><th>Status</th><th>Kunde</th><th>E-Mail</th></tr></thead><tbody>`;
                 company.slots.forEach(slot => {
                     html += `<tr>
