@@ -86,7 +86,7 @@ def agent_respond(user_message, channel="chat", user_email=None):
     sql_query = sql_response.choices[0].message['content'].strip()
     # Sicherheits-Check: Nur SELECTs erlauben
     if not sql_query.lower().startswith("select"):
-        return "[Fehler: Nur SELECT-Abfragen sind erlaubt!]"
+        return "Entschuldigung, ich kann aus Sicherheitsgründen nur Informationen aus der Datenbank abrufen, aber keine Änderungen vornehmen. Bitte stelle deine Frage so, dass ich dir mit einer Auskunft helfen kann – zum Beispiel zu bestehenden Terminen oder Kunden. Falls du Unterstützung brauchst, melde dich gern direkt beim Support!"
     # 2. Führe das SQL-Statement aus
     try:
         conn = get_db_connection()
