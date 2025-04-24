@@ -435,6 +435,9 @@ def chat_api():
         except Exception as e:
             app.logger.error(f"[DB-Fehler bei Terminabfrage]: {e}")
             db_context += f" [DB-Fehler: {e}]"
+        except Exception as e:
+            app.logger.error(f"[DB-Fehler bei Terminabfrage]: {e}")
+            db_context += f" [DB-Fehler: {e}]"
     # --- System-Prompt klarstellen ---
     # Nutze zentrale Agentenfunktion für die Antwortgenerierung
     user_msg = last_user_msg or ""
