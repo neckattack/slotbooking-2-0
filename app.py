@@ -388,7 +388,6 @@ def chat_api():
     elif name_match:
         # Auch hier: Gemeinsame Agentenlogik nutzen
         db_context += find_next_appointment_for_name(name_match)
-{{ ... }}
         try:
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
