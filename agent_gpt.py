@@ -121,9 +121,17 @@ def agent_respond(user_message, channel="chat", user_email=None):
                 except Exception as e:
                     return f"Hallo,\n\nes gab einen Fehler bei der Masseur-Abfrage: {e}\n\nViele Grüße\nIhr neckattack-Team"
             # Nächster Termin/Kunde für Masseur XY
+            # Erkenne auch "Wann hat Masseur XY einen Termin" oder "Wann ist Masseur XY gebucht"
             match = re.search(r'masseur(?:in)? ([a-zA-Zäöüß]+)', msg_lc)
-            if match:
-                masseur_name = match.group(1)
+            if match or re.search(r'wann.*masseur.*([a-zA-Zäöüß]+).*termin', msg_lc) or re.search(r'gebucht.*masseur.*([a-zA-Zäöüß]+)', msg_lc):
+                if match:
+                    masseur_name = match.group(1)
+                else:
+                    # Versuche den Namen aus anderen Formulierungen zu extrahieren
+                    m2 = re.search(r'(?:wann|gebucht).*masseur.*([a-zA-Zäöüß]+)', msg_lc)
+                    masseur_name = m2.group(1) if m2 else None
+                if not masseur_name:
+                    return "Hallo,\n\nBitte gib den Namen des Masseurs an, für den du die Termine wissen möchtest (z.B. 'Wann hat Masseur Müller einen Termin?').\n\nViele Grüße\nIhr neckattack-Team"
                 try:
                     conn = get_db_connection()
                     cursor = conn.cursor(dictionary=True)
@@ -136,18 +144,24 @@ def agent_respond(user_message, channel="chat", user_email=None):
                         WHERE (a.first_name LIKE %s OR a.last_name LIKE %s)
                           AND d.date >= CURDATE()
                         ORDER BY d.date, t.time_start
-                        LIMIT 1
                     """
                     cursor.execute(sql, (f"%{masseur_name}%", f"%{masseur_name}%"))
-                    row = cursor.fetchone()
+                    rows = cursor.fetchall()
                     cursor.close()
                     conn.close()
-                    if not row:
-                        return f"Hallo,\n\nFür Masseur {masseur_name} ist kein nächster Termin im System eingetragen.\n\nViele Grüße\nIhr neckattack-Team"
-                    return f"Hallo,\n\nDer nächste Termin für Masseur {masseur_name} ist am {row['date']} von {row['time_start']} bis {row['time_end']} mit Kunde: {row['kunde'] or 'FREI'}\n\nViele Grüße\nIhr neckattack-Team"
+                    if not rows:
+                        return f"Hallo,\n\nFür Masseur {masseur_name} sind keine kommenden Termine im System eingetragen.\n\nViele Grüße\nIhr neckattack-Team"
+                    antwort = f"Hallo,\n\nHier sind alle kommenden Termine für Masseur {masseur_name}:\n"
+                    for row in rows:
+                        antwort += f"- {row['date']} {row['time_start']}-{row['time_end']}: {row['kunde'] or 'FREI'}"
+                        if row['kunde_email']:
+                            antwort += f" ({row['kunde_email']})"
+                        antwort += "\n"
+                    antwort += "\nViele Grüße\nIhr neckattack-Team"
+                    return antwort
                 except Exception as e:
                     return f"Hallo,\n\nes gab einen Fehler bei der Masseur-Terminabfrage: {e}\n\nViele Grüße\nIhr neckattack-Team"
-            return "Hallo,\n\nBitte gib den Namen des Masseurs an, für den du den nächsten Termin wissen möchtest (z.B. 'nächster Termin für Masseur Müller').\n\nViele Grüße\nIhr neckattack-Team"
+            return "Hallo,\n\nBitte gib den Namen des Masseurs an, für den du die Termine wissen möchtest (z.B. 'Wann hat Masseur Müller einen Termin?').\n\nViele Grüße\nIhr neckattack-Team"
         # 3. Sonstige Fragen
         else:
             return "Hallo,\n\nBitte stelle eine konkrete Frage zu Terminen, Anmeldungen oder Masseuren, damit ich dir weiterhelfen kann.\n\nViele Grüße\nIhr neckattack-Team"
