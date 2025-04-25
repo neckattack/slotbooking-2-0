@@ -51,6 +51,8 @@ def agent_respond(user_message, channel="chat", user_email=None):
             "Antworte immer auf Deutsch.\n"
             f"Datenbankschema (Knowledge):\n{knowledge}\n"
             f"(Kanal: {channel})\n"
+            "WICHTIG: Das Datum eines Termins steht IMMER in der Spalte 'date' der Tabelle 'dates' (Typ DATE). Zeitangaben stehen in 'time_start' und 'time_end' der Tabelle 'times' (Typ TIME). Um Termine in einem Zeitraum abzufragen, muss über 'dates.date' gefiltert werden.\n"
+            "BEISPIEL: SELECT * FROM dates WHERE date >= '2025-04-25' AND date <= '2025-05-01';\n"
         )
         sql_prompt = (
             system_prompt +
