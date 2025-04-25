@@ -54,7 +54,7 @@ def agent_respond(user_message, channel="chat", user_email=None):
         )
         sql_prompt = (
             system_prompt +
-            "\nFormuliere für die folgende Nutzerfrage ein passendes SQL-SELECT-Statement (ohne Erklärtext, nur das SQL!):\n" +
+            "\nGib IMMER ein SQL-SELECT-Statement zurück, das die Nutzerfrage beantwortet. KEINE Kommentare, KEINE Erklärungen, NUR das SQL-Statement!\n" +
             user_message
         )
         sql_response = openai.ChatCompletion.create(
@@ -62,6 +62,21 @@ def agent_respond(user_message, channel="chat", user_email=None):
             messages=[{"role": "system", "content": sql_prompt}]
         )
         sql_query = sql_response.choices[0].message['content'].strip()
+        # Fallback: Wenn kein SELECT, versuche es ein zweites Mal mit noch strengerem Prompt
+        if not sql_query.lower().startswith("select"):
+            fallback_prompt = (
+                system_prompt +
+                "\nACHTUNG: Gib JEDES MAL ein SQL-SELECT-Statement zurück, das die Nutzerfrage beantwortet. KEINE Kommentare, KEINE Erklärungen, NUR das SQL-Statement. Antworte NIEMALS mit etwas anderem als einem ausführbaren SELECT!\n" +
+                user_message
+            )
+            sql_response_fb = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "system", "content": fallback_prompt}]
+            )
+            sql_query = sql_response_fb.choices[0].message['content'].strip()
+        # Optional: Für Admins SQL loggen
+        if user_email and user_email.endswith("@neckattack.net"):
+            print(f"[GPT-SQL für {user_email}]: {sql_query}")
         if not sql_query.lower().startswith("select"):
             return "Hallo,\n\nEntschuldigung, ich kann aus Sicherheitsgründen nur Informationen aus der Datenbank abrufen, aber keine Änderungen vornehmen. Bitte stelle deine Frage so, dass ich dir mit einer Auskunft helfen kann – zum Beispiel zu bestehenden Terminen, Kunden oder Masseuren.\n\nViele Grüße\nIhr neckattack-Team"
         try:
