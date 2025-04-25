@@ -74,9 +74,9 @@ def agent_respond(user_message, channel="chat", user_email=None):
                 messages=[{"role": "system", "content": fallback_prompt}]
             )
             sql_query = sql_response_fb.choices[0].message['content'].strip()
-        # Optional: Für Admins SQL loggen
-        if user_email and user_email.endswith("@neckattack.net"):
-            print(f"[GPT-SQL für {user_email}]: {sql_query}")
+        # SQL-Logging: Immer ins Logfile schreiben, damit es im E-Mail-Agent-Log sichtbar ist
+        import logging
+        logging.info(f"[GPT-SQL-Statement] Das von GPT generierte SQL-Statement lautet:\n{sql_query}")
         if not sql_query.lower().startswith("select"):
             return "Hallo,\n\nEntschuldigung, ich kann aus Sicherheitsgründen nur Informationen aus der Datenbank abrufen, aber keine Änderungen vornehmen. Bitte stelle deine Frage so, dass ich dir mit einer Auskunft helfen kann – zum Beispiel zu bestehenden Terminen, Kunden oder Masseuren.\n\nViele Grüße\nIhr neckattack-Team"
         try:
