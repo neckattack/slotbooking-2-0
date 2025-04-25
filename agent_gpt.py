@@ -92,10 +92,20 @@ def agent_respond(user_message, channel="chat", user_email=None):
             if not rows:
                 return "Hallo,\n\nKeine passenden Daten gefunden.\n\nViele Grüße\nIhr neckattack-Team"
             # Ergebnis formatieren
-            antwort = "Hallo,\n\nHier das Ergebnis deiner Anfrage:\n"
-            for row in rows:
-                antwort += "- " + ", ".join(f"{k}: {v}" for k, v in row.items()) + "\n"
-            antwort += "\nViele Grüße\nIhr neckattack-Team"
+            # Userfreundliche, verständliche Antwort
+            if len(rows) > 0 and set(rows[0].keys()) == {"date", "num_slots", "num_reservations"}:
+                antwort = ("Hallo,\n\nHier die Übersicht der nächsten Termine für die gewünschte Firma. Es werden das Datum, die Anzahl der Terminslots und die Anzahl der Buchungen (Anmeldungen) angezeigt:\n\n"
+                          "Datum         | Slots | Buchungen\n"
+                          "------------- | ----- | ----------\n")
+                for row in rows:
+                    antwort += f"{row['date']} | {row['num_slots']} | {row['num_reservations']}\n"
+                antwort += "\nWenn du Details zu einzelnen Buchungen wünschst, frage gerne noch einmal gezielt nach!\n\nViele Grüße\nIhr neckattack-Team"
+            else:
+                # Generische, aber freundlichere Ausgabe
+                antwort = "Hallo,\n\nHier die Ergebnisse deiner Anfrage:\n\n"
+                for i, row in enumerate(rows, 1):
+                    antwort += f"{i}. " + ", ".join(f"{k}: {v}" for k, v in row.items()) + "\n"
+                antwort += "\nFalls du eine noch detailliertere Übersicht brauchst, stelle deine Frage bitte noch einmal etwas genauer.\n\nViele Grüße\nIhr neckattack-Team"
             return antwort
         except Exception as e:
             return f"Hallo,\n\nes gab einen Fehler bei der Datenbankabfrage: {e}\n\nViele Grüße\nIhr neckattack-Team"
