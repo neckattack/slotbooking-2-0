@@ -45,19 +45,36 @@ def agent_respond(user_message, channel="chat", user_email=None):
             knowledge = "(Knowledgebase konnte nicht geladen werden.)"
         # 1. FAQ-Logik: Suche nach passender FAQ-Antwort
         import re
-        faq_pattern = re.compile(r"- \*\*(.+?)\*\*\s*\n\s*- (Antwort|Frage):(.+?)(?=\n- \*\*|\n\n|$)", re.DOTALL)
+        # Verbesserte FAQ-Erkennung: toleranter, case-insensitive, ignoriert Satzzeichen
+        import unicodedata
+        def normalize(text):
+            text = text.lower().strip()
+            text = unicodedata.normalize('NFKD', text)
+            text = re.sub(r'[\W_]+', '', text)  # entferne Nicht-Buchstaben/Zahlen
+            return text
+        # FAQ-Pattern: Frage fett, Antwort eingerückt (egal ob mit 'Antwort:' oder nicht)
+        faq_pattern = re.compile(r"- \*\*(.+?)\*\*\s*\n((?:\s+- .+\n?)+)")
         faqs = faq_pattern.findall(knowledge)
-        user_msg_lc = user_message.lower().strip()
+        user_msg_norm = normalize(user_message)
         best_match = None
         best_score = 0
-        for q, typ, a in faqs:
-            score = difflib.SequenceMatcher(None, user_msg_lc, q.lower().strip()).ratio()
+        for q, a_block in faqs:
+            q_norm = normalize(q)
+            score = difflib.SequenceMatcher(None, user_msg_norm, q_norm).ratio()
             if score > best_score:
                 best_score = score
-                best_match = (q, typ, a)
-        # Schwellenwert für Ähnlichkeit (z.B. 0.7)
-        if best_match and best_score > 0.7:
-            antwort = best_match[2].strip()
+                best_match = (q, a_block)
+        # Schwelle etwas niedriger (z.B. 0.6)
+        if best_match and best_score > 0.6:
+            # Antwort extrahieren (erste eingerückte Zeile mit oder ohne 'Antwort:')
+            antwort_zeilen = [l.strip('- ').strip() for l in best_match[1].split('\n') if l.strip()]
+            antwort = ''
+            for l in antwort_zeilen:
+                if l.lower().startswith('antwort:'):
+                    antwort = l[8:].strip()
+                    break
+            if not antwort and antwort_zeilen:
+                antwort = antwort_zeilen[0]
             # ggf. Markdown-Links ersetzen
             antwort = re.sub(r'\[(.*?)\]\((.*?)\)', r'\1 (\2)', antwort)
             return f"Hallo,\n\n{antwort}\n\nViele Grüße\nIhr neckattack-Team"
