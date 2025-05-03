@@ -32,7 +32,7 @@ def agent_respond(user_message, channel="chat", user_email=None):
         f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str}.\n"
         "Du kennst das folgende Datenbankschema und kannst SQL-Statements generieren, um Nutzerfragen zu beantworten, wenn diese explizit nach Datenbankinhalten oder nach Terminen, Slots, Kunden, Reservierungen, gebuchten/freien Zeiten oder Einsätzen fragen.\n"
         "Nutze die Datenbank nur, wenn die Nutzerfrage eindeutig nach solchen Informationen verlangt (z.B. enthält die Frage eines der Schlüsselwörter: Termin, Slot, Kunde, Reservierung, SQL, Datenbank, gebucht, frei, gebuchte Zeiten, freie Zeiten, Einsatz).\n"
-        "Alle anderen Fragen beantworte bitte als FAQ anhand des Wissens aus der Knowledgebase.\n"
+        "Alle anderen Fragen beantworte bitte als FAQ anhand des Wissens aus der Knowledgebase. Nutze die Knowledgebase flexibel als Wissensquelle und entscheide situationsgerecht, wie ausführlich du antwortest: Du kannst einzelne FAQ-Einträge zitieren, mehrere zusammenfassen oder – falls sinnvoll – eine Übersicht geben. Entscheide selbst, was für die Nutzerfrage am hilfreichsten ist.\n"
         "Führe niemals destructive Queries wie DROP, DELETE, UPDATE ohne explizite Freigabe aus!\n"
         "Antworte immer auf Deutsch.\n"
         f"Datenbankschema (Knowledge):\n{knowledge}\n"
