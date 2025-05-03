@@ -78,7 +78,17 @@ def agent_respond(user_message, channel="chat", user_email=None):
             # ggf. Markdown-Links ersetzen
             antwort = re.sub(r'\[(.*?)\]\((.*?)\)', r'\1 (\2)', antwort)
             return f"Hallo,\n\n{antwort}\n\nViele Grüße\nIhr neckattack-Team"
-        # 2. Text2SQL-Flow für alle anderen Fragen
+        # 2. Rückfrage bei unklaren Fragen
+        # Liste bekannter Themenwörter (kannst du beliebig erweitern)
+        themen = ["termin", "slot", "masseur", "kunde", "rechnung", "zahlung", "gutschrift", "einsatz", "buchung"]
+        user_msg_lc = user_message.lower()
+        if not any(t in user_msg_lc for t in themen) or len(user_message.strip()) < 10:
+            return ("Hallo,\n\n"
+                    "ich bin mir nicht sicher, was genau du wissen möchtest. "
+                    "Kannst du deine Frage bitte etwas genauer formulieren? "
+                    "Zum Beispiel: 'Wann wurde meine letzte Rechnung bezahlt?' oder 'Wie finde ich meine Gutschriften?'\n\n"
+                    "Viele Grüße\nIhr neckattack-Team")
+        # 3. Text2SQL-Flow für alle anderen Fragen
         today_str = datetime.now().strftime('%Y-%m-%d')
         system_prompt = (
             f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str}.\n"
