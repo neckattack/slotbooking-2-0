@@ -90,19 +90,26 @@ def send_test_reply(to_addr, orig_subject, body):
             # --- Anrede ermitteln ---
             name = parseaddr(to_addr)[0]
             if not name:
-                # Versuche aus der E-Mail-Adresse den Namen zu extrahieren
                 match = re.match(r"([a-zA-ZäöüÄÖÜß\-\.]+)", to_addr)
                 name = match.group(1).split(".")[0].capitalize() if match else ""
-            anrede = f"Hallo {name}," if name else "Hallo,"
+
+            # Prompt für ChatGPT vorbereiten
+            from agent_gpt import agent_respond
+            if name:
+                prompt_body = f"Bitte schreibe eine freundliche, professionelle Antwort-Mail an '{name}'. Die Antwort soll mit einer persönlichen Anrede beginnen und die folgende Nutzeranfrage beantworten. Abschluss freundlich. Hier die Nutzeranfrage:\n\n{body}"
+            else:
+                prompt_body = f"Bitte schreibe eine freundliche, professionelle Antwort-Mail. Die Antwort soll mit einer Anrede beginnen und die folgende Nutzeranfrage beantworten. Abschluss freundlich. Hier die Nutzeranfrage:\n\n{body}"
+            try:
+                antwort = agent_respond(prompt_body, channel="email", user_email=to_addr)
+            except Exception as e:
+                antwort = f"[Fehler bei der Antwortgenerierung: {e}]"
 
             # --- HTML-Body bauen ---
             html_body = f'''
             <div style="font-family:Arial,sans-serif;font-size:1.08em;">
-              <p>{anrede}</p>
-              <p>Gerne beantworte ich deine Anfrage:</p>
               <div style="background:#f8f9fa;border-radius:7px;padding:12px 16px;margin:14px 0 18px 0;">{body}</div>
               <div style="margin-top:28px;text-align:left;">
-                <img src="https://www.neckattack.net/assets/bot-avatar.png" alt="KI Bot" width="80" style="border-radius:40px;margin-bottom:8px;">
+                <img src="https://files.neckattack.net/bot-avatar-user.png" alt="KI Bot" width="80" style="border-radius:40px;margin-bottom:8px;">
                 <br>
                 <strong>neckattack KI-Assistenz</strong><br>
                 <span style="font-size:0.95em;color:#666;">Ich bin der digitale Assistent von neckattack und helfe dir rund um die Uhr.</span>
