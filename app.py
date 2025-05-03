@@ -7,6 +7,31 @@ import openai
 from agent_core import find_next_appointment_for_name
 from agent_gpt import agent_respond
 
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    """
+    Health-Check- und Routing-Test für die FAQ/DB-Logik.
+    Gibt die Antworten auf eine FAQ- und eine DB-Testfrage als JSON zurück.
+    """
+    faq_frage = "Wie erkenne ich, ob meine Rechnung bezahlt wurde?"
+    db_frage = "Welche Termine gibt es morgen?"
+    try:
+        faq_antwort = agent_respond(faq_frage, channel="health")
+        db_antwort = agent_respond(db_frage, channel="health")
+        return jsonify({
+            "status": "ok",
+            "faq_test": {
+                "frage": faq_frage,
+                "antwort": faq_antwort
+            },
+            "db_test": {
+                "frage": db_frage,
+                "antwort": db_antwort
+            }
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
 load_dotenv()
 
 app = Flask(__name__)
