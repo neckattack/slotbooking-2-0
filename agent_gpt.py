@@ -111,14 +111,6 @@ def agent_respond(user_message, channel="chat", user_email=None):
         except Exception as e:
             logging.error(f"[FAQ-Exception] Fehler bei der FAQ-Antwort für Frage '{user_message}': {e}")
             return "[FAQ] Entschuldigung, ich konnte deine Frage gerade nicht beantworten. Bitte versuche es später erneut oder kontaktiere den Support."
-    )
-    sql_response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "system", "content": sql_prompt}]
-    )
-    sql_query = sql_response.choices[0].message['content'].strip()
-    # Sicherheits-Check: Nur SELECTs erlauben
-    if not sql_query.lower().startswith("select"):
         return "Entschuldigung, ich kann aus Sicherheitsgründen nur Informationen aus der Datenbank abrufen, aber keine Änderungen vornehmen. Bitte stelle deine Frage so, dass ich dir mit einer Auskunft helfen kann – zum Beispiel zu bestehenden Terminen oder Kunden. Falls du Unterstützung brauchst, melde dich gern direkt beim Support!"
     # 2. Führe das SQL-Statement aus
     try:
