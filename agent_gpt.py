@@ -92,6 +92,7 @@ def agent_respond(user_message, channel="chat", user_email=None):
             return f"[DB] Fehler bei der Datenbankabfrage: {e}"
     else:
         # FAQ-Modus: Beantworte anhand Knowledgebase
+        import logging
         try:
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
@@ -103,9 +104,13 @@ def agent_respond(user_message, channel="chat", user_email=None):
                 temperature=0.2
             )
             antwort = response.choices[0].message.content.strip()
+            if not antwort:
+                logging.error(f"[FAQ-Fehler] Leere Antwort von OpenAI für Frage: {user_message}")
+                return "[FAQ] Entschuldigung, ich konnte deine Frage gerade nicht beantworten. Bitte versuche es später erneut oder kontaktiere den Support."
             return f"[FAQ] {antwort}"
         except Exception as e:
-            return f"[FAQ] Fehler bei der FAQ-Antwort: {e}"
+            logging.error(f"[FAQ-Exception] Fehler bei der FAQ-Antwort für Frage '{user_message}': {e}")
+            return "[FAQ] Entschuldigung, ich konnte deine Frage gerade nicht beantworten. Bitte versuche es später erneut oder kontaktiere den Support."
     )
     sql_response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
