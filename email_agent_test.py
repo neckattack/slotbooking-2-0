@@ -118,8 +118,8 @@ def send_test_reply(to_addr, orig_subject, body):
               </div>
             </div>
             '''
-            msg.set_content(f"{anrede}\n\n{body}\n\nViele Grüße,\ndein neckattack KI-Assistenz-Bot", subtype='plain')
-            msg.add_alternative(html_body, subtype='html')
+            msg.set_content(antwort, subtype='plain')
+            msg.add_alternative(html_body.replace(body, antwort), subtype='html')
             server.send_message(msg)
             logger.info(f"Antwort an {to_addr} gesendet.")
     except Exception as e:
