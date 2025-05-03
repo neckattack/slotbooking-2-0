@@ -37,7 +37,7 @@ Hier kannst du interne Regeln, Policies, Rollen und weitere Dokumente für den n
 
 ## Weitere Policies, FAQ, etc.
 
-### Verhaltensregeln für Masseure
+### Verhaltensregeln wenn Masseure anfragen 
 
 - Wenn eine Anfrage von einem Masseur kommt (Absender ist in der admin-Tabelle):
     - Antworte bevorzugt mit internen Informationen, z.B. eigene Einsatzzeiten, alle Termine, bei denen der Masseur eingeteilt ist, Hinweise zu freien Slots oder Vertretungen.
@@ -49,9 +49,32 @@ Hier kannst du interne Regeln, Policies, Rollen und weitere Dokumente für den n
 
 - **Wie erfahre ich meine nächsten Einsätze?**
   - Frage einfach: "Wann bin ich wieder eingeteilt?" oder "Zeig mir meine nächsten Termine."
+
+- **Wie erfahre ich meine nächsten Einsätze?**
+  - Frage: "Wann bin ich wieder eingeteilt?" oder "Zeig mir meine nächsten Termine."
+
+- **Woher weiß ich, dass meine Rechnung bezahlt wurde?**
+  - Antwort: Logge dich zuerst in neckattack Blue ein: [nmarketplace.neckattack.net/login](https://nmarketplace.neckattack.net/login).  
+    Klicke dann auf „Meine Geldbörse“ am linken Rand.  
+    Rechts unten findest du den Abschnitt mit deinen Gutschriften.  
+    Gutschriften können nur ausgezahlt werden für Jobs, die du als erledigt markiert hast und die auch von uns als „geschlossen“ (closed) markiert wurden.  
+    Unter „Jobs“ → „History“ siehst du deine alten und neuen Gutschriften mit dem jeweiligen Status.
 - **Wie finde ich freie Slots?**
   - Frage: "Welche Slots sind nächste Woche noch frei?"
+
+- **Woher weiß ich, dass meine Rechnung bezahlt wurde?**
+  - Antwort: Logge dich zuerst in neckattack Blue ein: [nmarketplace.neckattack.net/login](https://nmarketplace.neckattack.net/login).  
+    Klicke dann auf „Meine Geldbörse“ am linken Rand.  
+    Rechts unten findest du den Abschnitt mit deinen Gutschriften.  
+    Gutschriften können nur ausgezahlt werden für Jobs, die du als erledigt markiert hast und die auch von uns als „geschlossen“ (closed) markiert wurden.  
+    Unter „Jobs“ → „History“ siehst du deine alten und neuen Gutschriften mit dem jeweiligen Status.
 
 <!-- Hier kannst du beliebig weitere FAQs für Masseure ergänzen! -->
 
 - Hier können beliebige Markdown-Dokumente ergänzt werden.
+**Woher weiß ich, dass meine Rechnung bezahlt wurde?**
+  - Antwort: Logge dich zuerst in neckattack Blue ein: [nmarketplace.neckattack.net/login](https://nmarketplace.neckattack.net/login).  
+    Klicke dann auf „Meine Geldbörse“ am linken Rand.  
+    Rechts unten findest du den Abschnitt mit deinen Gutschriften.  
+    Gutschriften können nur ausgezahlt werden für Jobs, die du als erledigt markiert hast und die auch von uns als „geschlossen“ (closed) markiert wurden.  
+    Unter „Jobs“ → „History“ siehst du deine alten und neuen Gutschriften mit dem jeweiligen Status.
