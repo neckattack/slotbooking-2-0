@@ -36,13 +36,32 @@ def agent_respond(user_message, channel="chat", user_email=None):
     import re
     if channel == "email":
         import re
+        import difflib
         # Knowledgebase aus docs/knowledge.md laden
         try:
-            with open("docs/knowledge.md", "r") as f:
+            with open("docs/knowledge.md", "r", encoding="utf-8") as f:
                 knowledge = f.read()
         except Exception:
             knowledge = "(Knowledgebase konnte nicht geladen werden.)"
-        # Text2SQL-Flow für ALLE Fragen
+        # 1. FAQ-Logik: Suche nach passender FAQ-Antwort
+        import re
+        faq_pattern = re.compile(r"- \*\*(.+?)\*\*\s*\n\s*- (Antwort|Frage):(.+?)(?=\n- \*\*|\n\n|$)", re.DOTALL)
+        faqs = faq_pattern.findall(knowledge)
+        user_msg_lc = user_message.lower().strip()
+        best_match = None
+        best_score = 0
+        for q, typ, a in faqs:
+            score = difflib.SequenceMatcher(None, user_msg_lc, q.lower().strip()).ratio()
+            if score > best_score:
+                best_score = score
+                best_match = (q, typ, a)
+        # Schwellenwert für Ähnlichkeit (z.B. 0.7)
+        if best_match and best_score > 0.7:
+            antwort = best_match[2].strip()
+            # ggf. Markdown-Links ersetzen
+            antwort = re.sub(r'\[(.*?)\]\((.*?)\)', r'\1 (\2)', antwort)
+            return f"Hallo,\n\n{antwort}\n\nViele Grüße\nIhr neckattack-Team"
+        # 2. Text2SQL-Flow für alle anderen Fragen
         today_str = datetime.now().strftime('%Y-%m-%d')
         system_prompt = (
             f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str}.\n"
