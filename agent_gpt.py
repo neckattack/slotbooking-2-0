@@ -77,6 +77,7 @@ def agent_respond(user_message, channel="chat", user_email=None):
                 antwort = antwort_zeilen[0]
             # ggf. Markdown-Links ersetzen
             antwort = re.sub(r'\[(.*?)\]\((.*?)\)', r'\1 (\2)', antwort)
+            # FAQ-Antwort wird exklusiv zurückgegeben, KEIN SQL-Flow mehr!
             return f"Hallo,\n\n{antwort}\n\nViele Grüße\nIhr neckattack-Team"
         # 2. Rückfrage bei unklaren Fragen
         # Liste bekannter Themenwörter (kannst du beliebig erweitern)
