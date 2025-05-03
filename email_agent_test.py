@@ -78,13 +78,41 @@ def send_test_reply(to_addr, orig_subject, body):
     import logging
     logger = logging.getLogger()
     try:
+        from email.utils import parseaddr
+        import re
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
             server.login(EMAIL_USER, EMAIL_PASS)
             msg = email.message.EmailMessage()
             msg['From'] = EMAIL_USER
             msg['To'] = to_addr
             msg['Subject'] = f"Re: {orig_subject}"
-            msg.set_content(body)
+
+            # --- Anrede ermitteln ---
+            name = parseaddr(to_addr)[0]
+            if not name:
+                # Versuche aus der E-Mail-Adresse den Namen zu extrahieren
+                match = re.match(r"([a-zA-ZäöüÄÖÜß\-\.]+)", to_addr)
+                name = match.group(1).split(".")[0].capitalize() if match else ""
+            anrede = f"Hallo {name}," if name else "Hallo,"
+
+            # --- HTML-Body bauen ---
+            html_body = f'''
+            <div style="font-family:Arial,sans-serif;font-size:1.08em;">
+              <p>{anrede}</p>
+              <p>Gerne beantworte ich deine Anfrage:</p>
+              <div style="background:#f8f9fa;border-radius:7px;padding:12px 16px;margin:14px 0 18px 0;">{body}</div>
+              <div style="margin-top:28px;text-align:left;">
+                <img src="https://www.neckattack.net/assets/bot-avatar.png" alt="KI Bot" width="80" style="border-radius:40px;margin-bottom:8px;">
+                <br>
+                <strong>neckattack KI-Assistenz</strong><br>
+                <span style="font-size:0.95em;color:#666;">Ich bin der digitale Assistent von neckattack und helfe dir rund um die Uhr.</span>
+                <hr style="margin:8px 0;">
+                <span style="font-size:0.9em;">neckattack ltd. | Landhausstr. 90, Stuttgart | hello@neckattack.net</span>
+              </div>
+            </div>
+            '''
+            msg.set_content(f"{anrede}\n\n{body}\n\nViele Grüße,\ndein neckattack KI-Assistenz-Bot", subtype='plain')
+            msg.add_alternative(html_body, subtype='html')
             server.send_message(msg)
             logger.info(f"Antwort an {to_addr} gesendet.")
     except Exception as e:
