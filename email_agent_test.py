@@ -96,18 +96,20 @@ def send_test_reply(to_addr, orig_subject, body):
             # Prompt für ChatGPT vorbereiten
             from agent_gpt import agent_respond
             if name:
-                prompt_body = f"Bitte schreibe eine freundliche, professionelle Antwort-Mail an '{name}'. Die Antwort soll mit einer persönlichen Anrede beginnen und die folgende Nutzeranfrage beantworten. Abschluss freundlich. Hier die Nutzeranfrage:\n\n{body}"
+                prompt_body = f"Bitte schreibe eine freundliche, professionelle Antwort-Mail an '{name}'. Die Antwort soll mit einer persönlichen Anrede beginnen, die folgende Nutzeranfrage beantworten und als HTML formatiert sein (inkl. Absätze, Listen, Hervorhebungen, wo sinnvoll). Abschluss freundlich. Hier die Nutzeranfrage:\n\n{body}"
             else:
-                prompt_body = f"Bitte schreibe eine freundliche, professionelle Antwort-Mail. Die Antwort soll mit einer Anrede beginnen und die folgende Nutzeranfrage beantworten. Abschluss freundlich. Hier die Nutzeranfrage:\n\n{body}"
+                prompt_body = f"Bitte schreibe eine freundliche, professionelle Antwort-Mail. Die Antwort soll mit einer Anrede beginnen, die folgende Nutzeranfrage beantworten und als HTML formatiert sein (inkl. Absätze, Listen, Hervorhebungen, wo sinnvoll). Abschluss freundlich. Hier die Nutzeranfrage:\n\n{body}"
             try:
-                antwort = agent_respond(prompt_body, channel="email", user_email=to_addr)
+                antwort_html = agent_respond(prompt_body, channel="email", user_email=to_addr)
             except Exception as e:
-                antwort = f"[Fehler bei der Antwortgenerierung: {e}]"
-
+                antwort_html = f"[Fehler bei der Antwortgenerierung: {e}]"
+            # Fallback: Plaintext-Version (HTML-Tags entfernen)
+            import re
+            antwort_plain = re.sub('<[^<]+?>', '', antwort_html)
             # --- HTML-Body bauen ---
             html_body = f'''
             <div style="font-family:Arial,sans-serif;font-size:1.08em;">
-              <div style="background:#f8f9fa;border-radius:7px;padding:12px 16px;margin:14px 0 18px 0;">{body}</div>
+              {antwort_html}
               <div style="margin-top:28px;text-align:left;">
                 <img src="https://files.neckattack.net/bot-avatar-user.png" alt="KI Bot" width="80" style="border-radius:40px;margin-bottom:8px;">
                 <br>
@@ -118,8 +120,8 @@ def send_test_reply(to_addr, orig_subject, body):
               </div>
             </div>
             '''
-            msg.set_content(antwort, subtype='plain')
-            msg.add_alternative(html_body.replace(body, antwort), subtype='html')
+            msg.set_content(antwort_plain, subtype='plain')
+            msg.add_alternative(html_body, subtype='html')
             server.send_message(msg)
             logger.info(f"Antwort an {to_addr} gesendet.")
     except Exception as e:

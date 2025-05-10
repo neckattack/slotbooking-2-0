@@ -53,21 +53,10 @@ Hier kannst du interne Regeln, Policies, Rollen und weitere Dokumente für den n
 - **Wie erfahre ich meine nächsten Einsätze?**
   - Frage: "Wann bin ich wieder eingeteilt?" oder "Zeig mir meine nächsten Termine."
 
-- **Woher weiß ich, dass meine Rechnung bezahlt wurde?**
-  - Antwort: Logge dich zuerst in neckattack Blue ein: [nmarketplace.neckattack.net/login](https://nmarketplace.neckattack.net/login).  
-    Klicke dann auf „Meine Geldbörse“ am linken Rand.  
-    Rechts unten findest du den Abschnitt mit deinen Gutschriften.  
-    Gutschriften können nur ausgezahlt werden für Jobs, die du als erledigt markiert hast und die auch von uns als „geschlossen“ (closed) markiert wurden.  
-    Unter „Jobs“ → „History“ siehst du deine alten und neuen Gutschriften mit dem jeweiligen Status.
+
 - **Wie finde ich freie Slots?**
   - Frage: "Welche Slots sind nächste Woche noch frei?"
 
-- **Woher weiß ich, dass meine Rechnung bezahlt wurde?**
-  - Antwort: Logge dich zuerst in neckattack Blue ein: [nmarketplace.neckattack.net/login](https://nmarketplace.neckattack.net/login).  
-    Klicke dann auf „Meine Geldbörse“ am linken Rand.  
-    Rechts unten findest du den Abschnitt mit deinen Gutschriften.  
-    Gutschriften können nur ausgezahlt werden für Jobs, die du als erledigt markiert hast und die auch von uns als „geschlossen“ (closed) markiert wurden.  
-    Unter „Jobs“ → „History“ siehst du deine alten und neuen Gutschriften mit dem jeweiligen Status.
 
 <!-- Hier kannst du beliebig weitere FAQs für Masseure ergänzen! -->
 
@@ -78,3 +67,13 @@ Hier kannst du interne Regeln, Policies, Rollen und weitere Dokumente für den n
     Rechts unten findest du den Abschnitt mit deinen Gutschriften.  
     Gutschriften können nur ausgezahlt werden für Jobs, die du als erledigt markiert hast und die auch von uns als „geschlossen“ (closed) markiert wurden.  
     Unter „Jobs“ → „History“ siehst du deine alten und neuen Gutschriften mit dem jeweiligen Status.
+**Wann wird meine Rechnung bezahlt?**
+  - Antwort: Wir zahlen Eingehende Rechnungen bzw. Gutschriften immer einmal pro Woche. STellst Du Deine Gutschrift oder Deine Rechnung bis Freitag, kommt Sie diret am Freitag in den Rechnungslauf und wird überwiesen Dann ist Dein Geld ca. am Dienstag spätestens verfügbar
+  
+**Wie erstelle ich eine Gutschrift?**
+  - Antwort: Logge dich zuerst in neckattack Blue ein: [nmarketplace.neckattack.net/login](https://nmarketplace.neckattack.net/login).  
+    Klicke dann auf „Meine Geldbörse“ am linken Rand.  
+    Rechts unten findest du den Abschnitt mit deinen Gutschriften.  
+    Gutschriften können nur ausgezahlt werden für Jobs, die du als erledigt markiert hast und die auch von uns als „geschlossen“ (closed) markiert wurden.  
+    Unter „Jobs“ → „History“ siehst du deine alten und neuen Gutschriften mit dem jeweiligen Status.
+  
