@@ -76,4 +76,6 @@ Hier kannst du interne Regeln, Policies, Rollen und weitere Dokumente für den n
     Rechts unten findest du den Abschnitt mit deinen Gutschriften.  
     Gutschriften können nur ausgezahlt werden für Jobs, die du als erledigt markiert hast und die auch von uns als „geschlossen“ (closed) markiert wurden.  
     Unter „Jobs“ → „History“ siehst du deine alten und neuen Gutschriften mit dem jeweiligen Status.
+**Wie erstelle ich eine Rechnung?**
+  - Antwort: Du brauchst keine Rechnung zu erstellen, nur im System auf den close button drücken - dan schicken ud überweisen wir Dir eine Gutschrift mit dem bis zum Datum aufgelaufenen Geldern.
   
