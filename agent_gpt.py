@@ -48,9 +48,13 @@ def agent_respond(user_message, channel="chat", user_email=None):
         text = re.sub(r'[\W_]+', '', text)
         return text
 
-    # Prüfe, ob die Nutzerfrage ein DB-Schlüsselwort enthält
+    # Prüfe, ob die Nutzerfrage wirklich eine DB-Abfrage ist
     user_message_norm = normalize(user_message)
-    is_db_query = any(kw in user_message_norm for kw in db_keywords)
+    # Neue Logik: Nur wenn explizit nach Datenbankinhalten gefragt wird ("wie viele", "zeige mir", "liste", "welche kunden", "sql")
+    db_phrases = [
+        "wie viele", "zeige mir", "liste", "welche kunden", "welche termine", "sql", "datenbank", "select "
+    ]
+    is_db_query = any(phrase in user_message.lower() for phrase in db_phrases)
 
     if is_db_query:
         # Datenbank-Modus: Generiere SQL und führe aus
@@ -74,6 +78,10 @@ def agent_respond(user_message, channel="chat", user_email=None):
                 temperature=0.0
             )
             sql_query = response.choices[0].message.content.strip()
+            # Entferne ggf. Codeblock-Markierungen wie ```sql und ```
+            import re
+            sql_query = re.sub(r"^```sql", "", sql_query, flags=re.IGNORECASE).strip()
+            sql_query = re.sub(r"^```|```$", "", sql_query).strip()
             # Führe das SQL aus
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
