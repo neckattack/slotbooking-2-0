@@ -37,6 +37,48 @@ Hier kannst du interne Regeln, Policies, Rollen und weitere Dokumente für den n
 
 ## Weitere Policies, FAQ, etc.
 
+---
+
+## FAQ für Masseure (Blue Portal)
+
+**Wie komme ich denn jetzt in mein Portal?**
+
+Dein Profil auf Blue ist jetzt aktiv:
+https://marketplace.neckattack.net/dashboard
+
+Unter "mein Konto" → Kontoinformationen kannst du noch deine Daten korrigieren (Tel.nr., Foto etc....)
+
+**Wie kann ich die Anfragen annehmen?**
+
+Im Dashboard / Armaturenbrett findest du 2 große Boxen. Die grüne Box "kommende Jobs" zeigt dir alle Einladungen.
+Klick auf einen Titel und dann auf "bin interessiert", wenn dich der Job ein bisschen interessiert.
+Du bist dann noch nicht zugeteilt, kannst aber Zusatzinfos in den Chat unter dem Job schreiben (neben deinem Foto).
+
+Wenn ich dich zuteile, bekommst du eine Mail. Dann musst DU nochmal in die grüne Box und zu dem Job gehen und ihn "bestätigen".
+Das letzte OK geben immer die Masseure.
+Das ist der grüne Button unten, neben deinem Foto: "bestätigen".
+
+Wenn der Job fertig ist, landet er in der blauen Box: "alte Jobs".
+Dort kannst du ihn als "geschlossen markieren" und dann landet das Geld automatisch in deinem Wallet / Geldbeutel.
+Dort einfach deine Bankdaten eintragen, und auf "auszahlen" drücken.
+
+**Wie komme ich zu meinem Geld?**
+
+Wenn der Job fertig ist, landet er in der blauen Box: "alte Jobs".
+Dort kannst du ihn als "geschlossen markieren" und dann landet das Geld automatisch in deinem Wallet / Geldbeutel.
+Dort einfach deine Bankdaten eintragen und auf "auszahlen" drücken.
+
+**Ich bin steuerpflichtig.**
+
+Auf deinem Profil unter “Mein Geldbeutel” findest du oben rechts “Zahlungsinfos hinzufügen”. Bei der Frage “Zahlst du MwSt?” gibst du dann “Ja” an - die Steuer wird dann automatisch berechnet und hinzugefügt.
+
+**Wie kann ich Jobs finden?**
+
+Wir laden dich zu jedem Job im Umkreis von 100km ein.
+Und du bekommst jedes Mal auch eine E-Mail mit der Einladung.
+Wichtig ist, dass deine Wohnadresse stimmt :)
+
+
 ### Verhaltensregeln wenn Masseure anfragen 
 
 - Wenn eine Anfrage von einem Masseur kommt (Absender ist in der admin-Tabelle):
