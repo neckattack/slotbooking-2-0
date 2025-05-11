@@ -111,7 +111,7 @@ def send_test_reply(to_addr, orig_subject, body):
             <div style="font-family:Arial,sans-serif;font-size:1.08em;">
               {antwort_html}
               <div style="margin-top:28px;text-align:left;">
-                <img src="https://files.neckattack.net/bot-avatar-user.png" alt="KI Bot" width="80" style="border-radius:40px;margin-bottom:8px;">
+                <img src="https://cdn-icons-png.flaticon.com/512/4712/4712035.png" alt="KI Bot" width="40" style="vertical-align:middle;border-radius:50%;margin-bottom:8px;">
                 <br>
                 <strong>neckattack KI-Assistenz</strong><br>
                 <span style="font-size:0.95em;color:#666;">Ich bin der digitale Assistent von neckattack und helfe dir rund um die Uhr.</span>
