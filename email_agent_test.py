@@ -105,7 +105,16 @@ def send_test_reply(to_addr, orig_subject, body):
                 antwort_html = f"[Fehler bei der Antwortgenerierung: {e}]"
             # Fallback: Plaintext-Version (HTML-Tags entfernen)
             import re
+            # Entferne versehentlich eingefügte Markdown-Blöcke wie ```html am Anfang
+            antwort_html = re.sub(r'^```html\s*', '', antwort_html.strip(), flags=re.IGNORECASE)
             antwort_plain = re.sub('<[^<]+?>', '', antwort_html)
+            # --- Debug-Info aus BLUE-DB ---
+            from agent_blue import get_user_info_by_email
+            user_info = get_user_info_by_email(to_addr)
+            if user_info:
+                debug_info = f"[DEBUG: User gefunden] Vorname: {user_info['first_name']}, Nachname: {user_info['last_name']}, Rolle: {user_info['role']}"
+            else:
+                debug_info = "[DEBUG: User nicht in BLUE-DB gefunden]"
             # --- HTML-Body bauen ---
             html_body = f'''
             <div style="font-family:Arial,sans-serif;font-size:1.08em;">
@@ -117,6 +126,7 @@ def send_test_reply(to_addr, orig_subject, body):
                 <span style="font-size:0.95em;color:#666;">Ich bin der digitale Assistent von neckattack und helfe dir rund um die Uhr.</span>
                 <hr style="margin:8px 0;">
                 <span style="font-size:0.9em;">neckattack ltd. | Landhausstr. 90, Stuttgart | hello@neckattack.net</span>
+                <br><span style="color:#c00;font-size:0.95em;">{debug_info}</span>
               </div>
             </div>
             '''
