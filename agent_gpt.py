@@ -50,11 +50,18 @@ def agent_respond(user_message, channel="chat", user_email=None):
 
     # Prüfe, ob die Nutzerfrage wirklich eine DB-Abfrage ist
     user_message_norm = normalize(user_message)
+    # FAQ-First: Prüfe, ob die Frage mit typischen FAQ-Formulierungen beginnt
+    faq_starts = [
+        "wie kann ich", "wie funktioniert", "was muss ich tun", "wie nehme ich", "wie akzeptiere ich", "wie bekomme ich", "wie melde ich mich", "wo finde ich"
+    ]
+    user_message_lower = user_message.lower().strip()
+    is_faq = any(user_message_lower.startswith(start) for start in faq_starts)
+
     # Neue Logik: Nur wenn explizit nach Datenbankinhalten gefragt wird ("wie viele", "zeige mir", "liste", "welche kunden", "sql")
     db_phrases = [
         "wie viele", "zeige mir", "liste", "welche kunden", "welche termine", "sql", "datenbank", "select "
     ]
-    is_db_query = any(phrase in user_message.lower() for phrase in db_phrases)
+    is_db_query = not is_faq and any(phrase in user_message_lower for phrase in db_phrases)
 
     if is_db_query:
         # Datenbank-Modus: Generiere SQL und führe aus
@@ -90,15 +97,15 @@ def agent_respond(user_message, channel="chat", user_email=None):
             cursor.close()
             conn.close()
             if not rows:
-                return "[DB] Keine passenden Daten gefunden."
+                return "Es wurden keine passenden Daten gefunden."
             # Formatiere das Ergebnis für den Nutzer
             result_lines = []
             for row in rows:
                 result_lines.append(", ".join(f"{k}: {v}" for k, v in row.items()))
             result_text = "\n".join(result_lines)
-            return f"[DB] {result_text}"
+            return result_text
         except Exception as e:
-            return f"[DB] Fehler bei der Datenbankabfrage: {e}"
+            return f"Fehler bei der Datenbankabfrage: {e}"
     else:
         # FAQ-Modus: Beantworte anhand Knowledgebase
         import logging
