@@ -4,6 +4,33 @@ import mysql.connector
 from dotenv import load_dotenv
 from datetime import datetime
 import openai
+from agent_core import find_next_appointment_for_name
+from agent_gpt import agent_respond
+
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    """
+    Health-Check- und Routing-Test für die FAQ/DB-Logik.
+    Gibt die Antworten auf eine FAQ- und eine DB-Testfrage als JSON zurück.
+    """
+    faq_frage = "Wie erkenne ich, ob meine Rechnung bezahlt wurde?"
+    db_frage = "Welche Termine gibt es morgen?"
+    try:
+        faq_antwort = agent_respond(faq_frage, channel="health")
+        db_antwort = agent_respond(db_frage, channel="health")
+        return jsonify({
+            "status": "ok",
+            "faq_test": {
+                "frage": faq_frage,
+                "antwort": faq_antwort
+            },
+            "db_test": {
+                "frage": db_frage,
+                "antwort": db_antwort
+            }
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 load_dotenv()
 
@@ -19,20 +46,34 @@ app.logger.info(f"mysql-connector-python Version: {mysql.connector.__version__}"
 # Prüfe und logge die wichtigsten DB-Umgebungsvariablen beim Start
 app.logger.info(f"[DB-UMGEBUNG] DB_HOST={os.environ.get('DB_HOST')}, DB_USER={os.environ.get('DB_USER')}, DB_NAME={os.environ.get('DB_NAME')}, DB_PORT={os.environ.get('DB_PORT')}")
 
-def get_db_connection():
-    host = os.environ.get("DB_HOST")
-    user = os.environ.get("DB_USER")
-    password = os.environ.get("DB_PASSWORD")
-    database = os.environ.get("DB_NAME")
-    port = int(os.environ.get("DB_PORT", 3306))
-    app.logger.info(f"[DB-CONNECT] host={host}, user={user}, db={database}, port={port}")
-    return mysql.connector.connect(
-        host=host,
-        user=user,
-        password=password,
-        database=database,
-        port=port
-    )
+from db_utils import get_db_connection
+
+
+def get_reservations_for_today():
+    """
+    Returns a list of reservations (customer name and email) for today's date.
+    """
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    sql = """
+        SELECT r.name AS kunde, r.email AS kunde_email
+        FROM reservations r
+        JOIN times t ON r.time_id = t.id
+        JOIN dates d ON t.date_id = d.id
+        WHERE d.date = %s
+    """
+    try:
+        cursor.execute(sql, (today_str,))
+        rows = cursor.fetchall()
+        reservations = [{"name": row["kunde"], "email": row["kunde_email"]} for row in rows if row["kunde"]]
+        return reservations
+    except Exception as e:
+        app.logger.error(f"[DB-Fehler bei get_reservations_for_today]: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route("/")
 def index():
@@ -360,41 +401,17 @@ def chat_api():
                     app.logger.error(f"[DB-Fehler bei Firmenabfrage]: {e}")
                     db_context += f" [DB-Fehler bei Firmenabfrage: {e}]"
     if next_termin_name:
+        # Gemeinsame Agentenlogik nutzen (wie beim E-Mail-Agenten)
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor(dictionary=True)
-            # Zuerst: Firmensuche
-            cursor.execute("SELECT id, name FROM clients WHERE name LIKE %s", (f"%{next_termin_name}%",))
-            firmen_treffer = cursor.fetchall()
-            if firmen_treffer:
-                db_context += f" Firmenname gefunden: {', '.join([f['name'] for f in firmen_treffer])}."
-                app.logger.info(f"[DB-ABFRAGE] Firmenname gefunden: {', '.join([f['name'] for f in firmen_treffer])}")
-            # Danach wie gehabt: Kundensuche
-            app.logger.info(f"[DB-QUERY] Suche nächsten Termin: SELECT MIN(datum) as naechster_termin, kunde FROM termine WHERE kunde LIKE '%{next_termin_name}%' AND datum >= {today_str}")
-            cursor.execute("""
-                SELECT MIN(datum) as naechster_termin, kunde FROM termine
-                WHERE kunde LIKE %s AND datum >= %s
-            """, (f"%{next_termin_name}%", today_str))
-            row = cursor.fetchone()
-            if row and row['naechster_termin']:
-                db_context += f" Nächster Termin für {next_termin_name}: {row['naechster_termin']} ."
-            else:
-                # Suche nach ähnlichen Namen
-                cursor.execute("SELECT DISTINCT kunde FROM termine WHERE kunde IS NOT NULL")
-                alle_kunden = [r['kunde'] for r in cursor.fetchall()]
-from difflib import get_close_matches
-                vorschlaege = get_close_matches(next_termin_name, alle_kunden, n=3, cutoff=0.4)
-                if vorschlaege:
-                    db_context += f" Für {next_termin_name} wurde kein zukünftiger Termin gefunden. Ähnliche Kundennamen: {', '.join(vorschlaege)}."
-                else:
-                    db_context += f" Für {next_termin_name} wurde kein zukünftiger Termin gefunden und keine ähnlichen Namen entdeckt."
-            cursor.close()
-            conn.close()
-            app.logger.info(f"[DB-ABFRAGE] Nächster Termin für {next_termin_name}: {row['naechster_termin'] if row else None}")
+            db_context += find_next_appointment_for_name(next_termin_name)
+
         except Exception as e:
+            app.logger.info(f"[DB-ABFRAGE] Nächster Termin für {next_termin_name}: {row['naechster_termin'] if row else None}")
             db_context += f" [DB-Fehler: {e}]"
             app.logger.error(f"[DB-Fehler bei Terminabfrage]: {e}")
     elif name_match:
+        # Auch hier: Gemeinsame Agentenlogik nutzen
+        db_context += find_next_appointment_for_name(name_match)
         try:
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
@@ -442,47 +459,14 @@ from difflib import get_close_matches
         except Exception as e:
             app.logger.error(f"[DB-Fehler bei Terminabfrage]: {e}")
             db_context += f" [DB-Fehler: {e}]"
+        except Exception as e:
+            app.logger.error(f"[DB-Fehler bei Terminabfrage]: {e}")
+            db_context += f" [DB-Fehler: {e}]"
     # --- System-Prompt klarstellen ---
-    system_prompt = (
-        f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str} (Europe/Berlin). "
-        "\n\nDatenbankstruktur und Zusammenhänge:\n"
-        "- clients: Firmenkunden. Spalten: id, name (Firmenname).\n"
-        "- dates: Termine pro Firma. Spalten: id, client_id (verknüpft mit clients.id), date (Datum), masseur_id (verknüpft mit admin.id).\n"
-        "- times: Zeit-Slots an einem Tag. Spalten: id, date_id (verknüpft mit dates.id), time_start, time_end.\n"
-        "- reservations: Buchungen eines Slots. Spalten: id, time_id (verknüpft mit times.id), name (Kundenname), email.\n"
-        "- admin: Masseure und Ansprechpartner. Spalten: id, first_name, last_name, email.\n"
-        "\nVerknüpfungen:\n"
-        "Jede Firma (clients) hat Termine (dates) an bestimmten Tagen. Jeder Termin kann mehrere Zeit-Slots (times) haben. Jeder Slot kann von einem Kunden (reservations) gebucht werden. Masseure (admin) können einem Termin zugeordnet sein.\n"
-        "\nSlotbuchung bei neckattack:\n"
-        "Wir, die Firma neckattack, bieten Massagen an verschiedenen Standorten für Firmenkunden an. In der Datenbank werden für jede Firma die einzelnen Mitarbeiter, deren Buchungen, sowie die jeweiligen Daten und Uhrzeiten gespeichert, wann welcher Kunde einen Massagetermin hat.\n"
-        "\nBeantworte alle Nutzerfragen stets auf Basis dieser Struktur und der echten Datenbankdaten. Wenn keine passenden Daten gefunden werden, erkläre das höflich und weise darauf hin, dass keine passenden Datenbankdaten vorhanden sind.\n"
-    )    
-    if not db_context:
-        db_context = "[Achtung: Keine passenden Datenbankdaten zur Nutzerfrage gefunden.]"
-        app.logger.info("[DB-KONTEXT] Kein passender Kontext aus DB generiert.")
-    else:
-        app.logger.info(f"[DB-KONTEXT] {db_context}")
-    system_prompt += f" Datenbank-Info: {db_context}"
-    # Ersetze die erste system-Nachricht im Verlauf (falls vorhanden), sonst füge sie vorn an
-    new_messages = messages[:]
-    found_system = False
-    for i, m in enumerate(new_messages):
-        if m.get('role') == 'system':
-            new_messages[i]['content'] = system_prompt
-            found_system = True
-            break
-    if not found_system:
-        new_messages = [{'role': 'system', 'content': system_prompt}] + new_messages
-    openai.api_key = os.environ.get("OPENAI_API_KEY")
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=new_messages
-        )
-        answer = response.choices[0].message['content'].strip()
-        return jsonify({'answer': answer})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    # Nutze zentrale Agentenfunktion für die Antwortgenerierung
+    user_msg = last_user_msg or ""
+    answer = agent_respond(user_msg, channel="chat")
+    return jsonify({'answer': answer})
 
 if __name__ == "__main__":
     app.run(debug=True)
