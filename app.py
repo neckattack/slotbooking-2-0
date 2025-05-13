@@ -47,6 +47,32 @@ app.logger.info(f"mysql-connector-python Version: {mysql.connector.__version__}"
 app.logger.info(f"[DB-UMGEBUNG] DB_HOST={os.environ.get('DB_HOST')}, DB_USER={os.environ.get('DB_USER')}, DB_NAME={os.environ.get('DB_NAME')}, DB_PORT={os.environ.get('DB_PORT')}")
 
 from db_utils import get_db_connection
+from flask import current_app
+from agent_blue import get_blue_db_connection
+
+@app.route('/debug/db-test')
+def debug_db_test():
+    """
+    Prüft die Verbindung zur BLUE-DB und sucht nach einer Test-Admin-Mail.
+    Gibt das Ergebnis als JSON zurück.
+    """
+    import os
+    test_email = os.environ.get('DEBUG_ADMIN_EMAIL', 'chris.walther@neckattack.net')
+    result = {'db_connect': False, 'admin_found': False, 'error': None}
+    try:
+        conn = get_blue_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        result['db_connect'] = True
+        cursor.execute("SELECT admin_username FROM tbl_admin WHERE admin_email = %s", (test_email,))
+        admin_row = cursor.fetchone()
+        result['admin_found'] = bool(admin_row)
+        if admin_row:
+            result['admin_username'] = admin_row['admin_username']
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        result['error'] = str(e)
+    return jsonify(result)
 
 
 def get_reservations_for_today():
