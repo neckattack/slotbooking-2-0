@@ -75,7 +75,10 @@ def agent_respond(user_message, channel="chat", user_email=None):
         # Prüfe, ob die Antwort wie ein SQL-Statement aussieht
         sql_pattern = re.compile(r'^(SELECT|SHOW|DESCRIBE|WITH) ', re.IGNORECASE)
         if sql_pattern.match(antwort):
-            # SQL ausführen
+            if channel == "email":
+                # Für E-Mails: Keine SQL-Abfrage, sondern FAQ-Antwort zurückgeben
+                return antwort
+            # Für andere Kanäle bleibt das Verhalten unverändert
             try:
                 conn = get_db_connection()
                 cursor = conn.cursor(dictionary=True)
