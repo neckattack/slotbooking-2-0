@@ -20,6 +20,9 @@ def agent_respond(user_message, channel="chat", user_email=None):
     - channel: "chat", "email" etc.
     - user_email: falls bekannt, für Kontext (z.B. bei E-Mail)
     """
+    import logging
+    from faq_langchain import faq_answer
+    from datetime import datetime
     today_str = datetime.now().strftime('%Y-%m-%d')
     db_context = ""
     knowledge = load_knowledge()
@@ -40,6 +43,14 @@ def agent_respond(user_message, channel="chat", user_email=None):
         f"(Kanal: {channel})\n"
         f"Datenbank-Kontext: {db_context}\n"
     )
+    # 1. Schritt: FAQ-LangChain nutzen
+    try:
+        faq_resp = faq_answer(user_message)
+        if faq_resp and len(faq_resp.strip()) > 10 and "nicht beantworten" not in faq_resp.lower():
+            return faq_resp.strip()
+    except Exception as e:
+        logging.error(f"[FAQ-LangChain-Exception] Fehler bei der FAQ-Antwort für Frage '{user_message}': {e}")
+    # 2. Schritt: Fallback auf OpenAI/DB wie gehabt
     import re
     import unicodedata
     def normalize(text):
@@ -47,21 +58,10 @@ def agent_respond(user_message, channel="chat", user_email=None):
         text = unicodedata.normalize('NFKD', text)
         text = re.sub(r'[\W_]+', '', text)
         return text
-
-    # Prüfe, ob die Nutzerfrage wirklich eine DB-Abfrage ist
     user_message_norm = normalize(user_message)
-    # FAQ-First: Prüfe, ob die Frage mit typischen FAQ-Formulierungen beginnt
-    faq_starts = [
-        "wie kann ich", "wie funktioniert", "was muss ich tun", "wie nehme ich", "wie akzeptiere ich", "wie bekomme ich", "wie melde ich mich", "wo finde ich"
-    ]
     user_message_lower = user_message.lower().strip()
-    is_faq = any(user_message_lower.startswith(start) for start in faq_starts)
-
-    # Neue Logik: Nur wenn explizit nach Datenbankinhalten gefragt wird ("wie viele", "zeige mir", "liste", "welche kunden", "sql")
-    # AI-first: GPT entscheidet, ob FAQ oder SQL nötig ist
-    import logging
-    import re
     try:
+        import openai
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -72,14 +72,12 @@ def agent_respond(user_message, channel="chat", user_email=None):
             temperature=0.2
         )
         antwort = response.choices[0].message.content.strip()
-        # Prüfe, ob die Antwort wie ein SQL-Statement aussieht
         sql_pattern = re.compile(r'^(SELECT|SHOW|DESCRIBE|WITH) ', re.IGNORECASE)
         if sql_pattern.match(antwort):
             if channel == "email":
-                # Für E-Mails: Keine SQL-Abfrage, sondern FAQ-Antwort zurückgeben
                 return antwort
-            # Für andere Kanäle bleibt das Verhalten unverändert
             try:
+                from db_utils import get_db_connection
                 conn = get_db_connection()
                 cursor = conn.cursor(dictionary=True)
                 cursor.execute(antwort)
@@ -88,7 +86,6 @@ def agent_respond(user_message, channel="chat", user_email=None):
                 conn.close()
                 if not rows:
                     return "Es wurden keine passenden Daten gefunden."
-                # Ergebnis formatieren
                 result_lines = []
                 for row in rows:
                     result_lines.append(", ".join(f"{k}: {v}" for k, v in row.items()))
@@ -97,7 +94,6 @@ def agent_respond(user_message, channel="chat", user_email=None):
             except Exception as e:
                 logging.error(f"[DB-Exception] Fehler bei der Datenbankabfrage für Frage '{user_message}': {e}")
                 return "Entschuldigung, es gab einen Fehler bei der Datenbankabfrage. Bitte versuche es später erneut oder kontaktiere den Support."
-        # Wenn kein SQL, direkt als FAQ-Antwort zurückgeben
         if not antwort:
             logging.error(f"[FAQ-Fehler] Leere Antwort von OpenAI für Frage: {user_message}")
             return "Entschuldigung, ich konnte deine Frage gerade nicht beantworten. Bitte versuche es später erneut oder kontaktiere den Support."
