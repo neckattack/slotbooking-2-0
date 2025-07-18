@@ -95,14 +95,52 @@ def send_test_reply(to_addr, orig_subject, body):
 
             # Prompt für ChatGPT vorbereiten
             from agent_gpt import agent_respond
+            beispiel_html = """
+<p>Hallo Max,</p>
+<p>vielen Dank für deine Anfrage. Hier die wichtigsten Schritte:</p>
+<ul>
+  <li>Logge dich ein.</li>
+  <li>Klicke auf ...</li>
+  <li>Prüfe ...</li>
+</ul>
+<p>Viele Grüße<br>Dein Support-Team</p>
+"""
             if name:
-                prompt_body = f"Bitte schreibe eine freundliche, professionelle Antwort-Mail an '{name}'. Die Antwort soll mit einer persönlichen Anrede beginnen, die folgende Nutzeranfrage beantworten und als HTML formatiert sein (inkl. Absätze, Listen, Hervorhebungen, wo sinnvoll). Abschluss freundlich. Hier die Nutzeranfrage:\n\n{body}"
+                prompt_body = (
+                    f"Bitte schreibe eine freundliche, professionelle Antwort-Mail an '{name}'. Die Antwort soll mit einer persönlichen Anrede beginnen, die folgende Nutzeranfrage beantworten und als vollständiges HTML mit <p>-Absätzen und <ul><li>-Listen, wo sinnvoll, formatiert sein. Gib ausschließlich HTML zurück, kein Markdown, keine reinen Texte. Abschluss freundlich. Beispiel:\n{beispiel_html}\nHier die Nutzeranfrage:\n\n{body}"
+                )
             else:
-                prompt_body = f"Bitte schreibe eine freundliche, professionelle Antwort-Mail. Die Antwort soll mit einer Anrede beginnen, die folgende Nutzeranfrage beantworten und als HTML formatiert sein (inkl. Absätze, Listen, Hervorhebungen, wo sinnvoll). Abschluss freundlich. Hier die Nutzeranfrage:\n\n{body}"
+                prompt_body = (
+                    f"Bitte schreibe eine freundliche, professionelle Antwort-Mail. Die Antwort soll mit einer Anrede beginnen, die folgende Nutzeranfrage beantworten und als vollständiges HTML mit <p>-Absätzen und <ul><li>-Listen, wo sinnvoll, formatiert sein. Gib ausschließlich HTML zurück, kein Markdown, keine reinen Texte. Abschluss freundlich. Beispiel:\n{beispiel_html}\nHier die Nutzeranfrage:\n\n{body}"
+                )
             try:
                 antwort_html = agent_respond(prompt_body, channel="email", user_email=to_addr)
             except Exception as e:
                 antwort_html = f"[Fehler bei der Antwortgenerierung: {e}]"
+            # Fallback: Wenn kein HTML, dann Text in HTML umwandeln
+            if not ("<p>" in antwort_html or "<ul>" in antwort_html or "<ol>" in antwort_html):
+                def text_to_html(text):
+                    import re
+                    # Listenpunkte erkennen
+                    lines = text.split('\n')
+                    html_lines = []
+                    in_list = False
+                    for line in lines:
+                        line = line.strip()
+                        if re.match(r'^(\d+\.|\-|•)', line):
+                            if not in_list:
+                                html_lines.append('<ul>')
+                                in_list = True
+                            html_lines.append(f'<li>{line}</li>')
+                        elif line:
+                            if in_list:
+                                html_lines.append('</ul>')
+                                in_list = False
+                            html_lines.append(f'<p>{line}</p>')
+                    if in_list:
+                        html_lines.append('</ul>')
+                    return '\n'.join(html_lines)
+                antwort_html = text_to_html(antwort_html)
             # Fallback: Plaintext-Version (HTML-Tags entfernen)
             import re
             # Entferne versehentlich eingefügte Markdown-Blöcke wie ```html am Anfang
@@ -110,10 +148,20 @@ def send_test_reply(to_addr, orig_subject, body):
             antwort_plain = re.sub('<[^<]+?>', '', antwort_html)
             # --- Debug-Info aus BLUE-DB ---
             from agent_blue import get_user_info_by_email
-            user_info = get_user_info_by_email(to_addr)
+            logger.info(f"[Mail-Check] Prüfe Rolle für Absender: {to_addr}")
+            # Case-insensitive Suche
+            user_info = None
+            try:
+                user_info = get_user_info_by_email(to_addr.lower())
+            except Exception as e:
+                logger.error(f"Fehler bei get_user_info_by_email: {e}")
             if user_info:
+                logger.info(f"[Mail-Check] User erkannt: Rolle={user_info['role']}, Name={user_info['first_name']} {user_info['last_name']}")
                 debug_info = f"[DEBUG: User gefunden] Vorname: {user_info['first_name']}, Nachname: {user_info['last_name']}, Rolle: {user_info['role']}"
+                if user_info['role'] == 'admin':
+                    antwort_html = '<b>Hallo Admin!</b><br>Du bist als Admin in der BLUE-Datenbank hinterlegt. Wenn du spezielle Systembefehle oder Support brauchst, gib mir einfach Bescheid.'
             else:
+                logger.info(f"[Mail-Check] User nicht in BLUE-DB gefunden für: {to_addr}")
                 debug_info = "[DEBUG: User nicht in BLUE-DB gefunden]"
             # --- HTML-Body bauen ---
             html_body = f'''
@@ -132,7 +180,9 @@ def send_test_reply(to_addr, orig_subject, body):
             '''
             msg.set_content(antwort_plain, subtype='plain')
             msg.add_alternative(html_body, subtype='html')
+            logger.info(f"[Mail-Versand] Sende Antwort an {to_addr}...")
             server.send_message(msg)
+            logger.info(f"[Mail-Versand] Antwort an {to_addr} gesendet.")
             logger.info(f"Antwort an {to_addr} gesendet.")
     except Exception as e:
         logger.error(f"Fehler beim SMTP-Versand an {to_addr}: {e}")
