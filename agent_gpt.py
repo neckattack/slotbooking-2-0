@@ -87,12 +87,24 @@ def agent_respond(user_message, channel="chat", user_email=None):
         # Automatische Nachbearbeitung: E-Mail-Antworten schön formatieren
         if channel == "email" and antwort:
             import re
-            # Nach jedem Satzende (Punkt, Ausrufezeichen, Fragezeichen gefolgt von Leerzeichen) einen Absatz erzwingen
-            antwort = re.sub(r'([.!?])\s+', r'\1\n\n', antwort)
+            # Keine Absätze nach Punkt in URL
+            def absatz_sub(match):
+                s = match.group(0)
+                if 'http' in s or 'www.' in s:
+                    return s
+                return s[0] + '\n\n'
+            # Nach jedem Satzende (Punkt, Ausrufezeichen, Fragezeichen, außer bei URLs) einen Absatz erzwingen
+            antwort = re.sub(r'([.!?])\s+', absatz_sub, antwort)
+            # Schrittanweisungen als Listenpunkt erkennen
+            antwort = re.sub(r'(?i)\b(logge dich|klicke|scrolle|prüfe|beachte|falls|kontaktiere)\b', r'\n- \1', antwort)
             # Listenpunkte ("1. ...") jeweils in eigene Zeile
             antwort = re.sub(r'(\d+\. )', r'\n\1', antwort)
             antwort = re.sub(r'\n{3,}', '\n\n', antwort)
+            # Immer mindestens zwei Absätze erzwingen
+            if antwort.count('\n\n') < 2:
+                antwort = antwort.replace('. ', '.\n\n')
             antwort = antwort.strip()
+
 
         sql_pattern = re.compile(r'^(SELECT|SHOW|DESCRIBE|WITH) ', re.IGNORECASE)
         if sql_pattern.match(antwort):
