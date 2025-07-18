@@ -19,6 +19,8 @@ def agent_respond(user_message, channel="chat", user_email=None):
     - user_message: Die Frage/Bitte des Nutzers (Mailtext, Chat, ...)
     - channel: "chat", "email" etc.
     - user_email: falls bekannt, für Kontext (z.B. bei E-Mail)
+
+    # WICHTIG: E-Mails IMMER klar gegliedert mit Absätzen, Listen und Themenblöcken formatieren – keine Fließtexte! (Regel: email_formatting)
     """
     import logging
     from faq_langchain import faq_answer
@@ -37,6 +39,7 @@ def agent_respond(user_message, channel="chat", user_email=None):
         "WICHTIG: Versuche IMMER zuerst, die Nutzerfrage anhand der Knowledgebase als FAQ zu beantworten. Nur wenn wirklich explizit nach Datenbankinhalten, Listen, Statistiken oder konkreten Werten gefragt wird, generiere ein SQL-Statement.\n"
         "Wenn du ein SQL-Statement generierst, gib NUR das SQL-Statement zurück (ohne Erklärtext, ohne Codeblock, ohne Präfix). In allen anderen Fällen gib direkt die Antwort für die E-Mail zurück.\n"
         "Achte bei deinen Antworten IMMER auf eine natürliche, freundliche und sehr übersichtliche Formatierung: Nutze für Schritt-für-Schritt-Anleitungen IMMER nummerierte Listen (jede Anweisung als eigener Listenpunkt) und trenne Absätze immer durch eine Leerzeile. Schreibe keine Fließtexte, sondern gliedere die Antwort wie eine echte, gut lesbare E-Mail. Keine technischen Labels, keine HTML-Tags, keine FAQ-Kennzeichnung.\n"
+        "E-Mails IMMER klar gegliedert mit Absätzen, Listen und Themenblöcken formatieren – keine Fließtexte! (email_formatting Regel)\n"
         "Führe niemals destructive Queries wie DROP, DELETE, UPDATE ohne explizite Freigabe aus!\n"
         "Antworte immer auf Deutsch.\n"
         f"Datenbankschema (Knowledge):\n{knowledge}\n"
