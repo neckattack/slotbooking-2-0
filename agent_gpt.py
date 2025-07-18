@@ -38,8 +38,17 @@ def agent_respond(user_message, channel="chat", user_email=None):
         "Du kennst das folgende Datenbankschema und kannst SQL-Statements generieren, um Nutzerfragen zu beantworten, wenn diese explizit nach Datenbankinhalten oder nach Terminen, Slots, Kunden, Reservierungen, gebuchten/freien Zeiten oder Einsätzen fragen.\n"
         "WICHTIG: Versuche IMMER zuerst, die Nutzerfrage anhand der Knowledgebase als FAQ zu beantworten. Nur wenn wirklich explizit nach Datenbankinhalten, Listen, Statistiken oder konkreten Werten gefragt wird, generiere ein SQL-Statement.\n"
         "Wenn du ein SQL-Statement generierst, gib NUR das SQL-Statement zurück (ohne Erklärtext, ohne Codeblock, ohne Präfix). In allen anderen Fällen gib direkt die Antwort für die E-Mail zurück.\n"
-        "Achte bei deinen Antworten IMMER auf eine natürliche, freundliche und sehr übersichtliche Formatierung: Nutze für Schritt-für-Schritt-Anleitungen IMMER nummerierte Listen (jede Anweisung als eigener Listenpunkt) und trenne Absätze immer durch eine Leerzeile. Schreibe keine Fließtexte, sondern gliedere die Antwort wie eine echte, gut lesbare E-Mail. Keine technischen Labels, keine HTML-Tags, keine FAQ-Kennzeichnung.\n"
-        "E-Mails IMMER klar gegliedert mit Absätzen, Listen und Themenblöcken formatieren – keine Fließtexte! (email_formatting Regel)\n"
+        "Achte bei deinen Antworten IMMER auf eine natürliche, freundliche und sehr übersichtliche Formatierung:"
+        "\n- Trenne jeden Sinnabschnitt durch eine Leerzeile (Absatz)."
+        "\n- Nutze für Schritt-für-Schritt-Anleitungen IMMER nummerierte Listen (jede Anweisung als eigener Listenpunkt)."
+        "\n- Schreibe KEINE Fließtexte, sondern gliedere die Antwort wie eine echte, gut lesbare E-Mail."
+        "\n- Keine technischen Labels, keine HTML-Tags, keine FAQ-Kennzeichnung."
+        "\n- Gib die Antwort so aus, dass sie direkt als E-Mail verschickt werden kann und sehr gut lesbar ist."
+        "\n- Beispiel für gutes Format (bitte IMMER so antworten):\n"
+        "\nHallo Max,\n\n"
+        "vielen Dank für deine Anfrage. Hier die wichtigsten Schritte:\n"
+        "1. Logge dich ein.\n2. Klicke auf ...\n3. Prüfe ...\n\nFalls du weitere Fragen hast, melde dich gerne!\n\nViele Grüße\nDein Support-Team\n"
+        "\nE-Mails IMMER klar gegliedert mit Absätzen, Listen und Themenblöcken formatieren – keine Fließtexte! (email_formatting Regel)\n"
         "Führe niemals destructive Queries wie DROP, DELETE, UPDATE ohne explizite Freigabe aus!\n"
         "Antworte immer auf Deutsch.\n"
         f"Datenbankschema (Knowledge):\n{knowledge}\n"
@@ -75,6 +84,16 @@ def agent_respond(user_message, channel="chat", user_email=None):
             temperature=0.2
         )
         antwort = response.choices[0].message.content.strip()
+        # Automatische Nachbearbeitung: E-Mail-Antworten schön formatieren
+        if channel == "email" and antwort:
+            import re
+            # Nach jedem Satzende (Punkt, Ausrufezeichen, Fragezeichen gefolgt von Leerzeichen) einen Absatz erzwingen
+            antwort = re.sub(r'([.!?])\s+', r'\1\n\n', antwort)
+            # Listenpunkte ("1. ...") jeweils in eigene Zeile
+            antwort = re.sub(r'(\d+\. )', r'\n\1', antwort)
+            antwort = re.sub(r'\n{3,}', '\n\n', antwort)
+            antwort = antwort.strip()
+
         sql_pattern = re.compile(r'^(SELECT|SHOW|DESCRIBE|WITH) ', re.IGNORECASE)
         if sql_pattern.match(antwort):
             if channel == "email":
