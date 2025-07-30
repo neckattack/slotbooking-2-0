@@ -1,6 +1,19 @@
 console.log('main.js geladen!');
 // Hilfsfunktion zum Laden und Anzeigen der Termine
 function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
+    // Dynamische Überschrift setzen
+    const headline = document.getElementById('headline');
+    if (datum) {
+        // Datum in deutsches Format bringen
+        const parts = datum.split('-');
+        if (parts.length === 3) {
+            headline.textContent = `Termine am ${parts[2]}.${parts[1]}.${parts[0]}`;
+        } else {
+            headline.textContent = `Termine am ${datum}`;
+        }
+    } else {
+        headline.textContent = 'Kommende Termine (14 Tage)';
+    }
     // TEST: Hole alle Slots inkl. Slot-ID, Status, Kunde/E-Mail
     fetch(`/api/slots?datum=${datum}`)
         .then(response => response.json())
