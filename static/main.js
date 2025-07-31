@@ -3,7 +3,8 @@ console.log('main.js geladen!');
 function loadAndDisplayAppointments(datum, isCronjobPreview = false) {
     // Dynamische Überschrift setzen
     const headline = document.getElementById('headline');
-    if (datum) {
+    let isSingleDay = !!datum;
+    if (isSingleDay) {
         // Datum in deutsches Format bringen
         const parts = datum.split('-');
         if (parts.length === 3) {
@@ -239,7 +240,61 @@ if (freieTermine.length > 0) {
             // Sammle alle zu löschenden Termine
             const termineToDelete = [];
 
-            sortedCompanies.forEach(firma => {
+            // Gruppierung und Anzeige je nach Filtermodus
+            if (isSingleDay) {
+                // Einzel-Tag: Keine Gruppierung nach Tagen, sondern alle Firmen direkt anzeigen
+                sortedCompanies.forEach(firma => {
+                    const { masseur, masseur_email, termine } = groupedByCompany[firma];
+                    let htmlBlock = '';
+                    htmlBlock += `
+                    <div class="company-section">
+                        <div class="company-header">
+                            <h3 class="mb-2">
+                                <i class="bi bi-building"></i> ${firma}
+                            </h3>
+                            <div>
+                                <i class="bi bi-person-badge"></i> <strong>${masseur}</strong>
+                                ${masseur_email ? `<br><a href="mailto:${masseur_email}" class="email-link"><i class="bi bi-envelope"></i> ${masseur_email}</a>` : ''}
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th class="time-column">Zeit / Slot-ID</th>
+                                        <th>Status / Kunde</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+                    allTimeSlots.forEach((time, idx) => {
+                        const termin = termine[time];
+                        const isFree = !termin;
+                        let rowClass = isFree ? 'free-slot' : 'booked-slot';
+                        htmlBlock += `
+                            <tr class="${rowClass}">
+                                <td class="time-column">
+                                    <span class="time-badge">${time}</span>
+                                    <br>
+                                    <small class="text-muted">ID: ${termin && termin.time_id ? termin.time_id : '-'}</small>
+                                </td>
+                                <td>`;
+                        if (isFree) {
+                            htmlBlock += `<i class="bi bi-calendar-check"></i> FREI`;
+                        } else {
+                            htmlBlock += `<div><strong><i class="bi bi-person"></i> ${termin.kunde || '-'}</strong>`;
+                            if (termin.kunde_email) {
+                                htmlBlock += `<br><a href="mailto:${termin.kunde_email}" class="email-link"><i class="bi bi-envelope"></i> ${termin.kunde_email}</a>`;
+                            }
+                            htmlBlock += `</div>`;
+                        }
+                        htmlBlock += `</td></tr>`;
+                    });
+                    htmlBlock += `</tbody></table></div></div>`;
+                    div.innerHTML += htmlBlock;
+                });
+            } else {
+                // Standard: Gruppierung wie gehabt
+                sortedCompanies.forEach(firma => {
                 const { masseur, masseur_email, termine } = groupedByCompany[firma];
                 
                 // Finde den ersten besetzten Termin
