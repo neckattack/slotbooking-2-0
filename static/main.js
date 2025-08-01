@@ -255,6 +255,29 @@ if (freieTermine.length > 0) {
                             <div>
                                 <i class="bi bi-person-badge"></i> <strong>${masseur}</strong>
                                 ${masseur_email ? `<br><a href="mailto:${masseur_email}" class="email-link"><i class="bi bi-envelope"></i> ${masseur_email}</a>` : ''}
+                                <br>
+                                <span class="occupancy-info">
+                                    ${(() => {
+                                        let total = 0;
+                                        let booked = 0;
+                                        allTimeSlots.forEach(time => {
+                                            const termin = termine[time];
+                                            // Slot zählt nicht, wenn Buchung mit 'Pause' in der E-Mail
+                                            if (termin && termin.kunde_email && termin.kunde_email.toLowerCase().includes('pause')) {
+                                                return;
+                                            }
+                                            if (!termin) {
+                                                total++;
+                                            } else {
+                                                total++;
+                                                booked++;
+                                            }
+                                        });
+                                        if (total === 0) return '<span class="text-muted">Keine Slots</span>';
+                                        const percent = Math.round((booked / total) * 100);
+                                        return `<span class='fw-bold'>Belegung: ${percent}%</span> <span class='text-muted'>(${booked} von ${total} belegt)</span>`;
+                                    })()}
+                                </span>
                             </div>
                         </div>
                         <div class="table-responsive">
@@ -435,6 +458,11 @@ if (freieTermine.length > 0) {
 }
         });
 }
+
+// Initial-Load: 14-Tage-Ansicht und Überschrift setzen
+window.addEventListener('DOMContentLoaded', function() {
+    loadAndDisplayAppointments('', false);
+});
 
 // Event Listener für den normalen "Termine anzeigen" Button
 document.getElementById("laden").addEventListener("click", function() {
