@@ -42,6 +42,20 @@ def faq_answer(question):
     result = qa({"query": question})
     return result["result"].strip()
 
+# Relevanzprüfung: Nutzt FAISS similarity_search_with_score.
+# Hinweis: Bei FAISS in LangChain ist ein KLEINERER Score in der Regel besser (Distanz).
+# Der Default-Threshold 0.6 ist konservativ; je kleiner desto strenger.
+def faq_is_relevant(question: str, threshold: float = 0.6):
+    try:
+        docs = vectorstore.similarity_search_with_score(question, k=1)
+        if not docs:
+            return False, None, None
+        doc, score = docs[0]
+        is_rel = score is not None and score <= threshold
+        return is_rel, doc.page_content if doc else None, score
+    except Exception:
+        return False, None, None
+
 if __name__ == "__main__":
     frage = input("Deine Frage: ")
     print(faq_answer(frage))

@@ -24,7 +24,7 @@ def agent_respond(user_message, channel="chat", user_email=None):
     # WICHTIG: E-Mails IMMER klar gegliedert mit Absätzen, Listen und Themenblöcken formatieren – keine Fließtexte! (Regel: email_formatting)
     """
     import logging
-    from faq_langchain import faq_answer
+    from faq_langchain import faq_answer, faq_is_relevant
     from datetime import datetime
     today_str = datetime.now().strftime('%Y-%m-%d')
     db_context = ""
@@ -93,9 +93,11 @@ def agent_respond(user_message, channel="chat", user_email=None):
     # 1. Schritt: FAQ-LangChain nutzen (nur wenn nicht offensichtlich Off-Topic)
     try:
         if not is_offtopic(user_message):
-            faq_resp = faq_answer(user_message)
-            if faq_resp and len(faq_resp.strip()) > 10 and "nicht beantworten" not in faq_resp.lower():
-                return faq_resp.strip()
+            is_rel, _doc, score = faq_is_relevant(user_message)
+            if is_rel:
+                faq_resp = faq_answer(user_message)
+                if faq_resp and len(faq_resp.strip()) > 10 and "nicht beantworten" not in faq_resp.lower():
+                    return faq_resp.strip()
     except Exception as e:
         logging.error(f"[FAQ-LangChain-Exception] Fehler bei der FAQ-Antwort für Frage '{user_message}': {e}")
     # 2. Schritt: Fallback auf OpenAI/DB wie gehabt

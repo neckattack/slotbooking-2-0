@@ -58,7 +58,7 @@ def check_mail_and_reply():
             body = msg.get_payload(decode=True).decode(charset, errors='ignore')
         logger.info(f"Mail-Body: {body}")
 
-        # Sende echte neckattack-GPT-Antwort zurück
+        # Sende echte neckattack-GPT-Antwort zurück (nur EIN Aufruf)
         from agent_gpt import agent_respond
         try:
             antwort = agent_respond(body, channel="email", user_email=from_addr)
@@ -74,7 +74,7 @@ def check_mail_and_reply():
 
     mail.logout()
 
-def send_test_reply(to_addr, orig_subject, body):
+def send_test_reply(to_addr, orig_subject, antwort_text):
     import smtplib
     import logging
     logger = logging.getLogger()
@@ -94,30 +94,8 @@ def send_test_reply(to_addr, orig_subject, body):
                 match = re.match(r"([a-zA-ZäöüÄÖÜß\-\.]+)", to_addr)
                 name = match.group(1).split(".")[0].capitalize() if match else ""
 
-            # Prompt für ChatGPT vorbereiten
-            from agent_gpt import agent_respond
-            beispiel_html = """
-<p>Hallo Max,</p>
-<p>vielen Dank für deine Anfrage. Hier die wichtigsten Schritte:</p>
-<ul>
-  <li>Logge dich ein.</li>
-  <li>Klicke auf ...</li>
-  <li>Prüfe ...</li>
-</ul>
-<p>Viele Grüße<br>Dein Support-Team</p>
-"""
-            if name:
-                prompt_body = (
-                    f"Bitte schreibe eine freundliche, professionelle Antwort-Mail an '{name}'. Die Antwort soll mit einer persönlichen Anrede beginnen, die folgende Nutzeranfrage beantworten und als vollständiges HTML mit <p>-Absätzen und <ul><li>-Listen, wo sinnvoll, formatiert sein. Gib ausschließlich HTML zurück, kein Markdown, keine reinen Texte. Abschluss freundlich. Beispiel:\n{beispiel_html}\nHier die Nutzeranfrage:\n\n{body}"
-                )
-            else:
-                prompt_body = (
-                    f"Bitte schreibe eine freundliche, professionelle Antwort-Mail. Die Antwort soll mit einer Anrede beginnen, die folgende Nutzeranfrage beantworten und als vollständiges HTML mit <p>-Absätzen und <ul><li>-Listen, wo sinnvoll, formatiert sein. Gib ausschließlich HTML zurück, kein Markdown, keine reinen Texte. Abschluss freundlich. Beispiel:\n{beispiel_html}\nHier die Nutzeranfrage:\n\n{body}"
-                )
-            try:
-                antwort_html = agent_respond(prompt_body, channel="email", user_email=to_addr)
-            except Exception as e:
-                antwort_html = f"[Fehler bei der Antwortgenerierung: {e}]"
+            # Verwende die bereits erzeugte Antwort (kein zweiter LLM-Call)
+            antwort_html = antwort_text
             # Fallback: Wenn kein HTML, dann Text in HTML umwandeln
             if not ("<p>" in antwort_html or "<ul>" in antwort_html or "<ol>" in antwort_html):
                 def text_to_html(text):
