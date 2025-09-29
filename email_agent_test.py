@@ -10,6 +10,7 @@ EMAIL_USER = os.environ.get('EMAIL_USER')
 EMAIL_PASS = os.environ.get('EMAIL_PASS')
 SMTP_SERVER = os.environ.get('SMTP_SERVER')  # z.B. 'smtp.gmail.com'
 SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
+FAQ_ONLY = os.environ.get('AGENT_FAQ_ONLY', 'false').lower() == 'true'
 
 
 from agent_core import find_next_appointment_for_name
@@ -148,7 +149,7 @@ def send_test_reply(to_addr, orig_subject, body):
             antwort_plain = re.sub('<[^<]+?>', '', antwort_html)
             # --- Debug-Info aus BLUE-DB ---
             from agent_blue import get_user_info_by_email
-            logger.info(f"[Mail-Check] Prüfe Rolle für Absender: {to_addr}")
+            logger.info(f"[Mail-Check] Prüfe Rolle/Person für Absender: {to_addr}")
             # Case-insensitive Suche
             user_info = None
             try:
@@ -156,9 +157,17 @@ def send_test_reply(to_addr, orig_subject, body):
             except Exception as e:
                 logger.error(f"Fehler bei get_user_info_by_email: {e}")
             if user_info:
-                logger.info(f"[Mail-Check] User erkannt: Rolle={user_info['role']}, Name={user_info['first_name']} {user_info['last_name']}")
-                debug_info = f"[DEBUG: User gefunden] Vorname: {user_info['first_name']}, Nachname: {user_info['last_name']}, Rolle: {user_info['role']}"
-                if user_info['role'] == 'admin':
+                full_name = (user_info.get('first_name') or '')
+                if user_info.get('last_name'):
+                    full_name = (full_name + ' ' + user_info['last_name']).strip()
+                address = user_info.get('address') or '–'
+                logger.info(
+                    f"[Mail-Check] User erkannt: Rolle={user_info.get('role')}, Name={full_name}, Adresse={address}"
+                )
+                debug_info = (
+                    f"[DEBUG: User gefunden] Name: {full_name} | Rolle: {user_info.get('role')} | Adresse: {address}"
+                )
+                if user_info.get('role') == 'admin':
                     antwort_html = '<b>Hallo Admin!</b><br>Du bist als Admin in der BLUE-Datenbank hinterlegt. Wenn du spezielle Systembefehle oder Support brauchst, gib mir einfach Bescheid.'
             else:
                 logger.info(f"[Mail-Check] User nicht in BLUE-DB gefunden für: {to_addr}")

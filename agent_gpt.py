@@ -5,6 +5,7 @@ from agent_core import find_next_appointment_for_name
 from db_utils import get_db_connection
 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
+FAQ_ONLY = os.environ.get("AGENT_FAQ_ONLY", "false").lower() == "true"
 
 def load_knowledge():
     try:
@@ -33,28 +34,50 @@ def agent_respond(user_message, channel="chat", user_email=None):
         "termin", "termine", "slot", "slots", "kunde", "kunden", "reservierung", "reservierungen",
         "sql", "datenbank", "gebucht", "frei", "gebuchte zeiten", "freie zeiten", "einsatz", "einsätze"
     ]
-    system_prompt = (
-        f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str}.\n"
-        "Du kennst das folgende Datenbankschema und kannst SQL-Statements generieren, um Nutzerfragen zu beantworten, wenn diese explizit nach Datenbankinhalten oder nach Terminen, Slots, Kunden, Reservierungen, gebuchten/freien Zeiten oder Einsätzen fragen.\n"
-        "WICHTIG: Versuche IMMER zuerst, die Nutzerfrage anhand der Knowledgebase als FAQ zu beantworten. Nur wenn wirklich explizit nach Datenbankinhalten, Listen, Statistiken oder konkreten Werten gefragt wird, generiere ein SQL-Statement.\n"
-        "Wenn du ein SQL-Statement generierst, gib NUR das SQL-Statement zurück (ohne Erklärtext, ohne Codeblock, ohne Präfix). In allen anderen Fällen gib direkt die Antwort für die E-Mail zurück.\n"
-        "Achte bei deinen Antworten IMMER auf eine natürliche, freundliche und sehr übersichtliche Formatierung:"
-        "\n- Trenne jeden Sinnabschnitt durch eine Leerzeile (Absatz)."
-        "\n- Nutze für Schritt-für-Schritt-Anleitungen IMMER nummerierte Listen (jede Anweisung als eigener Listenpunkt)."
-        "\n- Schreibe KEINE Fließtexte, sondern gliedere die Antwort wie eine echte, gut lesbare E-Mail."
-        "\n- Keine technischen Labels, keine HTML-Tags, keine FAQ-Kennzeichnung."
-        "\n- Gib die Antwort so aus, dass sie direkt als E-Mail verschickt werden kann und sehr gut lesbar ist."
-        "\n- Beispiel für gutes Format (bitte IMMER so antworten):\n"
-        "\nHallo Max,\n\n"
-        "vielen Dank für deine Anfrage. Hier die wichtigsten Schritte:\n"
-        "1. Logge dich ein.\n2. Klicke auf ...\n3. Prüfe ...\n\nFalls du weitere Fragen hast, melde dich gerne!\n\nViele Grüße\nDein Support-Team\n"
-        "\nE-Mails IMMER klar gegliedert mit Absätzen, Listen und Themenblöcken formatieren – keine Fließtexte! (email_formatting Regel)\n"
-        "Führe niemals destructive Queries wie DROP, DELETE, UPDATE ohne explizite Freigabe aus!\n"
-        "Antworte immer auf Deutsch.\n"
-        f"Datenbankschema (Knowledge):\n{knowledge}\n"
-        f"(Kanal: {channel})\n"
-        f"Datenbank-Kontext: {db_context}\n"
-    )
+    if FAQ_ONLY:
+        system_prompt = (
+            f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str}.\n"
+            "WICHTIG: Beantworte die Nutzerfrage AUSSCHLIESSLICH anhand der Knowledgebase (FAQ).\n"
+            "ERZEUGE KEINE SQL-Statements und führe KEINE Datenbankabfragen durch.\n"
+            "Wenn Informationen nicht in der Knowledgebase stehen, erkläre das freundlich und biete allgemeine Hilfe oder nächste Schritte an.\n"
+            "Achte bei deinen Antworten IMMER auf eine natürliche, freundliche und sehr übersichtliche Formatierung:"
+            "\n- Trenne jeden Sinnabschnitt durch eine Leerzeile (Absatz)."
+            "\n- Nutze für Schritt-für-Schritt-Anleitungen IMMER nummerierte Listen (jede Anweisung als eigener Listenpunkt)."
+            "\n- Schreibe KEINE Fließtexte, sondern gliedere die Antwort wie eine echte, gut lesbare E-Mail."
+            "\n- Keine technischen Labels, keine HTML-Tags, keine FAQ-Kennzeichnung."
+            "\n- Gib die Antwort so aus, dass sie direkt als E-Mail verschickt werden kann und sehr gut lesbar ist."
+            "\n- Beispiel für gutes Format (bitte IMMER so antworten):\n"
+            "\nHallo Max,\n\n"
+            "vielen Dank für deine Anfrage. Hier die wichtigsten Schritte:\n"
+            "1. Logge dich ein.\n2. Klicke auf ...\n3. Prüfe ...\n\nFalls du weitere Fragen hast, melde dich gerne!\n\nViele Grüße\nDein Support-Team\n"
+            "\nE-Mails IMMER klar gegliedert mit Absätzen, Listen und Themenblöcken formatieren – keine Fließtexte! (email_formatting Regel)\n"
+            "Antworte immer auf Deutsch.\n"
+            f"Knowledgebase (FAQ):\n{knowledge}\n"
+            f"(Kanal: {channel})\n"
+        )
+    else:
+        system_prompt = (
+            f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str}.\n"
+            "Du kennst das folgende Datenbankschema und kannst SQL-Statements generieren, um Nutzerfragen zu beantworten, wenn diese explizit nach Datenbankinhalten oder nach Terminen, Slots, Kunden, Reservierungen, gebuchten/freien Zeiten oder Einsätzen fragen.\n"
+            "WICHTIG: Versuche IMMER zuerst, die Nutzerfrage anhand der Knowledgebase als FAQ zu beantworten. Nur wenn wirklich explizit nach Datenbankinhalten, Listen, Statistiken oder konkreten Werten gefragt wird, generiere ein SQL-Statement.\n"
+            "Wenn du ein SQL-Statement generierst, gib NUR das SQL-Statement zurück (ohne Erklärtext, ohne Codeblock, ohne Präfix). In allen anderen Fällen gib direkt die Antwort für die E-Mail zurück.\n"
+            "Achte bei deinen Antworten IMMER auf eine natürliche, freundliche und sehr übersichtliche Formatierung:"
+            "\n- Trenne jeden Sinnabschnitt durch eine Leerzeile (Absatz)."
+            "\n- Nutze für Schritt-für-Schritt-Anleitungen IMMER nummerierte Listen (jede Anweisung als eigener Listenpunkt)."
+            "\n- Schreibe KEINE Fließtexte, sondern gliedere die Antwort wie eine echte, gut lesbare E-Mail."
+            "\n- Keine technischen Labels, keine HTML-Tags, keine FAQ-Kennzeichnung."
+            "\n- Gib die Antwort so aus, dass sie direkt als E-Mail verschickt werden kann und sehr gut lesbar ist."
+            "\n- Beispiel für gutes Format (bitte IMMER so antworten):\n"
+            "\nHallo Max,\n\n"
+            "vielen Dank für deine Anfrage. Hier die wichtigsten Schritte:\n"
+            "1. Logge dich ein.\n2. Klicke auf ...\n3. Prüfe ...\n\nFalls du weitere Fragen hast, melde dich gerne!\n\nViele Grüße\nDein Support-Team\n"
+            "\nE-Mails IMMER klar gegliedert mit Absätzen, Listen und Themenblöcken formatieren – keine Fließtexte! (email_formatting Regel)\n"
+            "Führe niemals destructive Queries wie DROP, DELETE, UPDATE ohne explizite Freigabe aus!\n"
+            "Antworte immer auf Deutsch.\n"
+            f"Datenbankschema (Knowledge):\n{knowledge}\n"
+            f"(Kanal: {channel})\n"
+            f"Datenbank-Kontext: {db_context}\n"
+        )
     # 1. Schritt: FAQ-LangChain nutzen
     try:
         faq_resp = faq_answer(user_message)
@@ -106,28 +129,29 @@ def agent_respond(user_message, channel="chat", user_email=None):
             antwort = antwort.strip()
 
 
-        sql_pattern = re.compile(r'^(SELECT|SHOW|DESCRIBE|WITH) ', re.IGNORECASE)
-        if sql_pattern.match(antwort):
-            if channel == "email":
-                return antwort
-            try:
-                from db_utils import get_db_connection
-                conn = get_db_connection()
-                cursor = conn.cursor(dictionary=True)
-                cursor.execute(antwort)
-                rows = cursor.fetchall()
-                cursor.close()
-                conn.close()
-                if not rows:
-                    return "Es wurden keine passenden Daten gefunden."
-                result_lines = []
-                for row in rows:
-                    result_lines.append(", ".join(f"{k}: {v}" for k, v in row.items()))
-                result_text = "\n".join(result_lines)
-                return result_text
-            except Exception as e:
-                logging.error(f"[DB-Exception] Fehler bei der Datenbankabfrage für Frage '{user_message}': {e}")
-                return "Entschuldigung, es gab einen Fehler bei der Datenbankabfrage. Bitte versuche es später erneut oder kontaktiere den Support."
+        if not FAQ_ONLY:
+            sql_pattern = re.compile(r'^(SELECT|SHOW|DESCRIBE|WITH) ', re.IGNORECASE)
+            if sql_pattern.match(antwort):
+                if channel == "email":
+                    return antwort
+                try:
+                    from db_utils import get_db_connection
+                    conn = get_db_connection()
+                    cursor = conn.cursor(dictionary=True)
+                    cursor.execute(antwort)
+                    rows = cursor.fetchall()
+                    cursor.close()
+                    conn.close()
+                    if not rows:
+                        return "Es wurden keine passenden Daten gefunden."
+                    result_lines = []
+                    for row in rows:
+                        result_lines.append(", ".join(f"{k}: {v}" for k, v in row.items()))
+                    result_text = "\n".join(result_lines)
+                    return result_text
+                except Exception as e:
+                    logging.error(f"[DB-Exception] Fehler bei der Datenbankabfrage für Frage '{user_message}': {e}")
+                    return "Entschuldigung, es gab einen Fehler bei der Datenbankabfrage. Bitte versuche es später erneut oder kontaktiere den Support."
         if not antwort:
             logging.error(f"[FAQ-Fehler] Leere Antwort von OpenAI für Frage: {user_message}")
             return "Entschuldigung, ich konnte deine Frage gerade nicht beantworten. Bitte versuche es später erneut oder kontaktiere den Support."

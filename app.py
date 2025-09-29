@@ -48,7 +48,7 @@ app.logger.info(f"[DB-UMGEBUNG] DB_HOST={os.environ.get('DB_HOST')}, DB_USER={os
 
 from db_utils import get_db_connection
 from flask import current_app
-from agent_blue import get_blue_db_connection
+from db_utils_blue import get_blue_db_connection
 
 @app.route('/debug/db-test')
 def debug_db_test():
