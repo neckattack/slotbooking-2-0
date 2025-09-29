@@ -56,7 +56,8 @@ def get_user_info_by_email(email):
                 'first_name': row['user_first_name'],
                 'last_name': row['user_last_name'],
                 'role': role,
-                'address': address
+                'address': address,
+                'source': 'tbl_users'
             }
         # Wenn nicht gefunden, in tbl_admin suchen
         cursor.execute("SELECT admin_username FROM tbl_admin WHERE admin_email = %s", (email,))
@@ -67,7 +68,8 @@ def get_user_info_by_email(email):
                 'first_name': admin_row['admin_username'],
                 'last_name': '',
                 'role': 'admin',
-                'address': None
+                'address': None,
+                'source': 'tbl_admin'
             }
         return None
     finally:

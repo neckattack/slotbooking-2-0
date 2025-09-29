@@ -149,11 +149,14 @@ def send_test_reply(to_addr, orig_subject, body):
             antwort_plain = re.sub('<[^<]+?>', '', antwort_html)
             # --- Debug-Info aus BLUE-DB ---
             from agent_blue import get_user_info_by_email
-            logger.info(f"[Mail-Check] Prüfe Rolle/Person für Absender: {to_addr}")
+            from email.utils import parseaddr
+            # Reine E-Mail extrahieren (z.B. aus "Name <mail@domain>")
+            searched_email = (parseaddr(to_addr)[1] or to_addr).strip().lower()
+            logger.info(f"[Mail-Check] Prüfe Rolle/Person für Absender (bereinigt): {searched_email}")
             # Case-insensitive Suche
             user_info = None
             try:
-                user_info = get_user_info_by_email(to_addr.lower())
+                user_info = get_user_info_by_email(searched_email)
             except Exception as e:
                 logger.error(f"Fehler bei get_user_info_by_email: {e}")
             if user_info:
@@ -161,17 +164,17 @@ def send_test_reply(to_addr, orig_subject, body):
                 if user_info.get('last_name'):
                     full_name = (full_name + ' ' + user_info['last_name']).strip()
                 address = user_info.get('address') or '–'
-                logger.info(
-                    f"[Mail-Check] User erkannt: Rolle={user_info.get('role')}, Name={full_name}, Adresse={address}"
-                )
+                source = user_info.get('source') or 'unbekannt'
+                user_id = user_info.get('user_id')
+                logger.info(f"[Mail-Check] User erkannt: email={searched_email} | source={source} | user_id={user_id} | Rolle={user_info.get('role')} | Name={full_name} | Adresse={address}")
                 debug_info = (
-                    f"[DEBUG: User gefunden] Name: {full_name} | Rolle: {user_info.get('role')} | Adresse: {address}"
+                    f"[DEBUG: BLUE-DB Treffer] email: {searched_email} | source: {source} | user_id: {user_id} | Name: {full_name} | Rolle: {user_info.get('role')} | Adresse: {address}"
                 )
                 if user_info.get('role') == 'admin':
                     antwort_html = '<b>Hallo Admin!</b><br>Du bist als Admin in der BLUE-Datenbank hinterlegt. Wenn du spezielle Systembefehle oder Support brauchst, gib mir einfach Bescheid.'
             else:
-                logger.info(f"[Mail-Check] User nicht in BLUE-DB gefunden für: {to_addr}")
-                debug_info = "[DEBUG: User nicht in BLUE-DB gefunden]"
+                logger.info(f"[Mail-Check] User nicht in BLUE-DB gefunden für: {searched_email}")
+                debug_info = f"[DEBUG: Kein BLUE-DB Treffer] email: {searched_email}"
             # --- HTML-Body bauen ---
             html_body = f'''
             <div style="font-family:Arial,sans-serif;font-size:1.08em;">
