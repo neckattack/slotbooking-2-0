@@ -94,7 +94,7 @@ def check_mail_and_reply():
                     segs.append(b)
             # Filter zu kurze Segmente
             segs = [s.strip() for s in segs if len(s.strip()) >= 5]
-            return segs[:6]  # harte Obergrenze, um Spam zu vermeiden
+            return segs  # keine harte Obergrenze, flexibel
 
         segments = _segment_questions(body)
         try:
@@ -116,12 +116,6 @@ def check_mail_and_reply():
                         seg_answer = agent_respond(seg, channel="email", user_email=from_addr)
                     except Exception as e:
                         seg_answer = f"[Teilfrage {i+1}: Fehler bei der Antwortgenerierung: {e}]"
-                    # Überschrift aus dem Fragen-Snippet (max. 80 Zeichen)
-                    import re as _re
-                    title = seg.strip().split("\n")[0]
-                    title = _re.sub(r"\s+", " ", title)
-                    if len(title) > 80:
-                        title = title[:77].rstrip() + "…"
                     # Sicherstellen, dass die Antwort HTML ist
                     ans_html = seg_answer
                     if not ("<p>" in ans_html or "<ul>" in ans_html or "<ol>" in ans_html or "<div>" in ans_html):
@@ -145,8 +139,14 @@ def check_mail_and_reply():
                                 html_lines.append('</ul>')
                             return '\n'.join(html_lines)
                         ans_html = _text_to_html(ans_html)
-                    abschnitt = f"<h3 style=\"margin-top:18px;\">{title}</h3>\n<div>{ans_html}</div>"
+                    abschnitt = f"<div style=\"margin-top:14px;\">{ans_html}</div>"
                     antworten.append(abschnitt)
+                # Abschlussformel
+                abschluss = (
+                    "<p style=\"margin-top:18px;\">Viele Grüße</p>\n"
+                    "<p>Dein Support-Team</p>"
+                )
+                antworten.append(abschluss)
                 antwort = "\n".join(antworten)
             logger.info(f"Antwort generiert (Segmente={len(segments)}): {antwort[:300]}...")
         except Exception as e:
