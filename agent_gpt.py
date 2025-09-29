@@ -34,12 +34,24 @@ def agent_respond(user_message, channel="chat", user_email=None):
         "termin", "termine", "slot", "slots", "kunde", "kunden", "reservierung", "reservierungen",
         "sql", "datenbank", "gebucht", "frei", "gebuchte zeiten", "freie zeiten", "einsatz", "einsätze"
     ]
+    # Einfache Off-Topic-Erkennung (z.B. Wetter, Smalltalk, allgemeine Fragen)
+    def is_offtopic(text: str) -> bool:
+        t = (text or "").lower()
+        offtopic_keywords = [
+            "wetter", "weather", "temperatur", "regen", "sonnig", "barcelona", "madrid", "berlin",
+            "witz", "joke", "nachrichten", "news", "aktien", "börse", "football", "fußball",
+            "wie gehts", "wie geht es", "smalltalk", "allgemein", "zeit", "uhrzeit"
+        ]
+        return any(k in t for k in offtopic_keywords)
+
     if FAQ_ONLY:
         system_prompt = (
             f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str}.\n"
-            "WICHTIG: Beantworte die Nutzerfrage AUSSCHLIESSLICH anhand der Knowledgebase (FAQ).\n"
+            "WICHTIG: Prüfe zuerst, ob die Knowledgebase (FAQ) relevant ist.\n"
+            "- Wenn relevant: beantworte anhand der Knowledgebase.\n"
+            "- Wenn NICHT relevant (Off-Topic, z.B. Wetter/Smalltalk): beantworte die Frage mit deinem allgemeinen Wissen.\n"
             "ERZEUGE KEINE SQL-Statements und führe KEINE Datenbankabfragen durch.\n"
-            "Wenn Informationen nicht in der Knowledgebase stehen, erkläre das freundlich und biete allgemeine Hilfe oder nächste Schritte an.\n"
+            "Wenn Informationen nicht in der Knowledgebase stehen, antworte trotzdem hilfreich (allgemeines Wissen erlaubt).\n"
             "Achte bei deinen Antworten IMMER auf eine natürliche, freundliche und sehr übersichtliche Formatierung:"
             "\n- Trenne jeden Sinnabschnitt durch eine Leerzeile (Absatz)."
             "\n- Nutze für Schritt-für-Schritt-Anleitungen IMMER nummerierte Listen (jede Anweisung als eigener Listenpunkt)."
@@ -78,11 +90,12 @@ def agent_respond(user_message, channel="chat", user_email=None):
             f"(Kanal: {channel})\n"
             f"Datenbank-Kontext: {db_context}\n"
         )
-    # 1. Schritt: FAQ-LangChain nutzen
+    # 1. Schritt: FAQ-LangChain nutzen (nur wenn nicht offensichtlich Off-Topic)
     try:
-        faq_resp = faq_answer(user_message)
-        if faq_resp and len(faq_resp.strip()) > 10 and "nicht beantworten" not in faq_resp.lower():
-            return faq_resp.strip()
+        if not is_offtopic(user_message):
+            faq_resp = faq_answer(user_message)
+            if faq_resp and len(faq_resp.strip()) > 10 and "nicht beantworten" not in faq_resp.lower():
+                return faq_resp.strip()
     except Exception as e:
         logging.error(f"[FAQ-LangChain-Exception] Fehler bei der FAQ-Antwort für Frage '{user_message}': {e}")
     # 2. Schritt: Fallback auf OpenAI/DB wie gehabt
