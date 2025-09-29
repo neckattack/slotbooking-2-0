@@ -58,11 +58,60 @@ def check_mail_and_reply():
             body = msg.get_payload(decode=True).decode(charset, errors='ignore')
         logger.info(f"Mail-Body: {body}")
 
-        # Sende echte neckattack-GPT-Antwort zurück (nur EIN Aufruf)
+        # Mehrteilige E-Mails in Teilfragen zerlegen und jeweils beantworten
         from agent_gpt import agent_respond
+        def _segment_questions(text: str):
+            import re
+            if not text:
+                return []
+            # Normalisieren von Zeilenumbrüchen
+            t = text.replace('\r\n', '\n').replace('\r', '\n')
+            # Erst nach Fragezeichen grob splitten und Fragezeichen wieder anhängen
+            parts = []
+            buf = []
+            for ch in t:
+                buf.append(ch)
+                if ch == '?':
+                    part = ''.join(buf).strip()
+                    if part:
+                        parts.append(part)
+                    buf = []
+            rest = ''.join(buf).strip()
+            if rest:
+                parts.append(rest)
+            # Zusätzlich Bullet-Zeilen als eigene Fragen behandeln, falls keine Fragezeichen
+            bullets = []
+            for line in t.split('\n'):
+                if re.match(r'^\s*([\-\*•]|\d+\.)\s+', line) and len(line.strip()) > 5:
+                    bullets.append(line.strip())
+            # Wenn keine klaren Fragen erkannt, fallback: ganzer Body als eine Frage
+            if not parts and not bullets:
+                return [t.strip()]
+            # Mergen: bevorzugt parts (Fragen), ergänze bullets die noch nicht enthalten sind
+            segs = parts[:]
+            for b in bullets:
+                if all(b not in p for p in segs):
+                    segs.append(b)
+            # Filter zu kurze Segmente
+            segs = [s.strip() for s in segs if len(s.strip()) >= 5]
+            return segs[:6]  # harte Obergrenze, um Spam zu vermeiden
+
+        segments = _segment_questions(body)
         try:
-            antwort = agent_respond(body, channel="email", user_email=from_addr)
-            logger.info(f"Antwort generiert: {antwort}")
+            if len(segments) <= 1:
+                antwort = agent_respond(body, channel="email", user_email=from_addr)
+            else:
+                antworten = []
+                for i, seg in enumerate(segments):
+                    try:
+                        seg_answer = agent_respond(seg, channel="email", user_email=from_addr)
+                    except Exception as e:
+                        seg_answer = f"[Teilfrage {i+1}: Fehler bei der Antwortgenerierung: {e}]"
+                    # Baue einen Abschnitt (übersichtlich je Frage)
+                    abschnitt = f"<h3>Frage {i+1}</h3>\n<div>{seg_answer}</div>"
+                    antworten.append(abschnitt)
+                antwort = "\n".join(antworten)
+            logger.info(f"Antwort generiert (Segmente={len(segments)}): {antwort[:300]}...")
         except Exception as e:
             logger.error(f"Fehler bei agent_respond: {e}")
             antwort = f"[Fehler bei der Antwortgenerierung: {e}]"

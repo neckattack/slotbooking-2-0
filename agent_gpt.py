@@ -135,16 +135,26 @@ def agent_respond(user_message, channel="chat", user_email=None):
     user_message_lower = user_message.lower().strip()
     try:
         import openai
+        # Dynamische Token-Grenze: E-Mail braucht oft mehr Platz
+        default_max = 900 if channel == "email" else 512
+        try:
+            env_max = int(os.environ.get("AGENT_MAX_TOKENS", str(default_max)))
+        except Exception:
+            env_max = default_max
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
-            max_tokens=512,
+            max_tokens=env_max,
             temperature=0.2
         )
         antwort = response.choices[0].message.content.strip()
+        # Eventuelle Code-Fences am Anfang/Ende entfernen
+        import re as _re
+        antwort = _re.sub(r'^```(?:html|\w+)?\s*', '', antwort)
+        antwort = _re.sub(r'```\s*$', '', antwort)
         # Automatische Nachbearbeitung: E-Mail-Antworten schön formatieren
         if channel == "email" and antwort:
             import re
