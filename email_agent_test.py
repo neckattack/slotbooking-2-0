@@ -101,14 +101,51 @@ def check_mail_and_reply():
             if len(segments) <= 1:
                 antwort = agent_respond(body, channel="email", user_email=from_addr)
             else:
-                antworten = []
+                # Persönliche Anrede aus From-Adresse ableiten
+                from email.utils import parseaddr
+                name_guess = parseaddr(from_addr)[0] or ""
+                if not name_guess:
+                    import re as _re
+                    m = _re.search(r"([a-zA-ZäöüÄÖÜß\-\.]+)", from_addr)
+                    if m:
+                        name_guess = m.group(1).split(".")[0].capitalize()
+                begr = f"<p>Hallo {name_guess},</p>" if name_guess else "<p>Hallo,</p>"
+                antworten = [begr]
                 for i, seg in enumerate(segments):
                     try:
                         seg_answer = agent_respond(seg, channel="email", user_email=from_addr)
                     except Exception as e:
                         seg_answer = f"[Teilfrage {i+1}: Fehler bei der Antwortgenerierung: {e}]"
-                    # Baue einen Abschnitt (übersichtlich je Frage)
-                    abschnitt = f"<h3>Frage {i+1}</h3>\n<div>{seg_answer}</div>"
+                    # Überschrift aus dem Fragen-Snippet (max. 80 Zeichen)
+                    import re as _re
+                    title = seg.strip().split("\n")[0]
+                    title = _re.sub(r"\s+", " ", title)
+                    if len(title) > 80:
+                        title = title[:77].rstrip() + "…"
+                    # Sicherstellen, dass die Antwort HTML ist
+                    ans_html = seg_answer
+                    if not ("<p>" in ans_html or "<ul>" in ans_html or "<ol>" in ans_html or "<div>" in ans_html):
+                        def _text_to_html(text):
+                            lines = (text or "").split('\n')
+                            html_lines = []
+                            in_list = False
+                            for line in lines:
+                                line = line.strip()
+                                if _re.match(r'^(\d+\.\s+|\-|•\s+)', line):
+                                    if not in_list:
+                                        html_lines.append('<ul>')
+                                        in_list = True
+                                    html_lines.append(f'<li>{line}</li>')
+                                elif line:
+                                    if in_list:
+                                        html_lines.append('</ul>')
+                                        in_list = False
+                                    html_lines.append(f'<p>{line}</p>')
+                            if in_list:
+                                html_lines.append('</ul>')
+                            return '\n'.join(html_lines)
+                        ans_html = _text_to_html(ans_html)
+                    abschnitt = f"<h3 style=\"margin-top:18px;\">{title}</h3>\n<div>{ans_html}</div>"
                     antworten.append(abschnitt)
                 antwort = "\n".join(antworten)
             logger.info(f"Antwort generiert (Segmente={len(segments)}): {antwort[:300]}...")
