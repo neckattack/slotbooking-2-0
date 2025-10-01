@@ -63,6 +63,24 @@ def check_mail_and_reply():
         import re  # für Segmentierung/HTML-Umwandlung
         # Sichtbarer Preface-Block mit kommenden Jobs für Masseure (immer anzeigen, wenn vorhanden)
         visible_preface_html = ""
+        def _fmt_dt(val):
+            from datetime import datetime
+            if val is None:
+                return "—"
+            if isinstance(val, datetime):
+                dt = val
+            else:
+                s = str(val)
+                # Versuche Standard-MySQL-Formate
+                for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+                    try:
+                        dt = datetime.strptime(s, fmt)
+                        break
+                    except Exception:
+                        dt = None
+                if dt is None:
+                    return s
+            return dt.strftime("%d.%m.%Y, %H:%M Uhr")
         try:
             from agent_blue import get_user_info_by_email
             from email.utils import parseaddr as _parseaddr
@@ -77,7 +95,7 @@ def check_mail_and_reply():
                     if jobs:
                         items = []
                         for j in jobs:
-                            date = j.get('date') or '—'
+                            date = _fmt_dt(j.get('date'))
                             loc = j.get('location') or '—'
                             desc = j.get('description') or '—'
                             items.append(f"<li><strong>{date}</strong> – {loc} · {desc}</li>")
@@ -291,6 +309,8 @@ def send_test_reply(to_addr, orig_subject, antwort_text):
                             jobs_snippet = " | Jobs: " + "; ".join(parts)
                 except Exception as e:
                     logger.error(f"[DEBUG-JOBS] Fehler beim Abruf kommender Jobs für user_id={user_id}: {e}")
+                if not jobs_snippet:
+                    jobs_snippet = " | Jobs: – keine gefunden –"
                 debug_info = (
                     f"[DEBUG: BLUE-DB Treffer] email: {searched_email} | source: {source} | user_id: {user_id} | Name: {full_name} | Rolle: {user_info.get('role')} | Adresse: {address}{jobs_snippet}"
                 )
