@@ -115,18 +115,17 @@ def get_upcoming_jobs_for_user(user_id: int, limit: int = 3) -> List[Dict[str, O
 # Präzise Variante für das bekannte BLUE-Schema
 # Tabellen:
 #   - tbl_tasks (task_user_id, task_identifier, task_deliver_by, task_location_id)
-#   - tbl_task_locations (task_location_id, name|title|location|address)
 # Gibt Liste mit {date, location, description} zurück.
 def get_upcoming_tasks_precise(user_id: int, limit: int = 3) -> List[Dict[str, Optional[str]]]:
     conn = get_blue_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
-        # Versuche bevorzugt 'name' als Locationtitel, ansonsten alternative Spalten
+        # Versuche bevorzugt 'loc_address' als Location, ansonsten alternative Spalten
         # Wir prüfen via information_schema, welche Spalten existieren.
         cursor.execute("SELECT DATABASE() AS db")
         dbrow = cursor.fetchone() or {}
         dbname = dbrow.get("db")
-        loc_col = "name"
+        loc_col = "loc_address"
         if dbname:
             try:
                 cursor.execute(
@@ -135,7 +134,7 @@ def get_upcoming_tasks_precise(user_id: int, limit: int = 3) -> List[Dict[str, O
                     (dbname,)
                 )
                 cols = {r["COLUMN_NAME"].lower() for r in cursor.fetchall()}
-                for candidate in ("name", "title", "location", "address"):
+                for candidate in ("loc_address", "name", "title", "location", "address"):
                     if candidate in cols:
                         loc_col = candidate
                         break
