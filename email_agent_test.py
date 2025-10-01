@@ -231,8 +231,24 @@ def send_test_reply(to_addr, orig_subject, antwort_text):
                 source = user_info.get('source') or 'unbekannt'
                 user_id = user_info.get('user_id')
                 logger.info(f"[Mail-Check] User erkannt: email={searched_email} | source={source} | user_id={user_id} | Rolle={user_info.get('role')} | Name={full_name} | Adresse={address}")
+                # Optional: kommende Jobs für Masseure abrufen
+                jobs_snippet = ""
+                try:
+                    if user_info.get('role') == 'masseur' and user_id:
+                        from agent_debug_jobs import get_upcoming_jobs_for_user
+                        jobs = get_upcoming_jobs_for_user(int(user_id), limit=3)
+                        if jobs:
+                            parts = []
+                            for j in jobs:
+                                date = j.get('date') or '—'
+                                loc = j.get('location') or '—'
+                                desc = j.get('description') or '—'
+                                parts.append(f"({date}) {loc} – {desc}")
+                            jobs_snippet = " | Jobs: " + "; ".join(parts)
+                except Exception as e:
+                    logger.error(f"[DEBUG-JOBS] Fehler beim Abruf kommender Jobs für user_id={user_id}: {e}")
                 debug_info = (
-                    f"[DEBUG: BLUE-DB Treffer] email: {searched_email} | source: {source} | user_id: {user_id} | Name: {full_name} | Rolle: {user_info.get('role')} | Adresse: {address}"
+                    f"[DEBUG: BLUE-DB Treffer] email: {searched_email} | source: {source} | user_id: {user_id} | Name: {full_name} | Rolle: {user_info.get('role')} | Adresse: {address}{jobs_snippet}"
                 )
                 if user_info.get('role') == 'admin':
                     antwort_html = '<b>Hallo Admin!</b><br>Du bist als Admin in der BLUE-Datenbank hinterlegt. Wenn du spezielle Systembefehle oder Support brauchst, gib mir einfach Bescheid.'
