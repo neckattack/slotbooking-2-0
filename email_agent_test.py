@@ -235,8 +235,12 @@ def send_test_reply(to_addr, orig_subject, antwort_text):
                 jobs_snippet = ""
                 try:
                     if user_info.get('role') == 'masseur' and user_id:
-                        from agent_debug_jobs import get_upcoming_jobs_for_user
-                        jobs = get_upcoming_jobs_for_user(int(user_id), limit=3)
+                        from agent_debug_jobs import get_upcoming_tasks_precise, get_upcoming_jobs_for_user
+                        # Präzise Task-Abfrage (tbl_tasks + tbl_task_locations)
+                        jobs = get_upcoming_tasks_precise(int(user_id), limit=3)
+                        # Fallback auf heuristische Suche, falls leer
+                        if not jobs:
+                            jobs = get_upcoming_jobs_for_user(int(user_id), limit=3)
                         if jobs:
                             parts = []
                             for j in jobs:

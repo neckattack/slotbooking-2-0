@@ -110,3 +110,55 @@ def get_upcoming_jobs_for_user(user_id: int, limit: int = 3) -> List[Dict[str, O
     finally:
         cursor.close()
         conn.close()
+
+
+# Präzise Variante für das bekannte BLUE-Schema
+# Tabellen:
+#   - tbl_tasks (task_user_id, task_identifier, task_deliver_by, task_location_id)
+#   - tbl_task_locations (task_location_id, name|title|location|address)
+# Gibt Liste mit {date, location, description} zurück.
+def get_upcoming_tasks_precise(user_id: int, limit: int = 3) -> List[Dict[str, Optional[str]]]:
+    conn = get_blue_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        # Versuche bevorzugt 'name' als Locationtitel, ansonsten alternative Spalten
+        # Wir prüfen via information_schema, welche Spalten existieren.
+        cursor.execute("SELECT DATABASE() AS db")
+        dbrow = cursor.fetchone() or {}
+        dbname = dbrow.get("db")
+        loc_col = "name"
+        if dbname:
+            try:
+                cursor.execute(
+                    "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='tbl_task_locations'",
+                    (dbname,)
+                )
+                cols = {r["COLUMN_NAME"].lower() for r in cursor.fetchall()}
+                for candidate in ("name", "title", "location", "address"):
+                    if candidate in cols:
+                        loc_col = candidate
+                        break
+            except Exception:
+                pass
+        sql = (
+            f"SELECT t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description "
+            "FROM tbl_tasks t "
+            "LEFT JOIN tbl_task_locations l ON l.task_location_id = t.task_location_id "
+            "WHERE t.task_user_id = %s AND t.task_deliver_by >= NOW() "
+            "ORDER BY t.task_deliver_by ASC LIMIT %s"
+        )
+        cursor.execute(sql, (user_id, limit))
+        rows = cursor.fetchall() or []
+        return [
+            {
+                "date": str(r.get("date")) if r.get("date") is not None else None,
+                "location": r.get("location"),
+                "description": r.get("description"),
+                "table": "tbl_tasks"
+            }
+            for r in rows
+        ]
+    finally:
+        cursor.close()
+        conn.close()
