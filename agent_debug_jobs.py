@@ -112,6 +112,61 @@ def get_upcoming_jobs_for_user(user_id: int, limit: int = 3) -> List[Dict[str, O
         conn.close()
 
 
+# Präziser Pfad über Bids: tbl_tasks_bids -> tbl_tasks -> tbl_task_locations
+# Felder:
+#   - tbl_tasks_bids.bid_bidder_id (User/Masseur)
+#   - tbl_tasks_bids.bid_id, tbl_tasks_bids.bid_task_id
+#   - tbl_tasks.task_identifier, tbl_tasks.task_deliver_by, tbl_tasks.task_location_id
+#   - tbl_task_locations.loc_address
+def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, Optional[str]]]:
+    conn = get_blue_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        # Prüfe existierende Spalten in tbl_task_locations für Location-Feld
+        cursor.execute("SELECT DATABASE() AS db")
+        dbrow = cursor.fetchone() or {}
+        dbname = dbrow.get("db")
+        loc_col = "loc_address"
+        if dbname:
+            try:
+                cursor.execute(
+                    "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='tbl_task_locations'",
+                    (dbname,)
+                )
+                cols = {r["COLUMN_NAME"].lower() for r in cursor.fetchall()}
+                for candidate in ("loc_address", "name", "title", "location", "address"):
+                    if candidate in cols:
+                        loc_col = candidate
+                        break
+            except Exception:
+                pass
+        sql = (
+            f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description "
+            "FROM tbl_tasks_bids b "
+            "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
+            "LEFT JOIN tbl_task_locations l ON l.task_location_id = t.task_location_id "
+            "WHERE b.bid_bidder_id = %s AND t.task_deliver_by >= NOW() "
+            "ORDER BY t.task_deliver_by ASC LIMIT %s"
+        )
+        cursor.execute(sql, (user_id, limit))
+        rows = cursor.fetchall() or []
+        return [
+            {
+                "date": r.get("date"),
+                "location": r.get("location"),
+                "description": r.get("description"),
+                "task_id": r.get("bid_task_id"),
+                "bid_id": r.get("bid_id"),
+                "table": "tbl_tasks_bids"
+            }
+            for r in rows
+        ]
+    finally:
+        cursor.close()
+        conn.close()
+
+
 # Präzise Variante für das bekannte BLUE-Schema
 # Tabellen:
 #   - tbl_tasks (task_user_id, task_identifier, task_deliver_by, task_location_id)

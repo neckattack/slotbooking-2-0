@@ -88,8 +88,17 @@ def check_mail_and_reply():
             user_info_pref = get_user_info_by_email(searched_email_pref)
             if user_info_pref and user_info_pref.get('role') == 'masseur' and user_info_pref.get('user_id'):
                 try:
-                    from agent_debug_jobs import get_upcoming_tasks_precise, get_upcoming_jobs_for_user
-                    jobs = get_upcoming_tasks_precise(int(user_info_pref['user_id']), limit=5)
+                    from agent_debug_jobs import (
+                        get_upcoming_tasks_via_bids,
+                        get_upcoming_tasks_precise,
+                        get_upcoming_jobs_for_user,
+                    )
+                    # 1) bevorzugt über Bids
+                    jobs = get_upcoming_tasks_via_bids(int(user_info_pref['user_id']), limit=5)
+                    # 2) ansonsten direkte Zuweisung user_id an Task
+                    if not jobs:
+                        jobs = get_upcoming_tasks_precise(int(user_info_pref['user_id']), limit=5)
+                    # 3) heuristischer Fallback
                     if not jobs:
                         jobs = get_upcoming_jobs_for_user(int(user_info_pref['user_id']), limit=5)
                     if jobs:
@@ -293,10 +302,17 @@ def send_test_reply(to_addr, orig_subject, antwort_text):
                 jobs_snippet = ""
                 try:
                     if user_info.get('role') == 'masseur' and user_id:
-                        from agent_debug_jobs import get_upcoming_tasks_precise, get_upcoming_jobs_for_user
-                        # Präzise Task-Abfrage (tbl_tasks + tbl_task_locations)
-                        jobs = get_upcoming_tasks_precise(int(user_id), limit=3)
-                        # Fallback auf heuristische Suche, falls leer
+                        from agent_debug_jobs import (
+                            get_upcoming_tasks_via_bids,
+                            get_upcoming_tasks_precise,
+                            get_upcoming_jobs_for_user,
+                        )
+                        # 1) Bids
+                        jobs = get_upcoming_tasks_via_bids(int(user_id), limit=3)
+                        # 2) direkte Tasks
+                        if not jobs:
+                            jobs = get_upcoming_tasks_precise(int(user_id), limit=3)
+                        # 3) Heuristik
                         if not jobs:
                             jobs = get_upcoming_jobs_for_user(int(user_id), limit=3)
                         if jobs:
