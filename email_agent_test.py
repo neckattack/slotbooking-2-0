@@ -61,7 +61,7 @@ def check_mail_and_reply():
         # Mehrteilige E-Mails in Teilfragen zerlegen und jeweils beantworten
         from agent_gpt import agent_respond
         import re  # für Segmentierung/HTML-Umwandlung
-        # Sichtbarer Preface-Block mit kommenden Jobs, falls sinnvoll
+        # Sichtbarer Preface-Block mit kommenden Jobs für Masseure (immer anzeigen, wenn vorhanden)
         visible_preface_html = ""
         try:
             from agent_blue import get_user_info_by_email
@@ -69,30 +69,26 @@ def check_mail_and_reply():
             searched_email_pref = (_parseaddr(from_addr)[1] or from_addr).strip().lower()
             user_info_pref = get_user_info_by_email(searched_email_pref)
             if user_info_pref and user_info_pref.get('role') == 'masseur' and user_info_pref.get('user_id'):
-                # Schlüsselwörter, die auf "kommende Termine/JOBS" hindeuten
-                t = (body or "").lower()
-                keywords = ["kommende termine", "kommende jobs", "nächste termine", "next jobs", "upcoming", "termine", "einsätze"]
-                if any(k in t for k in keywords):
-                    try:
-                        from agent_debug_jobs import get_upcoming_tasks_precise, get_upcoming_jobs_for_user
-                        jobs = get_upcoming_tasks_precise(int(user_info_pref['user_id']), limit=5)
-                        if not jobs:
-                            jobs = get_upcoming_jobs_for_user(int(user_info_pref['user_id']), limit=5)
-                        if jobs:
-                            items = []
-                            for j in jobs:
-                                date = j.get('date') or '—'
-                                loc = j.get('location') or '—'
-                                desc = j.get('description') or '—'
-                                items.append(f"<li><strong>{date}</strong> – {loc} · {desc}</li>")
-                            visible_preface_html = (
-                                "<div style=\"margin-bottom:14px;\">"
-                                "<p>Hier sind deine kommenden Jobs:</p>"
-                                f"<ul>{''.join(items)}</ul>"
-                                "</div>"
-                            )
-                    except Exception:
-                        pass
+                try:
+                    from agent_debug_jobs import get_upcoming_tasks_precise, get_upcoming_jobs_for_user
+                    jobs = get_upcoming_tasks_precise(int(user_info_pref['user_id']), limit=5)
+                    if not jobs:
+                        jobs = get_upcoming_jobs_for_user(int(user_info_pref['user_id']), limit=5)
+                    if jobs:
+                        items = []
+                        for j in jobs:
+                            date = j.get('date') or '—'
+                            loc = j.get('location') or '—'
+                            desc = j.get('description') or '—'
+                            items.append(f"<li><strong>{date}</strong> – {loc} · {desc}</li>")
+                        visible_preface_html = (
+                            "<div style=\"margin-bottom:14px;\">"
+                            "<p>Hier sind deine kommenden Jobs:</p>"
+                            f"<ul>{''.join(items)}</ul>"
+                            "</div>"
+                        )
+                except Exception:
+                    pass
         except Exception:
             pass
         def _segment_questions(text: str):
