@@ -60,6 +60,7 @@ def check_mail_and_reply():
 
         # Mehrteilige E-Mails in Teilfragen zerlegen und jeweils beantworten
         from agent_gpt import agent_respond
+        import re  # für Segmentierung/HTML-Umwandlung
         def _segment_questions(text: str):
             import re
             if not text:
@@ -105,8 +106,7 @@ def check_mail_and_reply():
                 from email.utils import parseaddr
                 name_guess = parseaddr(from_addr)[0] or ""
                 if not name_guess:
-                    import re as _re
-                    m = _re.search(r"([a-zA-ZäöüÄÖÜß\-\.]+)", from_addr)
+                    m = re.search(r"([a-zA-ZäöüÄÖÜß\-\.]+)", from_addr)
                     if m:
                         name_guess = m.group(1).split(".")[0].capitalize()
                 begr = f"<p>Hallo {name_guess},</p>" if name_guess else "<p>Hallo,</p>"
@@ -115,7 +115,11 @@ def check_mail_and_reply():
                     try:
                         seg_answer = agent_respond(seg, channel="email", user_email=from_addr)
                     except Exception as e:
-                        seg_answer = f"[Teilfrage {i+1}: Fehler bei der Antwortgenerierung: {e}]"
+                        # Freundlicher Fallback statt Fehlermeldung
+                        seg_answer = (
+                            "Es gab gerade ein technisches Problem bei der Beantwortung. "
+                            "Bitte formuliere die Teilfrage kurz erneut – ich helfe dir umgehend."
+                        )
                     # Sicherstellen, dass die Antwort HTML ist
                     ans_html = seg_answer
                     if not ("<p>" in ans_html or "<ul>" in ans_html or "<ol>" in ans_html or "<div>" in ans_html):
@@ -125,7 +129,7 @@ def check_mail_and_reply():
                             in_list = False
                             for line in lines:
                                 line = line.strip()
-                                if _re.match(r'^(\d+\.\s+|\-|•\s+)', line):
+                                if re.match(r'^(\d+\.\s+|\-|•\s+)', line):
                                     if not in_list:
                                         html_lines.append('<ul>')
                                         in_list = True
@@ -151,7 +155,13 @@ def check_mail_and_reply():
             logger.info(f"Antwort generiert (Segmente={len(segments)}): {antwort[:300]}...")
         except Exception as e:
             logger.error(f"Fehler bei agent_respond: {e}")
-            antwort = f"[Fehler bei der Antwortgenerierung: {e}]"
+            # Freundlicher Gesamt-Fallback
+            antwort = (
+                "<p>Hallo,</p>\n"
+                "<p>leider gab es gerade ein technisches Problem bei der Erstellung der Antwort. "
+                "Ich helfe dir sehr gerne – schicke mir die Frage bitte nochmal oder formuliere sie etwas kürzer. </p>\n"
+                "<p>Viele Grüße<br>Dein Support‑Team</p>"
+            )
         try:
             send_test_reply(from_addr, subject, antwort)
             logger.info(f"Antwort an {from_addr} gesendet.")
