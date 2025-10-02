@@ -127,7 +127,8 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
             "desc": None,
             "instr": None,
         }
-        lang_fk_col = "task_id"
+        # Bevorzugter FK laut Vorgabe: 'tasklang_task_id'
+        lang_fk_col = "tasklang_task_id"
         lang_lang_col = None
         if dbname:
             try:
@@ -168,7 +169,7 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
                     if c in cols:
                         lang_cols["instr"] = c
                         break
-                for c in ("task_id", "tl_task_id", "task_ref_id", "task_lang_task_id", "taskid"):
+                for c in ("tasklang_task_id", "task_id", "tl_task_id", "task_ref_id", "task_lang_task_id", "taskid"):
                     if c in cols:
                         lang_fk_col = c
                         break
@@ -201,7 +202,19 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
             f"{lang_where}"
             "ORDER BY (t.task_deliver_by IS NULL), t.task_deliver_by ASC LIMIT %s"
         )
-        cursor.execute(sql, (user_id, limit))
+        try:
+            cursor.execute(sql, (user_id, limit))
+        except Exception:
+            # Fallback: ohne Sprach-Join erneut versuchen
+            sql_no_lang = (
+                f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description "
+                "FROM tbl_task_bids b "
+                "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
+                f"LEFT JOIN tbl_task_locations l ON l.{loc_fk_col} = t.task_id "
+                "WHERE b.bid_bidder_id = %s "
+                "ORDER BY (t.task_deliver_by IS NULL), t.task_deliver_by ASC LIMIT %s"
+            )
+            cursor.execute(sql_no_lang, (user_id, limit))
         rows = cursor.fetchall() or []
         return [
             {
@@ -243,6 +256,8 @@ def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, 
             "desc": None,
             "instr": None,
         }
+        lang_fk_col = "task_id"
+        lang_lang_col = None
         if dbname:
             try:
                 cursor.execute(
@@ -313,7 +328,19 @@ def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, 
             f"{lang_where}"
             "ORDER BY t.task_deliver_by ASC LIMIT %s"
         )
-        cursor.execute(sql, (user_id, limit))
+        try:
+            cursor.execute(sql, (user_id, limit))
+        except Exception:
+            # Fallback: ohne Sprach-Join erneut versuchen
+            sql_no_lang = (
+                f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description "
+                "FROM tbl_task_bids b "
+                "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
+                f"LEFT JOIN tbl_task_locations l ON l.{loc_fk_col} = t.task_id "
+                "WHERE b.bid_bidder_id = %s AND t.task_deliver_by >= NOW() "
+                "ORDER BY t.task_deliver_by ASC LIMIT %s"
+            )
+            cursor.execute(sql_no_lang, (user_id, limit))
         rows = cursor.fetchall() or []
         return [
             {
