@@ -109,8 +109,11 @@ def check_mail_and_reply():
                         for j in jobs:
                             date = _fmt_dt(j.get('date'))
                             loc = j.get('location') or '—'
-                            desc = j.get('description') or '—'
-                            items.append(f"<li><strong>{date}</strong> – {loc} · {desc}</li>")
+                            title = j.get('task_title') or j.get('description') or '—'
+                            instr = j.get('task_instruction')
+                            instr_short = (instr[:80] + '…') if instr and len(instr) > 80 else (instr or '')
+                            extra = f" <span style=\"color:#666;\">({instr_short})</span>" if instr_short else ""
+                            items.append(f"<li><strong>{date}</strong> – {loc} · {title}{extra}</li>")
                         visible_preface_html = (
                             "<!-- PREFACE-BEGIN -->"
                             "<div style=\"margin-bottom:14px;\">"
@@ -399,8 +402,11 @@ def send_test_reply(to_addr, orig_subject, antwort_text):
                             for j in jobs:
                                 date = _fmt_de(j.get('date'))
                                 loc = j.get('location') or '—'
-                                desc = j.get('description') or '—'
-                                parts.append(f"({date}) {loc} – {desc}")
+                                title = j.get('task_title') or j.get('description') or '—'
+                                instr = j.get('task_instruction')
+                                instr_short = (instr[:60] + '…') if instr and len(instr) > 60 else (instr or '')
+                                suffix = f" ({instr_short})" if instr_short else ""
+                                parts.append(f"({date}) {loc} – {title}{suffix}")
                             jobs_snippet = f" | Jobs[{source_label}:{len(jobs)}]: " + "; ".join(parts)
                 except Exception as e:
                     logger.error(f"[DEBUG-JOBS] Fehler beim Abruf kommender Jobs für user_id={user_id}: {e}")

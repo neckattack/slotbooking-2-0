@@ -122,6 +122,11 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
         dbname = dbrow.get("db")
         loc_col = "loc_address"
         loc_fk_col = "loc_task_id"  # bevorzugt laut Screenshot
+        lang_cols = {
+            "title": None,
+            "desc": None,
+            "instr": None,
+        }
         if dbname:
             try:
                 cursor.execute(
@@ -140,11 +145,46 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
                         break
             except Exception:
                 pass
+            # Prüfe Spalten in tbl_tasks_lang
+            try:
+                cursor.execute(
+                    "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='tbl_tasks_lang'",
+                    (dbname,)
+                )
+                cols = {r["COLUMN_NAME"].lower() for r in cursor.fetchall()}
+                # Titelfeld ermitteln
+                for c in ("task_titel", "task_title", "title", "task_name"):
+                    if c in cols:
+                        lang_cols["title"] = c
+                        break
+                for c in ("task_description", "description"):
+                    if c in cols:
+                        lang_cols["desc"] = c
+                        break
+                for c in ("task_instruction", "instruction", "instructions"):
+                    if c in cols:
+                        lang_cols["instr"] = c
+                        break
+            except Exception:
+                pass
+        # Dynamische Auswahl der Sprachspalten
+        lang_select = []
+        if lang_cols["title"]:
+            lang_select.append(f"tl.{lang_cols['title']} AS task_title")
+        if lang_cols["desc"]:
+            lang_select.append(f"tl.{lang_cols['desc']} AS task_description")
+        if lang_cols["instr"]:
+            lang_select.append(f"tl.{lang_cols['instr']} AS task_instruction")
+        lang_select_sql = (", " + ", ".join(lang_select)) if lang_select else ""
+
         sql = (
-            f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description "
+            f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description"
+            f"{lang_select_sql} "
             "FROM tbl_task_bids b "
             "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
             f"LEFT JOIN tbl_task_locations l ON l.{loc_fk_col} = t.task_id "
+            "LEFT JOIN tbl_tasks_lang tl ON tl.task_id = t.task_id "
             "WHERE b.bid_bidder_id = %s "
             "ORDER BY (t.task_deliver_by IS NULL), t.task_deliver_by ASC LIMIT %s"
         )
@@ -182,6 +222,11 @@ def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, 
         dbname = dbrow.get("db")
         loc_col = "loc_address"
         loc_fk_col = "loc_task_id"
+        lang_cols = {
+            "title": None,
+            "desc": None,
+            "instr": None,
+        }
         if dbname:
             try:
                 cursor.execute(
@@ -200,11 +245,44 @@ def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, 
                         break
             except Exception:
                 pass
+            # Prüfe Spalten in tbl_tasks_lang
+            try:
+                cursor.execute(
+                    "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='tbl_tasks_lang'",
+                    (dbname,)
+                )
+                cols = {r["COLUMN_NAME"].lower() for r in cursor.fetchall()}
+                for c in ("task_titel", "task_title", "title", "task_name"):
+                    if c in cols:
+                        lang_cols["title"] = c
+                        break
+                for c in ("task_description", "description"):
+                    if c in cols:
+                        lang_cols["desc"] = c
+                        break
+                for c in ("task_instruction", "instruction", "instructions"):
+                    if c in cols:
+                        lang_cols["instr"] = c
+                        break
+            except Exception:
+                pass
+        lang_select = []
+        if lang_cols["title"]:
+            lang_select.append(f"tl.{lang_cols['title']} AS task_title")
+        if lang_cols["desc"]:
+            lang_select.append(f"tl.{lang_cols['desc']} AS task_description")
+        if lang_cols["instr"]:
+            lang_select.append(f"tl.{lang_cols['instr']} AS task_instruction")
+        lang_select_sql = (", " + ", ".join(lang_select)) if lang_select else ""
+
         sql = (
-            f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description "
+            f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description"
+            f"{lang_select_sql} "
             "FROM tbl_task_bids b "
             "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
             f"LEFT JOIN tbl_task_locations l ON l.{loc_fk_col} = t.task_id "
+            "LEFT JOIN tbl_tasks_lang tl ON tl.task_id = t.task_id "
             "WHERE b.bid_bidder_id = %s AND t.task_deliver_by >= NOW() "
             "ORDER BY t.task_deliver_by ASC LIMIT %s"
         )
