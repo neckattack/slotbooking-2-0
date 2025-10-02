@@ -109,10 +109,12 @@ def check_mail_and_reply():
                             desc = j.get('description') or '—'
                             items.append(f"<li><strong>{date}</strong> – {loc} · {desc}</li>")
                         visible_preface_html = (
+                            "<!-- PREFACE-BEGIN -->"
                             "<div style=\"margin-bottom:14px;\">"
                             "<p>Hier sind deine kommenden Jobs:</p>"
                             f"<ul>{''.join(items)}</ul>"
                             "</div>"
+                            "<!-- PREFACE-END -->"
                         )
                 except Exception:
                     pass
@@ -209,6 +211,45 @@ def check_mail_and_reply():
                 )
                 antworten.append(abschluss)
                 antwort = (visible_preface_html or "") + "\n".join(antworten)
+            # Letzter Schritt: LLM-Review zur Konsolidierung (keine doppelten Anreden, inhaltlich passend)
+            try:
+                import os as _os
+                import openai as _openai
+                _openai.api_key = _os.environ.get("OPENAI_API_KEY")
+                review_system = (
+                    "Du bist ein Assistent, der E-Mail-Antworten final prüft.\n"
+                    "- Bewahre den Inhalt zwischen <!-- PREFACE-BEGIN --> und <!-- PREFACE-END --> UNVERÄNDERT.\n"
+                    "- Entferne doppelte Begrüßungen/Abschlüsse.\n"
+                    "- Sorge für eine stimmige, kurze und hilfreiche Antwort, die zur Nutzerfrage passt.\n"
+                    "- Gib NUR validen HTML-Body zurück, ohne Codeblöcke/Markdown."
+                )
+                review_user = (
+                    f"[ORIGINAL_FRAGE]:\n{body}\n\n[ANTWORT_HTML]:\n{antwort}"
+                )
+                review_tokens = 900
+                try:
+                    review_tokens = int(_os.environ.get("AGENT_MAX_TOKENS", "900"))
+                except Exception:
+                    pass
+                _resp = _openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": review_system},
+                        {"role": "user", "content": review_user}
+                    ],
+                    max_tokens=review_tokens,
+                    temperature=0.1
+                )
+                _clean = _resp.choices[0].message.content.strip()
+                # Entferne etwaige Codefences
+                import re as __re
+                _clean = __re.sub(r'^```(?:html|\w+)?\s*', '', _clean)
+                _clean = __re.sub(r'```\s*$', '', _clean)
+                if _clean and len(_clean) > 50:
+                    antwort = _clean
+            except Exception:
+                pass
+
             logger.info(f"Antwort generiert (Segmente={len(segments)}): {antwort[:300]}...")
         except Exception as e:
             logger.error(f"Fehler bei agent_respond: {e}")
