@@ -171,8 +171,7 @@ def check_mail_and_reply():
                     m = re.search(r"([a-zA-ZäöüÄÖÜß\-\.]+)", from_addr)
                     if m:
                         name_guess = m.group(1).split(".")[0].capitalize()
-                begr = f"<p>Hallo {name_guess},</p>" if name_guess else "<p>Hallo,</p>"
-                antworten = [begr]
+                antworten = ([] if visible_preface_html else [f"<p>Hallo {name_guess},</p>" if name_guess else "<p>Hallo,</p>"])
                 for i, seg in enumerate(segments):
                     try:
                         seg_answer = agent_respond(seg, channel="email", user_email=from_addr)
@@ -256,12 +255,10 @@ def check_mail_and_reply():
             logger.info(f"Antwort generiert (Segmente={len(segments)}): {antwort[:300]}...")
         except Exception as e:
             logger.error(f"Fehler bei agent_respond: {e}")
-            # Freundlicher Gesamt-Fallback
+            # Freundlicher Gesamt-Fallback (ohne Begrüßung, um Doppelungen zu vermeiden)
             antwort = (
-                "<p>Hallo,</p>\n"
                 "<p>leider gab es gerade ein technisches Problem bei der Erstellung der Antwort. "
-                "Ich helfe dir sehr gerne – schicke mir die Frage bitte nochmal oder formuliere sie etwas kürzer. </p>\n"
-                "<p>Viele Grüße<br>Dein Support‑Team</p>"
+                "Ich helfe dir sehr gerne – schicke mir die Frage bitte nochmal oder formuliere sie etwas kürzer.</p>"
             )
         try:
             send_test_reply(from_addr, subject, antwort)

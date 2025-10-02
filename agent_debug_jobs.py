@@ -137,7 +137,7 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
                 pass
         sql = (
             f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description "
-            "FROM tbl_tasks_bids b "
+            "FROM tbl_task_bids b "
             "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
             "LEFT JOIN tbl_task_locations l ON l.task_location_id = t.task_location_id "
             "WHERE b.bid_bidder_id = %s "
@@ -152,7 +152,7 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
                 "description": r.get("description"),
                 "task_id": r.get("bid_task_id"),
                 "bid_id": r.get("bid_id"),
-                "table": "tbl_tasks_bids"
+                "table": "tbl_task_bids"
             }
             for r in rows
         ]
@@ -161,10 +161,10 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
         conn.close()
 
 
-# Präziser Pfad über Bids: tbl_tasks_bids -> tbl_tasks -> tbl_task_locations
+# Präziser Pfad über Bids: tbl_task_bids -> tbl_tasks -> tbl_task_locations
 # Felder:
-#   - tbl_tasks_bids.bid_bidder_id (User/Masseur)
-#   - tbl_tasks_bids.bid_id, tbl_tasks_bids.bid_task_id
+#   - tbl_task_bids.bid_bidder_id (User/Masseur)
+#   - tbl_task_bids.bid_id, tbl_task_bids.bid_task_id
 #   - tbl_tasks.task_identifier, tbl_tasks.task_deliver_by, tbl_tasks.task_location_id
 #   - tbl_task_locations.loc_address
 def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, Optional[str]]]:
@@ -192,7 +192,7 @@ def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, 
                 pass
         sql = (
             f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description "
-            "FROM tbl_tasks_bids b "
+            "FROM tbl_task_bids b "
             "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
             "LEFT JOIN tbl_task_locations l ON l.task_location_id = t.task_location_id "
             "WHERE b.bid_bidder_id = %s AND t.task_deliver_by >= NOW() "
