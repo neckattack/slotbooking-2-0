@@ -179,18 +179,10 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
                         break
             except Exception:
                 pass
-        # Dynamische Auswahl der Sprachspalten
-        lang_select = []
-        if lang_cols["title"]:
-            lang_select.append(f"tl.{lang_cols['title']} AS task_title")
-        if lang_cols["desc"]:
-            lang_select.append(f"tl.{lang_cols['desc']} AS task_description")
-        if lang_cols["instr"]:
-            lang_select.append(f"tl.{lang_cols['instr']} AS task_instruction")
-        lang_select_sql = (", " + ", ".join(lang_select)) if lang_select else ""
-
-        lang_join = f"LEFT JOIN tbl_tasks_lang tl ON tl.{lang_fk_col} = t.task_id "
-        lang_where = (f"AND tl.{lang_lang_col} = 'de' " if lang_lang_col else "")
+        # Festes Sprachschema laut Vorgabe
+        lang_select_sql = ", tl.task_title AS task_title, tl.task_description AS task_description, tl.task_instruction AS task_instruction"
+        lang_join = "LEFT JOIN tbl_tasks_lang tl ON tl.tasklang_task_id = t.task_id "
+        lang_where = ""
         sql = (
             f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description"
             f"{lang_select_sql} "
@@ -306,17 +298,10 @@ def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, 
                         break
             except Exception:
                 pass
-        lang_select = []
-        if lang_cols["title"]:
-            lang_select.append(f"tl.{lang_cols['title']} AS task_title")
-        if lang_cols["desc"]:
-            lang_select.append(f"tl.{lang_cols['desc']} AS task_description")
-        if lang_cols["instr"]:
-            lang_select.append(f"tl.{lang_cols['instr']} AS task_instruction")
-        lang_select_sql = (", " + ", ".join(lang_select)) if lang_select else ""
-
-        lang_join = f"LEFT JOIN tbl_tasks_lang tl ON tl.{lang_fk_col} = t.task_id "
-        lang_where = (f"AND tl.{lang_lang_col} = 'de' " if lang_lang_col else "")
+        # Festes Sprachschema laut Vorgabe
+        lang_select_sql = ", tl.task_title AS task_title, tl.task_description AS task_description, tl.task_instruction AS task_instruction"
+        lang_join = "LEFT JOIN tbl_tasks_lang tl ON tl.tasklang_task_id = t.task_id "
+        lang_where = ""
         sql = (
             f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description"
             f"{lang_select_sql} "
