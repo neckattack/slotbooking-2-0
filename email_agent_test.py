@@ -101,6 +101,9 @@ def check_mail_and_reply():
                     # 3) heuristischer Fallback
                     if not jobs:
                         jobs = get_upcoming_jobs_for_user(int(user_info_pref['user_id']), limit=5)
+                    if not jobs:
+                        from agent_debug_jobs import get_bids_tasks_any
+                        jobs = get_bids_tasks_any(int(user_info_pref['user_id']), limit=5)
                     if jobs:
                         items = []
                         for j in jobs:
@@ -322,6 +325,23 @@ def send_test_reply(to_addr, orig_subject, antwort_text):
             # --- Debug-Info aus BLUE-DB ---
             from agent_blue import get_user_info_by_email
             from email.utils import parseaddr
+            from datetime import datetime as _dt
+            def _fmt_de(val):
+                if val is None:
+                    return '—'
+                if isinstance(val, _dt):
+                    dt = val
+                else:
+                    s = str(val)
+                    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+                        try:
+                            dt = _dt.strptime(s, fmt)
+                            break
+                        except Exception:
+                            dt = None
+                    if dt is None:
+                        return s
+                return dt.strftime("%d.%m.%Y, %H:%M Uhr")
             # Reine E-Mail extrahieren (z.B. aus "Name <mail@domain>")
             searched_email = (parseaddr(to_addr)[1] or to_addr).strip().lower()
             logger.info(f"[Mail-Check] Prüfe Rolle/Person für Absender (bereinigt): {searched_email}")
@@ -350,26 +370,37 @@ def send_test_reply(to_addr, orig_subject, antwort_text):
                         )
                         # 1) Bids
                         jobs = get_upcoming_tasks_via_bids(int(user_id), limit=3)
+                        source_label = 'bids' if jobs else ''
                         # 2) direkte Tasks
                         if not jobs:
                             jobs = get_upcoming_tasks_precise(int(user_id), limit=3)
+                            source_label = 'tasks' if jobs else source_label
                         # 3) Heuristik
                         if not jobs:
                             jobs = get_upcoming_jobs_for_user(int(user_id), limit=3)
+                        if not jobs:
+                            from agent_debug_jobs import get_bids_tasks_any
+                            jobs = get_bids_tasks_any(int(user_id), limit=3)
+                            if jobs and not source_label:
+                                source_label = 'bids_any'
+                            if jobs and not source_label:
+                                source_label = 'heuristic'
                         if jobs:
                             parts = []
                             for j in jobs:
-                                date = j.get('date') or '—'
+                                date = _fmt_de(j.get('date'))
                                 loc = j.get('location') or '—'
                                 desc = j.get('description') or '—'
                                 parts.append(f"({date}) {loc} – {desc}")
-                            jobs_snippet = " | Jobs: " + "; ".join(parts)
+                            jobs_snippet = f" | Jobs[{source_label}:{len(jobs)}]: " + "; ".join(parts)
                 except Exception as e:
                     logger.error(f"[DEBUG-JOBS] Fehler beim Abruf kommender Jobs für user_id={user_id}: {e}")
                 if not jobs_snippet:
                     jobs_snippet = " | Jobs: – keine gefunden –"
+                app_ver = os.environ.get('APP_VERSION') or os.environ.get('RENDER_GIT_COMMIT') or ''
+                version_snippet = (f" | ver: {app_ver[:7]}" if app_ver else "")
                 debug_info = (
-                    f"[DEBUG: BLUE-DB Treffer] email: {searched_email} | source: {source} | user_id: {user_id} | Name: {full_name} | Rolle: {user_info.get('role')} | Adresse: {address}{jobs_snippet}"
+                    f"[DEBUG: BLUE-DB Treffer] email: {searched_email} | source: {source} | user_id: {user_id} | Name: {full_name} | Rolle: {user_info.get('role')} | Adresse: {address}{jobs_snippet}{version_snippet}"
                 )
                 if user_info.get('role') == 'admin':
                     antwort_html = '<b>Hallo Admin!</b><br>Du bist als Admin in der BLUE-Datenbank hinterlegt. Wenn du spezielle Systembefehle oder Support brauchst, gib mir einfach Bescheid.'
