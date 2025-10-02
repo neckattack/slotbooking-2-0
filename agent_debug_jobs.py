@@ -127,6 +127,8 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
             "desc": None,
             "instr": None,
         }
+        lang_fk_col = "task_id"
+        lang_lang_col = None
         if dbname:
             try:
                 cursor.execute(
@@ -166,6 +168,14 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
                     if c in cols:
                         lang_cols["instr"] = c
                         break
+                for c in ("task_id", "tl_task_id", "task_ref_id", "task_lang_task_id", "taskid"):
+                    if c in cols:
+                        lang_fk_col = c
+                        break
+                for c in ("lang", "language", "locale"):
+                    if c in cols:
+                        lang_lang_col = c
+                        break
             except Exception:
                 pass
         # Dynamische Auswahl der Sprachspalten
@@ -178,14 +188,17 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
             lang_select.append(f"tl.{lang_cols['instr']} AS task_instruction")
         lang_select_sql = (", " + ", ".join(lang_select)) if lang_select else ""
 
+        lang_join = f"LEFT JOIN tbl_tasks_lang tl ON tl.{lang_fk_col} = t.task_id "
+        lang_where = (f"AND tl.{lang_lang_col} = 'de' " if lang_lang_col else "")
         sql = (
             f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description"
             f"{lang_select_sql} "
             "FROM tbl_task_bids b "
             "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
             f"LEFT JOIN tbl_task_locations l ON l.{loc_fk_col} = t.task_id "
-            "LEFT JOIN tbl_tasks_lang tl ON tl.task_id = t.task_id "
+            f"{lang_join}"
             "WHERE b.bid_bidder_id = %s "
+            f"{lang_where}"
             "ORDER BY (t.task_deliver_by IS NULL), t.task_deliver_by ASC LIMIT %s"
         )
         cursor.execute(sql, (user_id, limit))
@@ -197,6 +210,9 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
                 "description": r.get("description"),
                 "task_id": r.get("bid_task_id"),
                 "bid_id": r.get("bid_id"),
+                "task_title": r.get("task_title"),
+                "task_description": r.get("task_description"),
+                "task_instruction": r.get("task_instruction"),
                 "table": "tbl_task_bids"
             }
             for r in rows
@@ -265,6 +281,14 @@ def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, 
                     if c in cols:
                         lang_cols["instr"] = c
                         break
+                for c in ("task_id", "tl_task_id", "task_ref_id", "task_lang_task_id", "taskid"):
+                    if c in cols:
+                        lang_fk_col = c
+                        break
+                for c in ("lang", "language", "locale"):
+                    if c in cols:
+                        lang_lang_col = c
+                        break
             except Exception:
                 pass
         lang_select = []
@@ -276,14 +300,17 @@ def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, 
             lang_select.append(f"tl.{lang_cols['instr']} AS task_instruction")
         lang_select_sql = (", " + ", ".join(lang_select)) if lang_select else ""
 
+        lang_join = f"LEFT JOIN tbl_tasks_lang tl ON tl.{lang_fk_col} = t.task_id "
+        lang_where = (f"AND tl.{lang_lang_col} = 'de' " if lang_lang_col else "")
         sql = (
             f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description"
             f"{lang_select_sql} "
             "FROM tbl_task_bids b "
             "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
             f"LEFT JOIN tbl_task_locations l ON l.{loc_fk_col} = t.task_id "
-            "LEFT JOIN tbl_tasks_lang tl ON tl.task_id = t.task_id "
+            f"{lang_join}"
             "WHERE b.bid_bidder_id = %s AND t.task_deliver_by >= NOW() "
+            f"{lang_where}"
             "ORDER BY t.task_deliver_by ASC LIMIT %s"
         )
         cursor.execute(sql, (user_id, limit))
@@ -295,7 +322,10 @@ def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, 
                 "description": r.get("description"),
                 "task_id": r.get("bid_task_id"),
                 "bid_id": r.get("bid_id"),
-                "table": "tbl_tasks_bids"
+                "task_title": r.get("task_title"),
+                "task_description": r.get("task_description"),
+                "task_instruction": r.get("task_instruction"),
+                "table": "tbl_task_bids"
             }
             for r in rows
         ]
