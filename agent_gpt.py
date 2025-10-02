@@ -47,16 +47,17 @@ def agent_respond(user_message, channel="chat", user_email=None):
     # Intent-Klassifizierung ohne LLM
     def classify_intent(text: str) -> str:
         try:
-            if is_offtopic(text):
-                return "offtopic"
-            # FAISS-Check: Ist FAQ relevant?
-            is_rel, _doc, _score = faq_is_relevant(text)
-            if is_rel:
-                return "faq"
-            # Datenbank-Keywords
+            # 1) Datenbank-Keywords zuerst (verhindert, dass 'zeit' als Offtopic DB-Fragen überschreibt)
             t = (text or "").lower()
             if any(k in t for k in db_keywords):
                 return "db"
+            # 2) FAQ-Relevanz prüfen
+            is_rel, _doc, _score = faq_is_relevant(text)
+            if is_rel:
+                return "faq"
+            # 3) Offtopic zuletzt
+            if is_offtopic(text):
+                return "offtopic"
             return "general"
         except Exception:
             return "general"

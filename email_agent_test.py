@@ -172,6 +172,14 @@ def check_mail_and_reply():
                     if m:
                         name_guess = m.group(1).split(".")[0].capitalize()
                 antworten = ([] if visible_preface_html else [f"<p>Hallo {name_guess},</p>" if name_guess else "<p>Hallo,</p>"])
+                def _strip_greeting_html(html: str) -> str:
+                    import re as _re2
+                    if not html:
+                        return html
+                    # Entferne führende Begrüßungszeilen (Hallo ..., Hallo Chris, etc.)
+                    html = _re2.sub(r'^\s*<p>\s*Hallo[^<]*</p>\s*', '', html, flags=_re2.IGNORECASE)
+                    html = _re2.sub(r'^\s*Hallo[^<>\n]*\n+', '', html, flags=_re2.IGNORECASE)
+                    return html
                 for i, seg in enumerate(segments):
                     try:
                         seg_answer = agent_respond(seg, channel="email", user_email=from_addr)
@@ -204,6 +212,10 @@ def check_mail_and_reply():
                                 html_lines.append('</ul>')
                             return '\n'.join(html_lines)
                         ans_html = _text_to_html(ans_html)
+                    # Doppelte Anreden vermeiden: Begrüßung in Segmentantworten entfernen,
+                    # wenn wir bereits eine Anrede gesetzt haben
+                    if antworten:
+                        ans_html = _strip_greeting_html(ans_html)
                     abschnitt = f"<div style=\"margin-top:14px;\">{ans_html}</div>"
                     antworten.append(abschnitt)
                 # Abschlussformel
@@ -216,8 +228,8 @@ def check_mail_and_reply():
             # Letzter Schritt: LLM-Review zur Konsolidierung (keine doppelten Anreden, inhaltlich passend)
             try:
                 import os as _os
-                import openai as _openai
-                _openai.api_key = _os.environ.get("OPENAI_API_KEY")
+                from openai import OpenAI as _OpenAI
+                _client = _OpenAI(api_key=_os.environ.get("OPENAI_API_KEY"))
                 review_system = (
                     "Du bist ein Assistent, der E-Mail-Antworten final prüft.\n"
                     "- Bewahre den Inhalt zwischen <!-- PREFACE-BEGIN --> und <!-- PREFACE-END --> UNVERÄNDERT.\n"
@@ -233,7 +245,7 @@ def check_mail_and_reply():
                     review_tokens = int(_os.environ.get("AGENT_MAX_TOKENS", "900"))
                 except Exception:
                     pass
-                _resp = _openai.ChatCompletion.create(
+                _resp = _client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=[
                         {"role": "system", "content": review_system},

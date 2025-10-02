@@ -121,6 +121,7 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
         dbrow = cursor.fetchone() or {}
         dbname = dbrow.get("db")
         loc_col = "loc_address"
+        loc_fk_col = "loc_task_id"  # bevorzugt laut Screenshot
         if dbname:
             try:
                 cursor.execute(
@@ -133,13 +134,17 @@ def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[
                     if candidate in cols:
                         loc_col = candidate
                         break
+                for fk_cand in ("loc_task_id", "task_location_id", "location_id", "id"):
+                    if fk_cand in cols:
+                        loc_fk_col = fk_cand
+                        break
             except Exception:
                 pass
         sql = (
             f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description "
             "FROM tbl_task_bids b "
             "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
-            "LEFT JOIN tbl_task_locations l ON l.task_location_id = t.task_location_id "
+            f"LEFT JOIN tbl_task_locations l ON l.{loc_fk_col} = t.task_id "
             "WHERE b.bid_bidder_id = %s "
             "ORDER BY (t.task_deliver_by IS NULL), t.task_deliver_by ASC LIMIT %s"
         )
@@ -176,6 +181,7 @@ def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, 
         dbrow = cursor.fetchone() or {}
         dbname = dbrow.get("db")
         loc_col = "loc_address"
+        loc_fk_col = "loc_task_id"
         if dbname:
             try:
                 cursor.execute(
@@ -188,13 +194,17 @@ def get_upcoming_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, 
                     if candidate in cols:
                         loc_col = candidate
                         break
+                for fk_cand in ("loc_task_id", "task_location_id", "location_id", "id"):
+                    if fk_cand in cols:
+                        loc_fk_col = fk_cand
+                        break
             except Exception:
                 pass
         sql = (
             f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description "
             "FROM tbl_task_bids b "
             "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
-            "LEFT JOIN tbl_task_locations l ON l.task_location_id = t.task_location_id "
+            f"LEFT JOIN tbl_task_locations l ON l.{loc_fk_col} = t.task_id "
             "WHERE b.bid_bidder_id = %s AND t.task_deliver_by >= NOW() "
             "ORDER BY t.task_deliver_by ASC LIMIT %s"
         )
