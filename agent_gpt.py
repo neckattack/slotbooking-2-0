@@ -1,10 +1,10 @@
 import os
-import openai
+from openai import OpenAI
 from datetime import datetime
 from agent_core import find_next_appointment_for_name
 from db_utils import get_db_connection
 
-openai.api_key = os.environ.get("OPENAI_API_KEY")
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 FAQ_ONLY = os.environ.get("AGENT_FAQ_ONLY", "false").lower() == "true"  # Flag bleibt vorhanden, wird aber nicht mehr zur Blockade von SQL genutzt.
 
 def load_knowledge():
@@ -134,14 +134,13 @@ def agent_respond(user_message, channel="chat", user_email=None):
     user_message_norm = normalize(user_message)
     user_message_lower = user_message.lower().strip()
     try:
-        import openai
         # Dynamische Token-Grenze: E-Mail braucht oft mehr Platz
         default_max = 900 if channel == "email" else 512
         try:
             env_max = int(os.environ.get("AGENT_MAX_TOKENS", str(default_max)))
         except Exception:
             env_max = default_max
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": system_prompt},
