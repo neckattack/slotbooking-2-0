@@ -114,6 +114,9 @@ def check_mail_and_reply():
                         jobs_past = get_past_tasks_via_bids(int(user_info_pref['user_id']), limit=5) or []
                     except Exception:
                         jobs_past = []
+                except Exception:
+                    # Fehler bei der Job-Ermittlung im Preface-Block ignorieren
+                    pass
                 # Preface rendern
                 if jobs_upcoming or jobs_past:
                     blocks = []
