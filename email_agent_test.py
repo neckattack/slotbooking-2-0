@@ -61,7 +61,7 @@ def check_mail_and_reply():
         # Mehrteilige E-Mails in Teilfragen zerlegen und jeweils beantworten
         from agent_gpt import agent_respond
         import re  # für Segmentierung/HTML-Umwandlung
-        # Sichtbarer Preface-Block mit kommenden Jobs für Masseure (immer anzeigen, wenn vorhanden)
+        # Sichtbarer Preface-Block mit kommenden und vergangenen Jobs für Masseure
         visible_preface_html = ""
         def _fmt_dt(val):
             from datetime import datetime
@@ -81,6 +81,9 @@ def check_mail_and_reply():
                 if dt is None:
                     return s
             return dt.strftime("%d.%m.%Y, %H:%M Uhr")
+        # Gemeinsame Job-Ermittlung (upcoming + past) für Preface und späteren Debug
+        jobs_upcoming = []
+        jobs_past = []
         try:
             from agent_blue import get_user_info_by_email
             from email.utils import parseaddr as _parseaddr
@@ -92,6 +95,7 @@ def check_mail_and_reply():
                         get_upcoming_tasks_via_bids,
                         get_upcoming_tasks_precise,
                         get_upcoming_jobs_for_user,
+                        get_past_tasks_via_bids,
                     )
                     # 1) bevorzugt über Bids
                     jobs = get_upcoming_tasks_via_bids(int(user_info_pref['user_id']), limit=5)
@@ -104,9 +108,18 @@ def check_mail_and_reply():
                     if not jobs:
                         from agent_debug_jobs import get_bids_tasks_any
                         jobs = get_bids_tasks_any(int(user_info_pref['user_id']), limit=5)
-                    if jobs:
+                    jobs_upcoming = jobs or []
+                    # Past-Jobs via Bids (separat)
+                    try:
+                        jobs_past = get_past_tasks_via_bids(int(user_info_pref['user_id']), limit=5) or []
+                    except Exception:
+                        jobs_past = []
+                # Preface rendern
+                if jobs_upcoming or jobs_past:
+                    blocks = []
+                    if jobs_upcoming:
                         items = []
-                        for j in jobs:
+                        for j in jobs_upcoming:
                             date = _fmt_dt(j.get('date'))
                             loc = j.get('location') or '—'
                             title = j.get('task_title') or j.get('description') or '—'
@@ -114,16 +127,22 @@ def check_mail_and_reply():
                             instr_short = (instr[:80] + '…') if instr and len(instr) > 80 else (instr or '')
                             extra = f" <span style=\"color:#666;\">({instr_short})</span>" if instr_short else ""
                             items.append(f"<li><strong>{date}</strong> – {loc} · {title}{extra}</li>")
-                        visible_preface_html = (
-                            "<!-- PREFACE-BEGIN -->"
-                            "<div style=\"margin-bottom:14px;\">"
-                            "<p>Hier sind deine kommenden Jobs:</p>"
-                            f"<ul>{''.join(items)}</ul>"
-                            "</div>"
-                            "<!-- PREFACE-END -->"
-                        )
-                except Exception:
-                    pass
+                        blocks.append("<p>Deine nächsten Jobs:</p>" + f"<ul>{''.join(items)}</ul>")
+                    if jobs_past:
+                        items = []
+                        for j in jobs_past:
+                            date = _fmt_dt(j.get('date'))
+                            loc = j.get('location') or '—'
+                            title = j.get('task_title') or j.get('description') or '—'
+                            items.append(f"<li><strong>{date}</strong> – {loc} · {title}</li>")
+                        blocks.append("<p>Deine letzten Jobs:</p>" + f"<ul>{''.join(items)}</ul>")
+                    visible_preface_html = (
+                        "<!-- PREFACE-BEGIN -->"
+                        "<div style=\"margin-bottom:14px;\">"
+                        + "".join(blocks) +
+                        "</div>"
+                        "<!-- PREFACE-END -->"
+                    )
         except Exception:
             pass
         def _segment_questions(text: str):
@@ -380,7 +399,7 @@ def send_test_reply(to_addr, orig_subject, antwort_text):
                             get_upcoming_tasks_precise,
                             get_upcoming_jobs_for_user,
                         )
-                        # 1) Bids
+                        # 1) Bids (upcoming)
                         jobs = get_upcoming_tasks_via_bids(int(user_id), limit=3)
                         source_label = 'bids' if jobs else ''
                         # 2) direkte Tasks
@@ -397,6 +416,13 @@ def send_test_reply(to_addr, orig_subject, antwort_text):
                                 source_label = 'bids_any'
                             if jobs and not source_label:
                                 source_label = 'heuristic'
+                        # Past via Bids (eigener Zähler)
+                        past_jobs = []
+                        try:
+                            from agent_debug_jobs import get_past_tasks_via_bids
+                            past_jobs = get_past_tasks_via_bids(int(user_id), limit=3) or []
+                        except Exception:
+                            past_jobs = []
                         if jobs:
                             parts = []
                             for j in jobs:
@@ -408,6 +434,14 @@ def send_test_reply(to_addr, orig_subject, antwort_text):
                                 suffix = f" ({instr_short})" if instr_short else ""
                                 parts.append(f"({date}) {loc} – {title}{suffix}")
                             jobs_snippet = f" | Jobs[{source_label}:{len(jobs)}]: " + "; ".join(parts)
+                        if past_jobs:
+                            parts_p = []
+                            for j in past_jobs:
+                                date = _fmt_de(j.get('date'))
+                                loc = j.get('location') or '—'
+                                title = j.get('task_title') or j.get('description') or '—'
+                                parts_p.append(f"({date}) {loc} – {title}")
+                            jobs_snippet += f" | JobsPast[bids:{len(past_jobs)}]: " + "; ".join(parts_p)
                 except Exception as e:
                     logger.error(f"[DEBUG-JOBS] Fehler beim Abruf kommender Jobs für user_id={user_id}: {e}")
                 if not jobs_snippet:

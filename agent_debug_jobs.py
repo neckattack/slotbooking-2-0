@@ -112,6 +112,79 @@ def get_upcoming_jobs_for_user(user_id: int, limit: int = 3) -> List[Dict[str, O
         conn.close()
 
 
+# Vergangene Tasks über Bids: wie get_upcoming_tasks_via_bids, aber Vergangenheit
+def get_past_tasks_via_bids(user_id: int, limit: int = 3) -> List[Dict[str, Optional[str]]]:
+    conn = get_blue_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT DATABASE() AS db")
+        dbrow = cursor.fetchone() or {}
+        dbname = dbrow.get("db")
+        loc_col = "loc_address"
+        loc_fk_col = "loc_task_id"
+        if dbname:
+            try:
+                cursor.execute(
+                    "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='tbl_task_locations'",
+                    (dbname,)
+                )
+                cols = {r["COLUMN_NAME"].lower() for r in cursor.fetchall()}
+                for candidate in ("loc_address", "name", "title", "location", "address"):
+                    if candidate in cols:
+                        loc_col = candidate
+                        break
+                for fk_cand in ("loc_task_id", "task_location_id", "location_id", "id"):
+                    if fk_cand in cols:
+                        loc_fk_col = fk_cand
+                        break
+            except Exception:
+                pass
+        # Fester Sprach-Join laut Schema (mit Fallback ohne Sprach-Join bei Fehlern)
+        lang_select_sql = ", tl.task_title AS task_title, tl.task_description AS task_description, tl.task_instruction AS task_instruction"
+        lang_join = "LEFT JOIN tbl_tasks_lang tl ON tl.tasklang_task_id = t.task_id "
+        sql = (
+            f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description"
+            f"{lang_select_sql} "
+            "FROM tbl_task_bids b "
+            "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
+            f"LEFT JOIN tbl_task_locations l ON l.{loc_fk_col} = t.task_id "
+            f"{lang_join}"
+            "WHERE b.bid_bidder_id = %s AND t.task_deliver_by < NOW() "
+            "ORDER BY t.task_deliver_by DESC LIMIT %s"
+        )
+        try:
+            cursor.execute(sql, (user_id, limit))
+        except Exception:
+            sql_no_lang = (
+                f"SELECT b.bid_id, b.bid_task_id, t.task_deliver_by AS date, l.{loc_col} AS location, t.task_identifier AS description "
+                "FROM tbl_task_bids b "
+                "JOIN tbl_tasks t ON t.task_id = b.bid_task_id "
+                f"LEFT JOIN tbl_task_locations l ON l.{loc_fk_col} = t.task_id "
+                "WHERE b.bid_bidder_id = %s AND t.task_deliver_by < NOW() "
+                "ORDER BY t.task_deliver_by DESC LIMIT %s"
+            )
+            cursor.execute(sql_no_lang, (user_id, limit))
+        rows = cursor.fetchall() or []
+        return [
+            {
+                "date": r.get("date"),
+                "location": r.get("location"),
+                "description": r.get("description"),
+                "task_id": r.get("bid_task_id"),
+                "bid_id": r.get("bid_id"),
+                "task_title": r.get("task_title"),
+                "task_description": r.get("task_description"),
+                "task_instruction": r.get("task_instruction"),
+                "table": "tbl_task_bids"
+            }
+            for r in rows
+        ]
+    finally:
+        cursor.close()
+        conn.close()
+
+
 # Fallback: Bids ohne Zeitfilter – liefert wenigstens Beschriftungen (und ggf. Datum/Adresse)
 def get_bids_tasks_any(user_id: int, limit: int = 3) -> List[Dict[str, Optional[str]]]:
     conn = get_blue_db_connection()
