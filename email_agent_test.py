@@ -139,10 +139,12 @@ def check_mail_and_reply():
                             title = j.get('task_title') or j.get('description') or '—'
                             items.append(f"<li><strong>{date}</strong> – {loc} · {title}</li>")
                         blocks.append("<p>Deine letzten Jobs:</p>" + f"<ul>{''.join(items)}</ul>")
+                    # Höfliche Einleitung vor den Listenblöcken
+                    intro = "<p>hier ist eine kurze Übersicht deiner nächsten und letzten Jobs:</p>"
                     visible_preface_html = (
                         "<!-- PREFACE-BEGIN -->"
                         "<div style=\"margin-bottom:14px;\">"
-                        + "".join(blocks) +
+                        + intro + "".join(blocks) +
                         "</div>"
                         "<!-- PREFACE-END -->"
                     )
@@ -186,17 +188,21 @@ def check_mail_and_reply():
 
         segments = _segment_questions(body)
         try:
+            # Persönliche Anrede ermitteln (immer verwenden)
+            from email.utils import parseaddr
+            name_guess = parseaddr(from_addr)[0] or ""
+            if not name_guess:
+                m = re.search(r"([a-zA-ZäöüÄÖÜß\-\.]+)", from_addr)
+                if m:
+                    name_guess = m.group(1).split(".")[0].capitalize()
+            greeting_html = f"<p>Hallo {name_guess},</p>" if name_guess else "<p>Hallo,</p>"
             if len(segments) <= 1:
-                antwort = (visible_preface_html or "") + (agent_respond(body, channel="email", user_email=from_addr) or "")
+                # Single-Segment: Begrüßung immer voranstellen, dann Preface (falls vorhanden), dann Antwort
+                antwort_body = agent_respond(body, channel="email", user_email=from_addr) or ""
+                antwort = greeting_html + (visible_preface_html or "") + antwort_body
             else:
-                # Persönliche Anrede aus From-Adresse ableiten
-                from email.utils import parseaddr
-                name_guess = parseaddr(from_addr)[0] or ""
-                if not name_guess:
-                    m = re.search(r"([a-zA-ZäöüÄÖÜß\-\.]+)", from_addr)
-                    if m:
-                        name_guess = m.group(1).split(".")[0].capitalize()
-                antworten = ([] if visible_preface_html else [f"<p>Hallo {name_guess},</p>" if name_guess else "<p>Hallo,</p>"])
+                # Multi-Segment: Begrüßung immer voranstellen
+                antworten = [greeting_html]
                 def _strip_greeting_html(html: str) -> str:
                     import re as _re2
                     if not html:
@@ -249,7 +255,7 @@ def check_mail_and_reply():
                     "<p>Dein Support-Team</p>"
                 )
                 antworten.append(abschluss)
-                antwort = (visible_preface_html or "") + "\n".join(antworten)
+                antwort = greeting_html + (visible_preface_html or "") + "\n".join(antworten[1:] if antworten and antworten[0] == greeting_html else antworten)
             # Letzter Schritt: LLM-Review zur Konsolidierung (keine doppelten Anreden, inhaltlich passend)
             try:
                 import os as _os
