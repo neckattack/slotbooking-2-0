@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 import mysql.connector
 from dotenv import load_dotenv
 from datetime import datetime
@@ -108,7 +108,65 @@ def get_reservations_for_today():
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    # Standardansicht: zur Inbox weiterleiten
+    return redirect(url_for('emails_page'))
+
+@app.route("/emails")
+def emails_page():
+    return render_template("emails.html")
+
+@app.route("/api/emails/inbox")
+def api_emails_inbox():
+    import imaplib, email
+    from email.header import decode_header
+    limit = request.args.get('limit', default=25, type=int)
+    host = os.environ.get('IMAP_HOST')
+    port = int(os.environ.get('IMAP_PORT', '993'))
+    user = os.environ.get('IMAP_USER')
+    pw = os.environ.get('IMAP_PASS')
+    mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
+    if not (host and user and pw):
+        return jsonify({"error": "IMAP Konfiguration unvollständig (IMAP_HOST/USER/PASS)."}), 500
+    try:
+        M = imaplib.IMAP4_SSL(host, port)
+        M.login(user, pw)
+        M.select(mailbox)
+        typ, data = M.search(None, 'ALL')
+        if typ != 'OK':
+            raise RuntimeError('IMAP search failed')
+        ids = data[0].split()
+        ids = ids[-limit:] if limit and len(ids) > limit else ids
+        items = []
+        for mid in reversed(ids):  # neueste zuerst
+            typ, msgdata = M.fetch(mid, '(RFC822)')
+            if typ != 'OK' or not msgdata or not msgdata[0]:
+                continue
+            msg = email.message_from_bytes(msgdata[0][1])
+            # Betreff decodieren
+            raw_sub = msg.get('Subject', '')
+            dh = decode_header(raw_sub)
+            subject_parts = []
+            for s, enc in dh:
+                try:
+                    subject_parts.append(s.decode(enc or 'utf-8') if isinstance(s, bytes) else str(s))
+                except Exception:
+                    subject_parts.append(s.decode('utf-8', errors='ignore') if isinstance(s, bytes) else str(s))
+            subject = ''.join(subject_parts)
+            from_addr = msg.get('From', '')
+            date = msg.get('Date', '')
+            message_id = msg.get('Message-ID', '')
+            items.append({
+                'subject': subject,
+                'from': from_addr,
+                'date': date,
+                'message_id': message_id
+            })
+        M.close()
+        M.logout()
+        return jsonify({'items': items})
+    except Exception as e:
+        app.logger.error(f"[IMAP] Fehler beim Laden der Inbox: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route("/api/termine")
 def termine():

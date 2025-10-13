@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inbox – neckattack</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 24px; }
+    h1 { margin: 0 0 16px; }
+    .toolbar { margin: 12px 0 20px; }
+    button { background:#2563eb; color:#fff; border:0; padding:8px 12px; border-radius:8px; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:default; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding:10px 6px; text-align:left; }
+    th { color:#374151; font-weight:600; }
+    td { color:#111827; font-size:14px; }
+    .sub { color:#6b7280; font-size:12px; }
+  </style>
+</head>
+<body>
+  <h1>📥 Inbox</h1>
+  <div class="toolbar">
+    <button id="reload">Aktualisieren</button>
+    <span id="status" class="sub" style="margin-left:10px;"></span>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Betreff</th><th>Von</th><th>Datum</th></tr>
+    </thead>
+    <tbody id="rows">
+      <tr><td colspan="3" class="sub">Lade …</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    async function loadInbox(){
+      const status = document.getElementById('status');
+      const rows = document.getElementById('rows');
+      status.textContent = 'lädt …';
+      try{
+        const res = await fetch('/api/emails/inbox?limit=25');
+        const data = await res.json();
+        rows.innerHTML = '';
+        if(!data.items || !data.items.length){
+          rows.innerHTML = '<tr><td colspan="3" class="sub">Keine E-Mails gefunden.</td></tr>';
+          status.textContent = '';
+          return;
+        }
+        for(const it of data.items){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${escapeHtml(it.subject || '')}</td>
+            <td class="sub">${escapeHtml(it.from || '')}</td>
+            <td class="sub">${escapeHtml(it.date || '')}</td>
+          `;
+          rows.appendChild(tr);
+        }
+        status.textContent = `${data.items.length} E-Mails geladen`;
+      }catch(e){
+        rows.innerHTML = `<tr><td colspan="3" class="sub">Fehler: ${e}</td></tr>`;
+        status.textContent = '';
+      }
+    }
+    function escapeHtml(s){
+      return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    }
+    document.getElementById('reload').addEventListener('click', loadInbox);
+    loadInbox();
+  </script>
+</body>
+</html>
