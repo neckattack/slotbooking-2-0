@@ -7,6 +7,11 @@ import openai
 from agent_core import find_next_appointment_for_name
 from agent_gpt import agent_respond
 
+load_dotenv()
+
+# Flask-App muss vor allen @app.route-Dekoratoren existieren
+app = Flask(__name__)
+
 @app.route("/api/health", methods=["GET"])
 def health_check():
     """
@@ -32,9 +37,9 @@ def health_check():
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
-load_dotenv()
-
-app = Flask(__name__)
+@app.route("/healthz")
+def healthz():
+    return "ok", 200
 
 import logging
 app.logger.setLevel(logging.INFO)
