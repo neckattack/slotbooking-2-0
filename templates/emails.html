@@ -67,6 +67,15 @@
 
   <script>
     let currentUid = null;
+    async function parseJsonSafe(res){
+      const ct = res.headers.get('content-type') || '';
+      const txt = await res.text();
+      if(ct.includes('application/json')){
+        try { return JSON.parse(txt); } catch(_){ return { error: 'Ungültiges JSON vom Server', raw: txt }; }
+      }
+      // Fallback: versuche JSON, sonst als Fehler-Text zurück
+      try { return JSON.parse(txt); } catch(_){ return { error: txt || 'Leere Antwort vom Server' }; }
+    }
     async function loadInbox(){
       const status = document.getElementById('status');
       const list = document.getElementById('list');
@@ -136,7 +145,7 @@
       status.textContent = 'Vorschlag wird erstellt …';
       try{
         const res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid}) });
-        const data = await res.json();
+        const data = await parseJsonSafe(res);
         if(data.error){ throw new Error(data.error); }
         toInput.value = data.to || '';
         subjInput.value = data.subject || '';
@@ -154,7 +163,7 @@
       status.textContent = 'Sende …';
       try{
         const res = await fetch('/api/emails/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({to: toInput.value, subject: subjInput.value, html: editor.innerHTML}) });
-        const data = await res.json();
+        const data = await parseJsonSafe(res);
         if(data.error){ throw new Error(data.error); }
         status.textContent = 'Gesendet';
       }catch(e){ status.textContent = 'Fehler: ' + e; }
