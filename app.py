@@ -360,26 +360,9 @@ def api_emails_agent_compose():
             s = re.sub(r'\n\s*\n\s*\n+', '\n\n', s)
             return s.strip()
         source_text = (plaintext or ( _html_to_text(html_body) if html_body else '' )).strip()
-        # Begrüßung ermitteln (Name aus BLUE-DB oder E-Mail ableiten)
+        # Neutrale Begrüßung (kein Personenname)
         from email.utils import parseaddr as _parseaddr
-        name_guess = _parseaddr(from_addr)[0] or ""
-        try:
-            if not name_guess or '@' in name_guess:
-                from agent_blue import get_user_info_by_email as _get_ui
-                searched_mail = (_parseaddr(from_addr)[1] or from_addr).strip().lower()
-                ui = _get_ui(searched_mail)
-                if ui and (ui.get('first_name') or ui.get('last_name')):
-                    fn = ui.get('first_name') or ''
-                    ln = ui.get('last_name') or ''
-                    name_guess = (fn + ' ' + ln).strip()
-                elif '@' in searched_mail:
-                    # Fallback: Local-Part heuristisch (z.B. chris.walther -> Chris)
-                    lp = searched_mail.split('@',1)[0]
-                    token = lp.replace('_',' ').replace('-',' ').replace('.', ' ').split(' ')[0]
-                    name_guess = token.capitalize() if token else ''
-        except Exception:
-            pass
-        greeting_html = f"<p>Hallo {name_guess},</p>" if name_guess else "<p>Hallo,</p>"
+        greeting_html = "<p>Hallo,</p>"
         # Preface: Jobs upcoming/past (wie email_agent_test)
         visible_preface_html = ""
         def _fmt_dt(val):
@@ -440,12 +423,10 @@ def api_emails_agent_compose():
             import re
             if not html:
                 return html
-            # <p>Hallo ...</p> am Anfang
-            html = re.sub(r'^\s*<p>\s*Hallo[^<]*</p>\s*', '', html, flags=re.IGNORECASE)
-            # Plaintext-Variante am Anfang
-            html = re.sub(r'^\s*Hallo[^\n<]*\n+', '', html, flags=re.IGNORECASE)
-            # "Hi"/"Guten Tag" Varianten einfach halten
-            html = re.sub(r'^\s*<p>\s*(Hi|Guten Tag|Guten Morgen|Guten Abend)[^<]*</p>\s*', '', html, flags=re.IGNORECASE)
+            # <p>...</p> Beginn mit gängigen Grußformeln entfernen (inkl. Name/E-Mail/Kommata)
+            html = re.sub(r'^\s*<p>\s*(hallo|hi|guten tag|guten morgen|guten abend)[^<]*</p>\s*', '', html, flags=re.IGNORECASE)
+            # Plaintext-Variante (ohne <p>) am Anfang
+            html = re.sub(r'^\s*(hallo|hi|guten tag|guten morgen|guten abend)[^\n<]*\n+', '', html, flags=re.IGNORECASE)
             return html
         antwort_body = _strip_greeting_html(antwort_body)
         # Antworten-HTML zusammensetzen: Wenn Preface vorhanden ist, KEIN weiterer Body anhängen
