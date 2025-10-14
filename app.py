@@ -574,6 +574,8 @@ def api_emails_thread():
             'html': html_body,
             'text': text_body
         }
+        import time as _t
+        now = _t.time()
         THREAD_CACHE[uid] = {"data": result, "ts": now}
         return jsonify(result)
     except Exception as e:
