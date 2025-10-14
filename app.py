@@ -119,7 +119,7 @@ def emails_page():
 def api_emails_inbox():
     import imaplib, email
     from email.header import decode_header
-    limit = request.args.get('limit', default=25, type=int)
+    limit = request.args.get('limit', default=20, type=int)
     host = os.environ.get('IMAP_HOST')
     port = int(os.environ.get('IMAP_PORT', '993'))
     user = os.environ.get('IMAP_USER')
@@ -128,20 +128,27 @@ def api_emails_inbox():
     if not (host and user and pw):
         return jsonify({"error": "IMAP Konfiguration unvollständig (IMAP_HOST/USER/PASS)."}), 500
     try:
+        app.logger.info(f"[IMAP] Verbinde zu {host}:{port}, mailbox={mailbox}, user={(user or '')[:3]+'***'}")
         M = imaplib.IMAP4_SSL(host, port)
         M.login(user, pw)
-        M.select(mailbox)
-        typ, data = M.search(None, 'ALL')
-        if typ != 'OK':
-            raise RuntimeError('IMAP search failed')
+        sel_typ, sel_data = M.select(mailbox)
+        if sel_typ != 'OK':
+            raise RuntimeError(f"IMAP select failed: {sel_typ} {sel_data}")
+        # UID-Suche ist robuster
+        typ, data = M.uid('search', None, 'ALL')
+        if typ != 'OK' or not data or data[0] is None:
+            raise RuntimeError(f'IMAP UID search failed: {typ} {data}')
         ids = data[0].split()
+        app.logger.info(f"[IMAP] Treffer gesamt: {len(ids)}")
         ids = ids[-limit:] if limit and len(ids) > limit else ids
         items = []
         for mid in reversed(ids):  # neueste zuerst
-            typ, msgdata = M.fetch(mid, '(RFC822)')
+            typ, msgdata = M.uid('fetch', mid, '(RFC822.HEADER)')
             if typ != 'OK' or not msgdata or not msgdata[0]:
                 continue
-            msg = email.message_from_bytes(msgdata[0][1])
+            # msgdata kann ein Tupel oder Liste sein
+            raw_bytes = msgdata[0][1] if isinstance(msgdata[0], tuple) else msgdata[0]
+            msg = email.message_from_bytes(raw_bytes)
             # Betreff decodieren
             raw_sub = msg.get('Subject', '')
             dh = decode_header(raw_sub)
@@ -154,7 +161,7 @@ def api_emails_inbox():
             subject = ''.join(subject_parts)
             from_addr = msg.get('From', '')
             date = msg.get('Date', '')
-            message_id = msg.get('Message-ID', '')
+            message_id = msg.get('Message-ID', '') or str(mid.decode() if isinstance(mid, bytes) else mid)
             items.append({
                 'subject': subject,
                 'from': from_addr,
@@ -167,6 +174,45 @@ def api_emails_inbox():
     except Exception as e:
         app.logger.error(f"[IMAP] Fehler beim Laden der Inbox: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route("/api/emails/imap-debug")
+def api_emails_imap_debug():
+    import imaplib
+    host = os.environ.get('IMAP_HOST')
+    port = int(os.environ.get('IMAP_PORT', '993'))
+    user = os.environ.get('IMAP_USER')
+    pw = os.environ.get('IMAP_PASS')
+    mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
+    if not (host and user and pw):
+        return jsonify({"ok": False, "error": "IMAP Konfiguration unvollständig (IMAP_HOST/USER/PASS)."}), 500
+    info = {"host": host, "port": port, "user": (user or '')[:3] + '***', "mailbox": mailbox}
+    try:
+        M = imaplib.IMAP4_SSL(host, port)
+        login_typ, login_data = M.login(user, pw)
+        info["login"] = login_typ
+        list_typ, list_data = M.list()
+        info["list_typ"] = list_typ
+        info["mailboxes"] = list_data[:10] if list_data else []
+        sel_typ, sel_data = M.select(mailbox)
+        info["select_typ"] = sel_typ
+        status_typ, status_data = M.status(mailbox, "(MESSAGES UNSEEN RECENT)")
+        info["status_typ"] = status_typ
+        info["status_data"] = status_data
+        srch_typ, srch_data = M.uid('search', None, 'ALL')
+        count = len((srch_data[0] or b'').split()) if srch_typ == 'OK' and srch_data else 0
+        info["search_typ"] = srch_typ
+        info["total_uids"] = count
+        if count:
+            uids = (srch_data[0] or b'').split()
+            info["last_uids"] = [u.decode() for u in uids[-5:]]
+        M.close()
+        M.logout()
+        return jsonify({"ok": True, "info": info})
+    except Exception as e:
+        info["error"] = str(e)
+        app.logger.error(f"[IMAP-DEBUG] {e}")
+        return jsonify({"ok": False, "info": info}), 500
 
 @app.route("/api/termine")
 def termine():
