@@ -5,62 +5,106 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Inbox – neckattack</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 24px; }
-    h1 { margin: 0 0 16px; }
-    .toolbar { margin: 12px 0 20px; }
-    button { background:#2563eb; color:#fff; border:0; padding:8px 12px; border-radius:8px; cursor:pointer; }
+    :root { --border:#e5e7eb; --sub:#6b7280; --fg:#111827; --primary:#2563eb; --active:#f3f4f6; }
+    * { box-sizing:border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 0; color: var(--fg); }
+    header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); }
+    h1 { margin: 0; font-size:20px; display:flex; gap:8px; align-items:center; }
+    .toolbar { display:flex; align-items:center; gap:10px; }
+    button { background:var(--primary); color:#fff; border:0; padding:8px 12px; border-radius:8px; cursor:pointer; }
     button:disabled { opacity:.6; cursor:default; }
-    table { width:100%; border-collapse: collapse; }
-    th, td { border-bottom: 1px solid #e5e7eb; padding:10px 6px; text-align:left; }
-    th { color:#374151; font-weight:600; }
-    td { color:#111827; font-size:14px; }
-    .sub { color:#6b7280; font-size:12px; }
+    .container { display:grid; grid-template-columns: 380px 1fr; height: calc(100vh - 58px); }
+    .list { border-right:1px solid var(--border); overflow:auto; }
+    .item { padding:10px 14px; border-bottom:1px solid var(--border); cursor:pointer; }
+    .item:hover { background:#fafafa; }
+    .item.active { background: var(--active); }
+    .item .subject { font-size:14px; }
+    .item.unseen .subject { font-weight:700; }
+    .item .meta { color: var(--sub); font-size:12px; margin-top:3px; display:flex; justify-content:space-between; gap:8px; }
+    .detail { overflow:auto; padding:16px 24px; }
+    .detail h2 { margin:0 0 8px; font-size:18px; }
+    .detail .meta { color: var(--sub); font-size:12px; margin-bottom:14px; }
+    .detail .content { background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px; }
+    .sub { color:var(--sub); font-size:12px; }
   </style>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
 <body>
-  <h1>📥 Inbox</h1>
-  <div class="toolbar">
-    <button id="reload">Aktualisieren</button>
-    <span id="status" class="sub" style="margin-left:10px;"></span>
+  <header>
+    <h1>📥 Inbox</h1>
+    <div class="toolbar">
+      <button id="reload">Aktualisieren</button>
+      <span id="status" class="sub"></span>
+    </div>
+  </header>
+  <div class="container">
+    <div class="list" id="list">
+      <div class="sub" style="padding:12px 14px;">Lade …</div>
+    </div>
+    <div class="detail" id="detail">
+      <div class="sub">E-Mail auswählen …</div>
+    </div>
   </div>
-  <table>
-    <thead>
-      <tr><th>Betreff</th><th>Von</th><th>Datum</th></tr>
-    </thead>
-    <tbody id="rows">
-      <tr><td colspan="3" class="sub">Lade …</td></tr>
-    </tbody>
-  </table>
 
   <script>
+    let currentUid = null;
     async function loadInbox(){
       const status = document.getElementById('status');
-      const rows = document.getElementById('rows');
+      const list = document.getElementById('list');
       status.textContent = 'lädt …';
       try{
-        const res = await fetch('/api/emails/inbox?limit=25');
+        const res = await fetch('/api/emails/inbox?limit=20');
         const data = await res.json();
-        rows.innerHTML = '';
+        list.innerHTML = '';
         if(!data.items || !data.items.length){
-          rows.innerHTML = '<tr><td colspan="3" class="sub">Keine E-Mails gefunden.</td></tr>';
+          list.innerHTML = '<div class="sub" style="padding:12px 14px;">Keine E-Mails gefunden.</div>';
           status.textContent = '';
           return;
         }
         for(const it of data.items){
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${escapeHtml(it.subject || '')}</td>
-            <td class="sub">${escapeHtml(it.from || '')}</td>
-            <td class="sub">${escapeHtml(it.date || '')}</td>
+          const div = document.createElement('div');
+          div.className = 'item' + (!it.seen ? ' unseen' : '');
+          div.dataset.uid = it.uid;
+          div.innerHTML = `
+            <div class="subject">${escapeHtml(it.subject || '(ohne Betreff)')}</div>
+            <div class="meta"><span>${escapeHtml(it.from || '')}</span><span>${escapeHtml(it.date || '')}</span></div>
           `;
-          rows.appendChild(tr);
+          div.addEventListener('click', () => selectItem(it.uid, div));
+          list.appendChild(div);
         }
         status.textContent = `${data.items.length} E-Mails geladen`;
       }catch(e){
-        rows.innerHTML = `<tr><td colspan="3" class="sub">Fehler: ${e}</td></tr>`;
+        list.innerHTML = `<div class="sub" style="padding:12px 14px;">Fehler: ${e}</div>`;
         status.textContent = '';
       }
     }
+
+    async function selectItem(uid, rowEl){
+      // Active markieren
+      document.querySelectorAll('.item.active').forEach(el => el.classList.remove('active'));
+      rowEl.classList.add('active');
+      currentUid = uid;
+      // Thread laden
+      const detail = document.getElementById('detail');
+      detail.innerHTML = '<div class="sub">Lade Inhalt …</div>';
+      try{
+        const res = await fetch(`/api/emails/thread?uid=${encodeURIComponent(uid)}`);
+        const t = await res.json();
+        if(t.error){ throw new Error(t.error); }
+        const html = t.html || (t.text ? `<pre>${escapeHtml(t.text)}</pre>` : '<div class="sub">Kein Inhalt</div>');
+        detail.innerHTML = `
+          <h2>${escapeHtml(t.subject || '')}</h2>
+          <div class="meta">Von: ${escapeHtml(t.from||'')} · An: ${escapeHtml(t.to||'')} · ${escapeHtml(t.date||'')}</div>
+          <div class="content">${html}</div>
+        `;
+        // Als gelesen markieren (opt-in: beim Öffnen)
+        try{ await fetch('/api/emails/seen', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid, seen:true})}); }catch(_){ }
+        rowEl.classList.remove('unseen');
+      }catch(e){
+        detail.innerHTML = `<div class="sub">Fehler: ${e}</div>`;
+      }
+    }
+
     function escapeHtml(s){
       return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
     }
