@@ -14,7 +14,8 @@ app = Flask(__name__)
 
 # Einfache In-Memory-Caches (kurzer TTL) für Geschwindigkeit
 INBOX_CACHE = {"data": None, "ts": 0, "key": None}
-THREAD_CACHE = {}  # uid -> {data, ts}
+THREAD_CACHE = {}   # uid -> {data, ts}  (Mail-Thread-Inhalt)
+COMPOSE_CACHE = {}  # uid -> {html, to, subject, ts} (Antwort-Entwurf)
 
 @app.route("/api/health", methods=["GET"])
 def health_check():
@@ -220,12 +221,9 @@ def api_emails_agent_compose():
     if not (host and user and pw):
         return jsonify({'error': 'IMAP Konfiguration unvollständig'}), 500
     try:
-        # Cache nutzen
+        # Compose-Cache derzeit nicht als Early-Return verwenden (Debug gegen falsche Antworten)
         import time as _t
         now = _t.time()
-        c = THREAD_CACHE.get(uid)
-        if c and now - c.get('ts', 0) < 60:
-            return jsonify(c['data'])
         M = imaplib.IMAP4_SSL(host, port)
         M.login(user, pw)
         M.select(mailbox)
@@ -416,17 +414,15 @@ def api_emails_agent_compose():
             f'<br><span style="color:#c00;font-size:0.95em;">{debug_info}</span>'
             '</div>'
         )
-        draft_html = f"<div style=\"font-family:Arial,sans-serif;font-size:1.08em;\">{antwort_html}{signature_block}</div>"
+        draft_html = f"<!-- DRAFT-GENERATED -->\n<div style=\"font-family:Arial,sans-serif;font-size:1.08em;\">{antwort_html}{signature_block}</div>"
         # Vorschlagsempfänger/Betreff
         reply_to = from_addr
         reply_subject = ("Re: " + subject) if subject and not subject.lower().startswith("re:") else (subject or "Antwort")
         M.close()
         M.logout()
-        return jsonify({
-            'html': draft_html,
-            'to': reply_to,
-            'subject': reply_subject
-        })
+        # In Compose-Cache legen
+        COMPOSE_CACHE[uid] = { 'html': draft_html, 'to': reply_to, 'subject': reply_subject, 'ts': now }
+        return jsonify({ 'html': draft_html, 'to': reply_to, 'subject': reply_subject })
     except Exception as e:
         app.logger.error(f"[AGENT-COMPOSE] error: {e}")
         return jsonify({'error': str(e)}), 500
