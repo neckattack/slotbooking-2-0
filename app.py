@@ -187,6 +187,134 @@ def api_emails_inbox():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/emails/agent-compose', methods=['POST'])
+def api_emails_agent_compose():
+    """Erstellt einen Antwortvorschlag (HTML) für eine gegebene Mail-UID.
+    Request: { uid: string }
+    Response: { html, to, subject }
+    """
+    import imaplib, email
+    from email.header import decode_header
+    data = request.get_json(silent=True) or {}
+    uid = data.get('uid')
+    if not uid:
+        return jsonify({'error': 'uid fehlt'}), 400
+    host = os.environ.get('IMAP_HOST') or os.environ.get('IMAP_SERVER')
+    port = int(os.environ.get('IMAP_PORT', '993'))
+    user = os.environ.get('IMAP_USER') or os.environ.get('EMAIL_USER')
+    pw = os.environ.get('IMAP_PASS') or os.environ.get('EMAIL_PASS')
+    mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
+    if not (host and user and pw):
+        return jsonify({'error': 'IMAP Konfiguration unvollständig'}), 500
+    try:
+        M = imaplib.IMAP4_SSL(host, port)
+        M.login(user, pw)
+        M.select(mailbox)
+        typ, msgdata = M.uid('fetch', uid, '(RFC822)')
+        if typ != 'OK' or not msgdata or not msgdata[0]:
+            raise RuntimeError('Fetch fehlgeschlagen')
+        raw = msgdata[0][1] if isinstance(msgdata[0], tuple) else msgdata[0]
+        msg = email.message_from_bytes(raw)
+        # Helper zum Decodieren
+        def _decode(s):
+            parts = []
+            for p, enc in decode_header(s or ''):
+                try:
+                    parts.append(p.decode(enc or 'utf-8') if isinstance(p, (bytes, bytearray)) else str(p))
+                except Exception:
+                    parts.append(p.decode('utf-8', errors='ignore') if isinstance(p, (bytes, bytearray)) else str(p))
+            return ''.join(parts)
+        subject = _decode(msg.get('Subject') or '')
+        from_addr = msg.get('From', '')
+        to_addr = msg.get('To', '')
+        # Body extrahieren (bevorzugt Text)
+        plaintext = None
+        html_body = None
+        if msg.is_multipart():
+            for part in msg.walk():
+                ctype = part.get_content_type()
+                disp = part.get('Content-Disposition', '')
+                if 'attachment' in (disp or '').lower():
+                    continue
+                payload = part.get_payload(decode=True)
+                if ctype == 'text/plain' and payload is not None and plaintext is None:
+                    try:
+                        plaintext = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
+                    except Exception:
+                        plaintext = payload.decode('utf-8', errors='ignore')
+                elif ctype == 'text/html' and payload is not None and html_body is None:
+                    try:
+                        html_body = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
+                    except Exception:
+                        html_body = payload.decode('utf-8', errors='ignore')
+        else:
+            payload = msg.get_payload(decode=True)
+            if payload is not None:
+                try:
+                    if (msg.get_content_type() or '') == 'text/html':
+                        html_body = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
+                    else:
+                        plaintext = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
+                except Exception:
+                    plaintext = payload.decode('utf-8', errors='ignore')
+        source_text = plaintext or html_body or ''
+        # Agenten-Antwort generieren
+        prompt = (
+            "Formuliere eine höfliche, kurze und hilfreiche E-Mail-Antwort in HTML (nur HTML-Body, ohne <html>-Rahmen). "
+            "Beginne IMMER mit einer höflichen Anrede und einem kurzen Einleitungssatz. "
+            "Verwende deutsche Sprache. Nutze, wenn sinnvoll, Stichpunkte. "
+            "Original-Anfrage:\n" + source_text[:4000]
+        )
+        draft_html = agent_respond(prompt, channel="email_draft")
+        # Vorschlagsempfänger: Antwort an Absender
+        reply_to = from_addr
+        reply_subject = ("Re: " + subject) if subject and not subject.lower().startswith("re:") else (subject or "Antwort")
+        M.close()
+        M.logout()
+        return jsonify({
+            'html': draft_html,
+            'to': reply_to,
+            'subject': reply_subject
+        })
+    except Exception as e:
+        app.logger.error(f"[AGENT-COMPOSE] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/emails/send', methods=['POST'])
+def api_emails_send():
+    """Versendet eine Mail (HTML). Request: { to, subject, html } """
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    data = request.get_json(silent=True) or {}
+    to_addr = data.get('to')
+    subject = data.get('subject') or ''
+    html = data.get('html') or ''
+    if not to_addr or not html:
+        return jsonify({'error': 'to und html sind erforderlich'}), 400
+    smtp_host = os.environ.get('SMTP_HOST') or os.environ.get('SMTP_SERVER')
+    smtp_port = int(os.environ.get('SMTP_PORT', '465'))
+    smtp_user = os.environ.get('SMTP_USER') or os.environ.get('EMAIL_USER')
+    smtp_pass = os.environ.get('SMTP_PASS') or os.environ.get('EMAIL_PASS')
+    if not (smtp_host and smtp_user and smtp_pass):
+        return jsonify({'error': 'SMTP Konfiguration unvollständig'}), 500
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = smtp_user
+        msg['To'] = to_addr
+        part = MIMEText(html, 'html', 'utf-8')
+        msg.attach(part)
+        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_user, [to_addr], msg.as_string())
+        return jsonify({'ok': True})
+    except Exception as e:
+        app.logger.error(f"[SMTP] send error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route("/api/emails/imap-debug")
 def api_emails_imap_debug():
     import imaplib
