@@ -276,7 +276,24 @@ def api_emails_agent_compose():
                         plaintext = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
                 except Exception:
                     plaintext = payload.decode('utf-8', errors='ignore')
-        source_text = (plaintext or html_body or '').strip()
+        # Quelle für den Agenten: bevorzugt Plaintext; wenn nur HTML vorhanden ist, in Text umwandeln
+        def _html_to_text(s: str) -> str:
+            import re, html as _html
+            if not s:
+                return ''
+            # Zeilenumbrüche für Blockelemente
+            s = re.sub(r'<\s*br\s*/?>', '\n', s, flags=re.IGNORECASE)
+            s = re.sub(r'</\s*p\s*>', '\n\n', s, flags=re.IGNORECASE)
+            s = re.sub(r'</\s*div\s*>', '\n', s, flags=re.IGNORECASE)
+            s = re.sub(r'</\s*li\s*>', '\n', s, flags=re.IGNORECASE)
+            # Tags entfernen
+            s = re.sub(r'<[^>]+>', '', s)
+            # HTML-Entities
+            s = _html.unescape(s)
+            # Whitespace normalisieren
+            s = re.sub(r'\n\s*\n\s*\n+', '\n\n', s)
+            return s.strip()
+        source_text = (plaintext or ( _html_to_text(html_body) if html_body else '' )).strip()
         # Begrüßung ermitteln
         from email.utils import parseaddr as _parseaddr
         name_guess = _parseaddr(from_addr)[0] or ""
