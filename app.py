@@ -17,6 +17,74 @@ INBOX_CACHE = {"data": None, "ts": 0, "key": None}
 THREAD_CACHE = {}   # uid -> {data, ts}  (Mail-Thread-Inhalt)
 COMPOSE_CACHE = {}  # uid -> {html, to, subject, ts} (Antwort-Entwurf)
 
+# Per-Process TTL-Caches für BLUE-DB und Job-Abfragen (beschleunigt Preface)
+BLUE_USER_CACHE = {}  # email -> {data, ts}
+JOBS_CACHE = {}       # user_id -> {upcoming, past, ts}
+
+def _cache_get(store: dict, key: str, ttl: int):
+    import time as _t
+    e = store.get(key)
+    if not e:
+        return None
+    if _t.time() - e.get('ts', 0) > ttl:
+        try:
+            del store[key]
+        except Exception:
+            pass
+        return None
+    return e
+
+def _cache_set(store: dict, key: str, value: dict):
+    import time as _t
+    value = dict(value or {})
+    value['ts'] = _t.time()
+    store[key] = value
+    return value
+
+# Cached BLUE-User-Infos (TTL 120s)
+def _get_user_info_cached(email_addr: str, ttl: int = 120):
+    try:
+        ck = (email_addr or '').strip().lower()
+        c = _cache_get(BLUE_USER_CACHE, ck, ttl)
+        if c is not None:
+            return c.get('data')
+        from agent_blue import get_user_info_by_email
+        data = get_user_info_by_email(ck)
+        _cache_set(BLUE_USER_CACHE, ck, {'data': data})
+        return data
+    except Exception:
+        return None
+
+# Cached Jobs (TTL 120s)
+def _get_jobs_cached(user_id: int, ttl: int = 120):
+    try:
+        key = str(int(user_id))
+        c = _cache_get(JOBS_CACHE, key, ttl)
+        if c is not None:
+            return c.get('upcoming') or [], c.get('past') or []
+        from agent_debug_jobs import (
+            get_upcoming_tasks_via_bids,
+            get_upcoming_tasks_precise,
+            get_upcoming_jobs_for_user,
+            get_past_tasks_via_bids,
+        )
+        jobs = get_upcoming_tasks_via_bids(user_id, limit=5)
+        if not jobs:
+            jobs = get_upcoming_tasks_precise(user_id, limit=5)
+        if not jobs:
+            jobs = get_upcoming_jobs_for_user(user_id, limit=5)
+        if not jobs:
+            from agent_debug_jobs import get_bids_tasks_any
+            jobs = get_bids_tasks_any(user_id, limit=5)
+        try:
+            jobs_past = get_past_tasks_via_bids(user_id, limit=5) or []
+        except Exception:
+            jobs_past = []
+        _cache_set(JOBS_CACHE, key, {'upcoming': jobs or [], 'past': jobs_past or []})
+        return jobs or [], jobs_past or []
+    except Exception:
+        return [], []
+
 @app.route("/api/health", methods=["GET"])
 def health_check():
     """
@@ -332,31 +400,12 @@ def api_emails_agent_compose():
                     return s
             return dt.strftime("%d.%m.%Y, %H:%M Uhr")
         try:
-            from agent_blue import get_user_info_by_email
             searched_email_pref = (_parseaddr(from_addr)[1] or from_addr).strip().lower()
-            user_info_pref = get_user_info_by_email(searched_email_pref)
+            user_info_pref = _get_user_info_cached(searched_email_pref)
             jobs_upcoming, jobs_past = [], []
             if user_info_pref and user_info_pref.get('role') == 'masseur' and user_info_pref.get('user_id'):
                 try:
-                    from agent_debug_jobs import (
-                        get_upcoming_tasks_via_bids,
-                        get_upcoming_tasks_precise,
-                        get_upcoming_jobs_for_user,
-                        get_past_tasks_via_bids,
-                    )
-                    jobs = get_upcoming_tasks_via_bids(int(user_info_pref['user_id']), limit=5)
-                    if not jobs:
-                        jobs = get_upcoming_tasks_precise(int(user_info_pref['user_id']), limit=5)
-                    if not jobs:
-                        jobs = get_upcoming_jobs_for_user(int(user_info_pref['user_id']), limit=5)
-                    if not jobs:
-                        from agent_debug_jobs import get_bids_tasks_any
-                        jobs = get_bids_tasks_any(int(user_info_pref['user_id']), limit=5)
-                    jobs_upcoming = jobs or []
-                    try:
-                        jobs_past = get_past_tasks_via_bids(int(user_info_pref['user_id']), limit=5) or []
-                    except Exception:
-                        jobs_past = []
+                    jobs_upcoming, jobs_past = _get_jobs_cached(int(user_info_pref['user_id']))
                 except Exception:
                     pass
             if jobs_upcoming or jobs_past:
@@ -407,9 +456,8 @@ def api_emails_agent_compose():
         # Debug + Signatur wie im Worker
         debug_info = ""
         try:
-            from agent_blue import get_user_info_by_email
             searched_email = (_parseaddr(from_addr)[1] or from_addr).strip().lower()
-            user_info = get_user_info_by_email(searched_email)
+            user_info = _get_user_info_cached(searched_email)
             if user_info:
                 full_name = (user_info.get('first_name') or '')
                 if user_info.get('last_name'):
@@ -420,8 +468,8 @@ def api_emails_agent_compose():
                 debug_jobs = ""
                 try:
                     if user_info.get('role') == 'masseur' and user_id:
-                        from agent_debug_jobs import get_upcoming_tasks_via_bids
-                        jobs = get_upcoming_tasks_via_bids(int(user_id), limit=2) or []
+                        upc, _past = _get_jobs_cached(int(user_id))
+                        jobs = upc[:2] if upc else []
                         if jobs:
                             parts = []
                             for j in jobs:
@@ -476,6 +524,7 @@ def api_emails_send():
     smtp_port = int(os.environ.get('SMTP_PORT', '465'))
     smtp_user = os.environ.get('SMTP_USER') or os.environ.get('EMAIL_USER')
     smtp_pass = os.environ.get('SMTP_PASS') or os.environ.get('EMAIL_PASS')
+    smtp_security = (os.environ.get('SMTP_SECURITY') or 'auto').lower()  # ssl | starttls | auto
     if not (smtp_host and smtp_user and smtp_pass):
         return jsonify({'error': 'SMTP Konfiguration unvollständig'}), 500
     try:
@@ -485,9 +534,31 @@ def api_emails_send():
         msg['To'] = to_addr
         part = MIMEText(html, 'html', 'utf-8')
         msg.attach(part)
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_user, [to_addr], msg.as_string())
+
+        def _send_ssl():
+            with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(smtp_user, [to_addr], msg.as_string())
+
+        def _send_starttls():
+            port_tls = int(os.environ.get('SMTP_PORT_STARTTLS', '587'))
+            with smtplib.SMTP(smtp_host, port_tls) as server:
+                server.ehlo()
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(smtp_user, [to_addr], msg.as_string())
+
+        if smtp_security == 'ssl':
+            _send_ssl()
+        elif smtp_security == 'starttls':
+            _send_starttls()
+        else:
+            # auto: erst SSL, dann Fallback auf STARTTLS
+            try:
+                _send_ssl()
+            except Exception as e1:
+                app.logger.warning(f"[SMTP] SSL failed, trying STARTTLS: {e1}")
+                _send_starttls()
         return jsonify({'ok': True})
     except Exception as e:
         app.logger.error(f"[SMTP] send error: {e}")
