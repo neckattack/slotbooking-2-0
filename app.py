@@ -257,15 +257,13 @@ def api_emails_agent_compose():
                         plaintext = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
                 except Exception:
                     plaintext = payload.decode('utf-8', errors='ignore')
-        source_text = plaintext or html_body or ''
-        # Agenten-Antwort generieren
-        prompt = (
-            "Formuliere eine höfliche, kurze und hilfreiche E-Mail-Antwort in HTML (nur HTML-Body, ohne <html>-Rahmen). "
-            "Beginne IMMER mit einer höflichen Anrede und einem kurzen Einleitungssatz. "
-            "Verwende deutsche Sprache. Nutze, wenn sinnvoll, Stichpunkte. "
-            "Original-Anfrage:\n" + source_text[:4000]
-        )
-        draft_html = agent_respond(prompt, channel="email_draft")
+        source_text = (plaintext or html_body or '').strip()
+        # Agent-Antwort exakt wie im System nutzen
+        draft_text = agent_respond(source_text, channel="email") or ""
+        # In einfaches HTML konvertieren (Zeilenumbrüche erhalten)
+        import html as _html
+        safe = _html.escape(draft_text).replace("\n\n", "<br><br>").replace("\n", "<br>")
+        draft_html = safe
         # Vorschlagsempfänger: Antwort an Absender
         reply_to = from_addr
         reply_subject = ("Re: " + subject) if subject and not subject.lower().startswith("re:") else (subject or "Antwort")
