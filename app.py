@@ -120,15 +120,19 @@ def api_emails_inbox():
     import imaplib, email
     from email.header import decode_header
     limit = request.args.get('limit', default=20, type=int)
-    host = os.environ.get('IMAP_HOST')
+    host = os.environ.get('IMAP_HOST') or os.environ.get('IMAP_SERVER')
     port = int(os.environ.get('IMAP_PORT', '993'))
-    user = os.environ.get('IMAP_USER')
-    pw = os.environ.get('IMAP_PASS')
+    user = os.environ.get('IMAP_USER') or os.environ.get('EMAIL_USER')
+    pw = os.environ.get('IMAP_PASS') or os.environ.get('EMAIL_PASS')
     mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
     if not (host and user and pw):
         return jsonify({"error": "IMAP Konfiguration unvollständig (IMAP_HOST/USER/PASS)."}), 500
     try:
-        app.logger.info(f"[IMAP] Verbinde zu {host}:{port}, mailbox={mailbox}, user={(user or '')[:3]+'***'}")
+        # Logge, welche Keys tatsächlich verwendet werden
+        used_host_key = 'IMAP_HOST' if os.environ.get('IMAP_HOST') else ('IMAP_SERVER' if os.environ.get('IMAP_SERVER') else '—')
+        used_user_key = 'IMAP_USER' if os.environ.get('IMAP_USER') else ('EMAIL_USER' if os.environ.get('EMAIL_USER') else '—')
+        used_pass_key = 'IMAP_PASS' if os.environ.get('IMAP_PASS') else ('EMAIL_PASS' if os.environ.get('EMAIL_PASS') else '—')
+        app.logger.info(f"[IMAP] Verbinde zu {host}:{port}, mailbox={mailbox}, user={(user or '')[:3]+'***'} | keys host={used_host_key}, user={used_user_key}, pass={used_pass_key}")
         M = imaplib.IMAP4_SSL(host, port)
         M.login(user, pw)
         sel_typ, sel_data = M.select(mailbox)
@@ -179,14 +183,19 @@ def api_emails_inbox():
 @app.route("/api/emails/imap-debug")
 def api_emails_imap_debug():
     import imaplib
-    host = os.environ.get('IMAP_HOST')
+    host = os.environ.get('IMAP_HOST') or os.environ.get('IMAP_SERVER')
     port = int(os.environ.get('IMAP_PORT', '993'))
-    user = os.environ.get('IMAP_USER')
-    pw = os.environ.get('IMAP_PASS')
+    user = os.environ.get('IMAP_USER') or os.environ.get('EMAIL_USER')
+    pw = os.environ.get('IMAP_PASS') or os.environ.get('EMAIL_PASS')
     mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
     if not (host and user and pw):
         return jsonify({"ok": False, "error": "IMAP Konfiguration unvollständig (IMAP_HOST/USER/PASS)."}), 500
-    info = {"host": host, "port": port, "user": (user or '')[:3] + '***', "mailbox": mailbox}
+    info = {"host": host, "port": port, "user": (user or '')[:3] + '***', "mailbox": mailbox,
+            "used_keys": {
+                "host": 'IMAP_HOST' if os.environ.get('IMAP_HOST') else ('IMAP_SERVER' if os.environ.get('IMAP_SERVER') else '—'),
+                "user": 'IMAP_USER' if os.environ.get('IMAP_USER') else ('EMAIL_USER' if os.environ.get('EMAIL_USER') else '—'),
+                "pass": 'IMAP_PASS' if os.environ.get('IMAP_PASS') else ('EMAIL_PASS' if os.environ.get('EMAIL_PASS') else '—'),
+            }}
     try:
         M = imaplib.IMAP4_SSL(host, port)
         login_typ, login_data = M.login(user, pw)
