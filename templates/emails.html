@@ -13,7 +13,7 @@
     .toolbar { display:flex; align-items:center; gap:10px; }
     button { background:var(--primary); color:#fff; border:0; padding:8px 12px; border-radius:8px; cursor:pointer; }
     button:disabled { opacity:.6; cursor:default; }
-    .container { display:grid; grid-template-columns: 380px 1fr; height: calc(100vh - 58px); }
+    .container { display:grid; grid-template-columns: 360px 1fr 460px; height: calc(100vh - 58px); }
     .list { border-right:1px solid var(--border); overflow:auto; }
     .item { padding:10px 14px; border-bottom:1px solid var(--border); cursor:pointer; }
     .item:hover { background:#fafafa; }
@@ -25,6 +25,14 @@
     .detail h2 { margin:0 0 8px; font-size:18px; }
     .detail .meta { color: var(--sub); font-size:12px; margin-bottom:14px; }
     .detail .content { background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px; }
+    .compose { border-left:1px solid var(--border); padding:16px 16px; overflow:auto; }
+    .compose h3 { margin:0 0 10px; font-size:16px; }
+    .compose .row { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
+    .compose label { width:60px; color:var(--sub); font-size:12px; }
+    .compose input { flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:14px; }
+    .compose .editor { min-height:220px; border:1px solid var(--border); border-radius:10px; padding:12px; background:#fff; }
+    .compose .actions { margin-top:10px; display:flex; gap:8px; }
+    .muted { color:var(--sub); }
     .sub { color:var(--sub); font-size:12px; }
   </style>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,6 +51,17 @@
     </div>
     <div class="detail" id="detail">
       <div class="sub">E-Mail auswählen …</div>
+    </div>
+    <div class="compose" id="compose">
+      <h3>Antwort</h3>
+      <div class="row"><label>Empf.</label><input id="compose_to" placeholder="Empfänger" /></div>
+      <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
+      <div id="compose_editor" class="editor" contenteditable="true"><div class="muted">Hier erscheint der Vorschlag …</div></div>
+      <div class="actions">
+        <button id="btn_propose" disabled>Antwort vorschlagen</button>
+        <button id="btn_send" disabled>Senden</button>
+        <span id="compose_status" class="sub"></span>
+      </div>
     </div>
   </div>
 
@@ -84,6 +103,9 @@
       document.querySelectorAll('.item.active').forEach(el => el.classList.remove('active'));
       rowEl.classList.add('active');
       currentUid = uid;
+      // Draft-Controls aktivieren
+      document.getElementById('btn_propose').disabled = false;
+      document.getElementById('btn_send').disabled = false;
       // Thread laden
       const detail = document.getElementById('detail');
       detail.innerHTML = '<div class="sub">Lade Inhalt …</div>';
@@ -105,10 +127,45 @@
       }
     }
 
+    async function proposeDraft(){
+      const status = document.getElementById('compose_status');
+      const toInput = document.getElementById('compose_to');
+      const subjInput = document.getElementById('compose_subject');
+      const editor = document.getElementById('compose_editor');
+      if(!currentUid){ status.textContent = 'Bitte zuerst eine E-Mail auswählen.'; return; }
+      status.textContent = 'Vorschlag wird erstellt …';
+      try{
+        const res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid}) });
+        const data = await res.json();
+        if(data.error){ throw new Error(data.error); }
+        toInput.value = data.to || '';
+        subjInput.value = data.subject || '';
+        editor.innerHTML = data.html || '<div class="muted">(leer)</div>';
+        status.textContent = 'Vorschlag erstellt';
+      }catch(e){ status.textContent = 'Fehler: ' + e; }
+    }
+
+    async function sendDraft(){
+      const status = document.getElementById('compose_status');
+      const toInput = document.getElementById('compose_to');
+      const subjInput = document.getElementById('compose_subject');
+      const editor = document.getElementById('compose_editor');
+      if(!toInput.value){ status.textContent = 'Empfänger fehlt.'; return; }
+      status.textContent = 'Sende …';
+      try{
+        const res = await fetch('/api/emails/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({to: toInput.value, subject: subjInput.value, html: editor.innerHTML}) });
+        const data = await res.json();
+        if(data.error){ throw new Error(data.error); }
+        status.textContent = 'Gesendet';
+      }catch(e){ status.textContent = 'Fehler: ' + e; }
+    }
+
     function escapeHtml(s){
       return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
     }
     document.getElementById('reload').addEventListener('click', loadInbox);
+    document.getElementById('btn_propose').addEventListener('click', proposeDraft);
+    document.getElementById('btn_send').addEventListener('click', sendDraft);
     loadInbox();
   </script>
 </body>
