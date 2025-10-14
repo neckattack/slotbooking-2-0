@@ -147,11 +147,15 @@ def api_emails_inbox():
         ids = ids[-limit:] if limit and len(ids) > limit else ids
         items = []
         for mid in reversed(ids):  # neueste zuerst
-            typ, msgdata = M.uid('fetch', mid, '(RFC822.HEADER)')
+            typ, msgdata = M.uid('fetch', mid, '(FLAGS RFC822.HEADER)')
             if typ != 'OK' or not msgdata or not msgdata[0]:
                 continue
             # msgdata kann ein Tupel oder Liste sein
-            raw_bytes = msgdata[0][1] if isinstance(msgdata[0], tuple) else msgdata[0]
+            tup = msgdata[0]
+            raw_bytes = tup[1] if isinstance(tup, tuple) else tup
+            # FLAGS extrahieren
+            flags_raw = (tup[0].decode() if isinstance(tup, tuple) and isinstance(tup[0], (bytes, bytearray)) else '')
+            seen = ('\\Seen' in flags_raw) if flags_raw else False
             msg = email.message_from_bytes(raw_bytes)
             # Betreff decodieren
             raw_sub = msg.get('Subject', '')
@@ -165,12 +169,15 @@ def api_emails_inbox():
             subject = ''.join(subject_parts)
             from_addr = msg.get('From', '')
             date = msg.get('Date', '')
-            message_id = msg.get('Message-ID', '') or str(mid.decode() if isinstance(mid, bytes) else mid)
+            uid_str = mid.decode() if isinstance(mid, (bytes, bytearray)) else str(mid)
+            message_id = msg.get('Message-ID', '') or uid_str
             items.append({
                 'subject': subject,
                 'from': from_addr,
                 'date': date,
-                'message_id': message_id
+                'message_id': message_id,
+                'uid': uid_str,
+                'seen': seen
             })
         M.close()
         M.logout()
@@ -222,6 +229,124 @@ def api_emails_imap_debug():
         info["error"] = str(e)
         app.logger.error(f"[IMAP-DEBUG] {e}")
         return jsonify({"ok": False, "info": info}), 500
+
+
+@app.route('/api/emails/thread')
+def api_emails_thread():
+    import imaplib, email
+    from email.header import decode_header
+    uid = request.args.get('uid')
+    if not uid:
+        return jsonify({'error': 'uid fehlt'}), 400
+    host = os.environ.get('IMAP_HOST') or os.environ.get('IMAP_SERVER')
+    port = int(os.environ.get('IMAP_PORT', '993'))
+    user = os.environ.get('IMAP_USER') or os.environ.get('EMAIL_USER')
+    pw = os.environ.get('IMAP_PASS') or os.environ.get('EMAIL_PASS')
+    mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
+    if not (host and user and pw):
+        return jsonify({'error': 'IMAP Konfiguration unvollständig'}), 500
+    try:
+        M = imaplib.IMAP4_SSL(host, port)
+        M.login(user, pw)
+        M.select(mailbox)
+        typ, msgdata = M.uid('fetch', uid, '(RFC822)')
+        if typ != 'OK' or not msgdata or not msgdata[0]:
+            raise RuntimeError('Fetch fehlgeschlagen')
+        raw = msgdata[0][1] if isinstance(msgdata[0], tuple) else msgdata[0]
+        msg = email.message_from_bytes(raw)
+        # Header
+        def _decode(s):
+            parts = []
+            for p, enc in decode_header(s or ''):
+                try:
+                    parts.append(p.decode(enc or 'utf-8') if isinstance(p, (bytes, bytearray)) else str(p))
+                except Exception:
+                    parts.append(p.decode('utf-8', errors='ignore') if isinstance(p, (bytes, bytearray)) else str(p))
+            return ''.join(parts)
+        subject = _decode(msg.get('Subject'))
+        from_addr = msg.get('From', '')
+        to_addr = msg.get('To', '')
+        date = msg.get('Date', '')
+        # Body (bevorzugt HTML)
+        html_body = None
+        text_body = None
+        if msg.is_multipart():
+            for part in msg.walk():
+                ctype = part.get_content_type()
+                disp = part.get('Content-Disposition', '')
+                if 'attachment' in (disp or '').lower():
+                    continue
+                payload = part.get_payload(decode=True)
+                if ctype == 'text/html' and payload is not None:
+                    try:
+                        html_body = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
+                    except Exception:
+                        html_body = payload.decode('utf-8', errors='ignore')
+                elif ctype == 'text/plain' and payload is not None and text_body is None:
+                    try:
+                        text_body = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
+                    except Exception:
+                        text_body = payload.decode('utf-8', errors='ignore')
+        else:
+            payload = msg.get_payload(decode=True)
+            if payload is not None:
+                ctype = msg.get_content_type()
+                if ctype == 'text/html':
+                    try:
+                        html_body = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
+                    except Exception:
+                        html_body = payload.decode('utf-8', errors='ignore')
+                else:
+                    try:
+                        text_body = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
+                    except Exception:
+                        text_body = payload.decode('utf-8', errors='ignore')
+        M.close()
+        M.logout()
+        return jsonify({
+            'uid': uid,
+            'subject': subject,
+            'from': from_addr,
+            'to': to_addr,
+            'date': date,
+            'html': html_body,
+            'text': text_body
+        })
+    except Exception as e:
+        app.logger.error(f"[IMAP] thread error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/emails/seen', methods=['POST'])
+def api_emails_seen():
+    import imaplib
+    data = request.get_json(silent=True) or {}
+    uid = data.get('uid')
+    seen = data.get('seen', True)
+    if not uid:
+        return jsonify({'error': 'uid fehlt'}), 400
+    host = os.environ.get('IMAP_HOST') or os.environ.get('IMAP_SERVER')
+    port = int(os.environ.get('IMAP_PORT', '993'))
+    user = os.environ.get('IMAP_USER') or os.environ.get('EMAIL_USER')
+    pw = os.environ.get('IMAP_PASS') or os.environ.get('EMAIL_PASS')
+    mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
+    if not (host and user and pw):
+        return jsonify({'error': 'IMAP Konfiguration unvollständig'}), 500
+    try:
+        M = imaplib.IMAP4_SSL(host, port)
+        M.login(user, pw)
+        M.select(mailbox)
+        if seen:
+            typ, resp = M.uid('store', uid, '+FLAGS.SILENT', '(\\Seen)')
+        else:
+            typ, resp = M.uid('store', uid, '-FLAGS.SILENT', '(\\Seen)')
+        ok = (typ == 'OK')
+        M.close()
+        M.logout()
+        return jsonify({'ok': ok})
+    except Exception as e:
+        app.logger.error(f"[IMAP] seen error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route("/api/termine")
 def termine():
