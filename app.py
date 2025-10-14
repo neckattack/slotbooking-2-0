@@ -289,9 +289,12 @@ def api_emails_agent_compose():
     if not (host and user and pw):
         return jsonify({'error': 'IMAP Konfiguration unvollständig'}), 500
     try:
-        # Compose-Cache derzeit nicht als Early-Return verwenden (Debug gegen falsche Antworten)
+        # Compose-Cache Early-Return (TTL 300s) für schnelle Wiederholungen
         import time as _t
         now = _t.time()
+        cc = COMPOSE_CACHE.get(uid)
+        if cc and now - cc.get('ts', 0) < 300:
+            return jsonify({ 'html': cc['html'], 'to': cc['to'], 'subject': cc['subject'] })
         M = imaplib.IMAP4_SSL(host, port)
         M.login(user, pw)
         M.select(mailbox)

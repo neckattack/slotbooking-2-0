@@ -131,6 +131,25 @@
         // Als gelesen markieren (opt-in: beim Öffnen)
         try{ await fetch('/api/emails/seen', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid, seen:true})}); }catch(_){ }
         rowEl.classList.remove('unseen');
+        // Prefetch: Draft im Hintergrund erzeugen
+        try {
+          const toInput = document.getElementById('compose_to');
+          const subjInput = document.getElementById('compose_subject');
+          const editor = document.getElementById('compose_editor');
+          const res2 = await fetch('/api/emails/agent-compose', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid}) });
+          const data2 = await parseJsonSafe(res2);
+          if(data2 && !data2.error && currentUid === uid){
+            // Nur befüllen, wenn Editor noch leer/Marker enthält
+            const htmlNow = (editor.innerHTML||'').trim();
+            const isEmpty = !htmlNow || htmlNow.includes('Hier erscheint der Vorschlag');
+            if(isEmpty){
+              toInput.value = data2.to || '';
+              subjInput.value = data2.subject || '';
+              editor.innerHTML = data2.html || '<div class="muted">(leer)</div>';
+              document.getElementById('compose_status').textContent = 'Vorschlag erstellt';
+            }
+          }
+        } catch(_e) { /* still fine */ }
       }catch(e){
         detail.innerHTML = `<div class="sub">Fehler: ${e}</div>`;
       }
