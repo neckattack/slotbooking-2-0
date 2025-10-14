@@ -12,6 +12,10 @@ load_dotenv()
 # Flask-App muss vor allen @app.route-Dekoratoren existieren
 app = Flask(__name__)
 
+# Einfache In-Memory-Caches (kurzer TTL) für Geschwindigkeit
+INBOX_CACHE = {"data": None, "ts": 0, "key": None}
+THREAD_CACHE = {}  # uid -> {data, ts}
+
 @app.route("/api/health", methods=["GET"])
 def health_check():
     """
@@ -128,6 +132,12 @@ def api_emails_inbox():
     if not (host and user and pw):
         return jsonify({"error": "IMAP Konfiguration unvollständig (IMAP_HOST/USER/PASS)."}), 500
     try:
+        # Cache nutzen
+        cache_key = f"{host}:{port}:{user}:{mailbox}:{limit}"
+        import time as _t
+        now = _t.time()
+        if INBOX_CACHE["data"] is not None and INBOX_CACHE["key"] == cache_key and now - INBOX_CACHE["ts"] < 15:
+            return jsonify({'items': INBOX_CACHE['data']})
         # Logge, welche Keys tatsächlich verwendet werden
         used_host_key = 'IMAP_HOST' if os.environ.get('IMAP_HOST') else ('IMAP_SERVER' if os.environ.get('IMAP_SERVER') else '—')
         used_user_key = 'IMAP_USER' if os.environ.get('IMAP_USER') else ('EMAIL_USER' if os.environ.get('EMAIL_USER') else '—')
@@ -181,6 +191,9 @@ def api_emails_inbox():
             })
         M.close()
         M.logout()
+        INBOX_CACHE["data"] = items
+        INBOX_CACHE["ts"] = now
+        INBOX_CACHE["key"] = cache_key
         return jsonify({'items': items})
     except Exception as e:
         app.logger.error(f"[IMAP] Fehler beim Laden der Inbox: {e}")
@@ -207,6 +220,12 @@ def api_emails_agent_compose():
     if not (host and user and pw):
         return jsonify({'error': 'IMAP Konfiguration unvollständig'}), 500
     try:
+        # Cache nutzen
+        import time as _t
+        now = _t.time()
+        c = THREAD_CACHE.get(uid)
+        if c and now - c.get('ts', 0) < 60:
+            return jsonify(c['data'])
         M = imaplib.IMAP4_SSL(host, port)
         M.login(user, pw)
         M.select(mailbox)
@@ -258,13 +277,130 @@ def api_emails_agent_compose():
                 except Exception:
                     plaintext = payload.decode('utf-8', errors='ignore')
         source_text = (plaintext or html_body or '').strip()
-        # Agent-Antwort exakt wie im System nutzen
-        draft_text = agent_respond(source_text, channel="email") or ""
-        # In einfaches HTML konvertieren (Zeilenumbrüche erhalten)
-        import html as _html
-        safe = _html.escape(draft_text).replace("\n\n", "<br><br>").replace("\n", "<br>")
-        draft_html = safe
-        # Vorschlagsempfänger: Antwort an Absender
+        # Begrüßung ermitteln
+        from email.utils import parseaddr as _parseaddr
+        name_guess = _parseaddr(from_addr)[0] or ""
+        greeting_html = f"<p>Hallo {name_guess},</p>" if name_guess else "<p>Hallo,</p>"
+        # Preface: Jobs upcoming/past (wie email_agent_test)
+        visible_preface_html = ""
+        def _fmt_dt(val):
+            from datetime import datetime as _dt
+            if val is None:
+                return "—"
+            if isinstance(val, _dt):
+                dt = val
+            else:
+                s = str(val)
+                for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+                    try:
+                        dt = _dt.strptime(s, fmt)
+                        break
+                    except Exception:
+                        dt = None
+                if dt is None:
+                    return s
+            return dt.strftime("%d.%m.%Y, %H:%M Uhr")
+        try:
+            from agent_blue import get_user_info_by_email
+            searched_email_pref = (_parseaddr(from_addr)[1] or from_addr).strip().lower()
+            user_info_pref = get_user_info_by_email(searched_email_pref)
+            jobs_upcoming, jobs_past = [], []
+            if user_info_pref and user_info_pref.get('role') == 'masseur' and user_info_pref.get('user_id'):
+                try:
+                    from agent_debug_jobs import (
+                        get_upcoming_tasks_via_bids,
+                        get_upcoming_tasks_precise,
+                        get_upcoming_jobs_for_user,
+                        get_past_tasks_via_bids,
+                    )
+                    jobs = get_upcoming_tasks_via_bids(int(user_info_pref['user_id']), limit=5)
+                    if not jobs:
+                        jobs = get_upcoming_tasks_precise(int(user_info_pref['user_id']), limit=5)
+                    if not jobs:
+                        jobs = get_upcoming_jobs_for_user(int(user_info_pref['user_id']), limit=5)
+                    if not jobs:
+                        from agent_debug_jobs import get_bids_tasks_any
+                        jobs = get_bids_tasks_any(int(user_info_pref['user_id']), limit=5)
+                    jobs_upcoming = jobs or []
+                    try:
+                        jobs_past = get_past_tasks_via_bids(int(user_info_pref['user_id']), limit=5) or []
+                    except Exception:
+                        jobs_past = []
+                except Exception:
+                    pass
+            if jobs_upcoming or jobs_past:
+                blocks = []
+                if jobs_upcoming:
+                    items = []
+                    for j in jobs_upcoming:
+                        date = _fmt_dt(j.get('date'))
+                        loc = j.get('location') or '—'
+                        title = j.get('task_title') or j.get('description') or '—'
+                        instr = j.get('task_instruction')
+                        instr_short = (instr[:80] + '…') if instr and len(instr) > 80 else (instr or '')
+                        extra = f" <span style=\"color:#666;\">({instr_short})</span>" if instr_short else ""
+                        items.append(f"<li><strong>{date}</strong> – {loc} · {title}{extra}</li>")
+                    blocks.append("<p>Deine nächsten Jobs:</p>" + f"<ul>{''.join(items)}</ul>")
+                if jobs_past:
+                    items = []
+                    for j in jobs_past:
+                        date = _fmt_dt(j.get('date'))
+                        loc = j.get('location') or '—'
+                        title = j.get('task_title') or j.get('description') or '—'
+                        items.append(f"<li><strong>{date}</strong> – {loc} · {title}</li>")
+                    blocks.append("<p>Deine letzten Jobs:</p>" + f"<ul>{''.join(items)}</ul>")
+                intro = "<p>hier ist eine kurze Übersicht deiner nächsten und letzten Jobs:</p>"
+                visible_preface_html = ("<!-- PREFACE-BEGIN -->" "<div style=\"margin-bottom:14px;\">" + intro + "".join(blocks) + "</div>" "<!-- PREFACE-END -->")
+        except Exception:
+            pass
+        # Agent-Antwort für den Haupttext
+        antwort_body = agent_respond(source_text, channel="email", user_email=from_addr) or ""
+        # Antworten-HTML zusammensetzen (mit Begrüßung, Preface, Body)
+        antwort_html = greeting_html + (visible_preface_html or "") + (antwort_body or "")
+        # Debug + Signatur wie im Worker
+        debug_info = ""
+        try:
+            from agent_blue import get_user_info_by_email
+            searched_email = (_parseaddr(from_addr)[1] or from_addr).strip().lower()
+            user_info = get_user_info_by_email(searched_email)
+            if user_info:
+                full_name = (user_info.get('first_name') or '')
+                if user_info.get('last_name'):
+                    full_name = (full_name + ' ' + user_info['last_name']).strip()
+                address = user_info.get('address') or '–'
+                source = user_info.get('source') or 'unbekannt'
+                user_id = user_info.get('user_id')
+                debug_jobs = ""
+                try:
+                    if user_info.get('role') == 'masseur' and user_id:
+                        from agent_debug_jobs import get_upcoming_tasks_via_bids
+                        jobs = get_upcoming_tasks_via_bids(int(user_id), limit=2) or []
+                        if jobs:
+                            parts = []
+                            for j in jobs:
+                                parts.append(str(j.get('task_title') or j.get('description') or '—'))
+                            debug_jobs = "; ".join(parts)
+                except Exception:
+                    pass
+                app_ver = os.environ.get('APP_VERSION') or os.environ.get('RENDER_GIT_COMMIT') or ''
+                version_snippet = (f" | ver: {app_ver[:7]}" if app_ver else "")
+                debug_info = f"[DEBUG: BLUE-DB] email: {searched_email} | source: {source} | user_id: {user_id} | Name: {full_name} | Adresse: {address} | Jobs: {debug_jobs}{version_snippet}"
+            else:
+                debug_info = f"[DEBUG: Kein BLUE-DB Treffer] email: {(_parseaddr(from_addr)[1] or from_addr)}"
+        except Exception:
+            pass
+        signature_block = (
+            '<div style="margin-top:28px;text-align:left;">'
+            '<img src="https://cdn-icons-png.flaticon.com/512/4712/4712035.png" alt="KI Bot" width="40" style="vertical-align:middle;border-radius:50%;margin-bottom:8px;">'
+            '<br><strong>neckattack KI-Assistenz</strong><br>'
+            '<span style="font-size:0.95em;color:#666;">Ich bin der digitale Assistent von neckattack und helfe dir rund um die Uhr.</span>'
+            '<hr style="margin:8px 0;">'
+            '<span style="font-size:0.9em;">neckattack ltd. | Landhausstr. 90, Stuttgart | hello@neckattack.net</span>'
+            f'<br><span style="color:#c00;font-size:0.95em;">{debug_info}</span>'
+            '</div>'
+        )
+        draft_html = f"<div style=\"font-family:Arial,sans-serif;font-size:1.08em;\">{antwort_html}{signature_block}</div>"
+        # Vorschlagsempfänger/Betreff
         reply_to = from_addr
         reply_subject = ("Re: " + subject) if subject and not subject.lower().startswith("re:") else (subject or "Antwort")
         M.close()
@@ -429,7 +565,7 @@ def api_emails_thread():
                         text_body = payload.decode('utf-8', errors='ignore')
         M.close()
         M.logout()
-        return jsonify({
+        result = {
             'uid': uid,
             'subject': subject,
             'from': from_addr,
@@ -437,7 +573,9 @@ def api_emails_thread():
             'date': date,
             'html': html_body,
             'text': text_body
-        })
+        }
+        THREAD_CACHE[uid] = {"data": result, "ts": now}
+        return jsonify(result)
     except Exception as e:
         app.logger.error(f"[IMAP] thread error: {e}")
         return jsonify({'error': str(e)}), 500
