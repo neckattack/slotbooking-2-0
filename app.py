@@ -41,6 +41,26 @@ def _cache_set(store: dict, key: str, value: dict):
     store[key] = value
     return value
 
+# Agent-Aufruf mit Timeout, damit UI nicht hängt
+def _agent_respond_with_timeout(text: str, *, channel: str, user_email: str, timeout_s: int = 8):
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as _TO
+    def _call():
+        try:
+            return agent_respond(text, channel=channel, user_email=user_email)
+        except Exception:
+            return ""
+    with ThreadPoolExecutor(max_workers=1) as ex:
+        fut = ex.submit(_call)
+        try:
+            res = fut.result(timeout=timeout_s)
+            return res or "", False
+        except _TO:
+            try:
+                fut.cancel()
+            except Exception:
+                pass
+            return "", True
+
 # Cached BLUE-User-Infos (TTL 120s)
 def _get_user_info_cached(email_addr: str, ttl: int = 120):
     try:
@@ -419,8 +439,8 @@ def api_emails_agent_compose():
                 visible_preface_html = ("<!-- PREFACE-BEGIN -->" "<div style=\"margin-bottom:14px;\">" + intro + "".join(blocks) + "</div>" "<!-- PREFACE-END -->")
         except Exception:
             pass
-        # Agent-Antwort für den Haupttext
-        antwort_body = agent_respond(source_text, channel="email", user_email=from_addr) or ""
+        # Agent-Antwort mit Timeout (UI soll nicht >8s warten)
+        antwort_body, timed_out = _agent_respond_with_timeout(source_text, channel="email", user_email=from_addr, timeout_s=8)
         # Doppelte Grußformeln entfernen, falls LLM bereits mit "Hallo ..." startet
         def _strip_greeting_html(html: str) -> str:
             import re
@@ -432,11 +452,17 @@ def api_emails_agent_compose():
             html = re.sub(r'^\s*(hallo|hi|guten tag|guten morgen|guten abend)[^\n<]*\n+', '', html, flags=re.IGNORECASE)
             return html
         antwort_body = _strip_greeting_html(antwort_body)
-        # Antworten-HTML zusammensetzen: Wenn Preface vorhanden ist, KEIN weiterer Body anhängen
+        # Antworten-HTML zusammensetzen: 
+        # - Wenn Preface vorhanden ist, KEIN weiterer Body anhängen (ist bereits die gewünschte Antwortform)
+        # - Wenn kein Preface und Timeout: kurze Fallback-Antwort
         if visible_preface_html:
             antwort_html = greeting_html + visible_preface_html
         else:
-            antwort_html = greeting_html + (antwort_body or "")
+            if timed_out and not (antwort_body and antwort_body.strip()):
+                fallback = "<p>ich melde mich gleich mit einer kurzen Antwort.</p>"
+                antwort_html = greeting_html + fallback
+            else:
+                antwort_html = greeting_html + (antwort_body or "")
         # Debug + Signatur wie im Worker
         debug_info = ""
         try:
@@ -520,13 +546,13 @@ def api_emails_send():
         msg.attach(part)
 
         def _send_ssl():
-            with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=12) as server:
                 server.login(smtp_user, smtp_pass)
                 server.sendmail(smtp_user, [to_addr], msg.as_string())
 
         def _send_starttls():
             port_tls = int(os.environ.get('SMTP_PORT_STARTTLS', '587'))
-            with smtplib.SMTP(smtp_host, port_tls) as server:
+            with smtplib.SMTP(smtp_host, port_tls, timeout=12) as server:
                 server.ehlo()
                 server.starttls()
                 server.login(smtp_user, smtp_pass)
