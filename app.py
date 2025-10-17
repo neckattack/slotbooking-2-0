@@ -314,7 +314,13 @@ def api_emails_agent_compose():
         now = _t.time()
         cc = COMPOSE_CACHE.get(uid)
         if cc and now - cc.get('ts', 0) < 300 and not cc.get('timed_out'):
-            return jsonify({ 'html': cc['html'], 'to': cc['to'], 'subject': cc['subject'] })
+            if cc.get('has_body') or cc.get('has_preface'):
+                return jsonify({ 'html': cc['html'], 'to': cc['to'], 'subject': cc['subject'] })
+            else:
+                try:
+                    del COMPOSE_CACHE[uid]
+                except Exception:
+                    pass
         M = imaplib.IMAP4_SSL(host, port)
         M.login(user, pw)
         M.select(mailbox)
@@ -464,12 +470,22 @@ def api_emails_agent_compose():
             html = re.sub(r'^\s*(hallo|hi|guten tag|guten morgen|guten abend)[^\n<]*\n+', '', html, flags=re.IGNORECASE)
             return html
         antwort_body = _strip_greeting_html(antwort_body)
+        # Body als "leer" behandeln, wenn nach HTML->Text kaum Inhalt vorhanden ist
+        _antwort_text = _html_to_text(antwort_body or '')
+        _has_meaningful_body = bool(_antwort_text and len(_antwort_text.strip()) >= 8)
         # Antworten-HTML zusammensetzen:
         # - Wenn Preface vorhanden ist, KEIN weiterer Body anhängen (ist bereits die gewünschte Antwortform)
+        has_preface = bool(visible_preface_html)
         if visible_preface_html:
             antwort_html = greeting_html + visible_preface_html
         else:
-            antwort_html = greeting_html + (antwort_body or "")
+            # Wenn der LLM-Body leer ist (auch ohne Timeout), liefern wir 504 statt eines leeren Drafts mit nur "Hallo,"
+            if not _has_meaningful_body:
+                M.close()
+                M.logout()
+                return jsonify({'error': 'compose_empty'}), 504
+            antwort_html = greeting_html + antwort_body
+        has_body = _has_meaningful_body
         # Debug + Signatur wie im Worker
         debug_info = ""
         try:
@@ -517,11 +533,19 @@ def api_emails_agent_compose():
         reply_subject = ("Re: " + subject) if subject and not subject.lower().startswith("re:") else (subject or "Antwort")
         M.close()
         M.logout()
-        # Bei Timeout ohne verwertbaren Body und ohne Preface -> 504
+        # Bei Timeout ohne verwertbaren Body und ohne Preface -> 504 (zusätzlich oben schon für leere Bodies behandelt)
         if (timed_out and not visible_preface_html and not (antwort_body and antwort_body.strip())):
             return jsonify({'error': 'compose_timeout'}), 504
         # In Compose-Cache legen (Timeout-Drafts nicht für Early-Return verwenden)
-        COMPOSE_CACHE[uid] = { 'html': draft_html, 'to': reply_to, 'subject': reply_subject, 'ts': now, 'timed_out': timed_out }
+        COMPOSE_CACHE[uid] = {
+            'html': draft_html,
+            'to': reply_to,
+            'subject': reply_subject,
+            'ts': now,
+            'timed_out': timed_out,
+            'has_body': has_body,
+            'has_preface': has_preface,
+        }
         return jsonify({ 'html': draft_html, 'to': reply_to, 'subject': reply_subject })
     except Exception as e:
         app.logger.error(f"[AGENT-COMPOSE] error: {e}")
