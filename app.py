@@ -313,7 +313,7 @@ def api_emails_agent_compose():
         import time as _t
         now = _t.time()
         cc = COMPOSE_CACHE.get(uid)
-        if cc and now - cc.get('ts', 0) < 300:
+        if cc and now - cc.get('ts', 0) < 300 and not cc.get('timed_out'):
             return jsonify({ 'html': cc['html'], 'to': cc['to'], 'subject': cc['subject'] })
         M = imaplib.IMAP4_SSL(host, port)
         M.login(user, pw)
@@ -386,8 +386,13 @@ def api_emails_agent_compose():
         # Neutrale Begrüßung (kein Personenname)
         from email.utils import parseaddr as _parseaddr
         greeting_html = "<p>Hallo,</p>"
-        # Preface: Jobs upcoming/past (wie email_agent_test)
+        # Preface: Jobs upcoming/past (nur wenn Anfrage thematisch passt)
         visible_preface_html = ""
+        _source_lc = (source_text or "").lower()
+        _preface_ok = any(k in _source_lc for k in [
+            'job', 'jobs', 'termin', 'termine', 'einsatz', 'einsätze', 'einsatzplan', 'auftrag', 'aufträge',
+            'wann arbeite', 'wo bin ich', 'zeitplan', 'kalender', 'schicht', 'schedule'
+        ])
         def _fmt_dt(val):
             from datetime import datetime as _dt
             if val is None:
@@ -414,7 +419,7 @@ def api_emails_agent_compose():
                     jobs_upcoming, jobs_past = _get_jobs_cached(int(user_info_pref['user_id']))
                 except Exception:
                     pass
-            if jobs_upcoming or jobs_past:
+            if _preface_ok and (jobs_upcoming or jobs_past):
                 blocks = []
                 if jobs_upcoming:
                     items = []
@@ -510,8 +515,8 @@ def api_emails_agent_compose():
         reply_subject = ("Re: " + subject) if subject and not subject.lower().startswith("re:") else (subject or "Antwort")
         M.close()
         M.logout()
-        # In Compose-Cache legen
-        COMPOSE_CACHE[uid] = { 'html': draft_html, 'to': reply_to, 'subject': reply_subject, 'ts': now }
+        # In Compose-Cache legen (Timeout-Drafts nicht für Early-Return verwenden)
+        COMPOSE_CACHE[uid] = { 'html': draft_html, 'to': reply_to, 'subject': reply_subject, 'ts': now, 'timed_out': timed_out }
         return jsonify({ 'html': draft_html, 'to': reply_to, 'subject': reply_subject })
     except Exception as e:
         app.logger.error(f"[AGENT-COMPOSE] error: {e}")
