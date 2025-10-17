@@ -519,8 +519,6 @@ def api_emails_agent_compose():
         M.logout()
         # Bei Timeout ohne verwertbaren Body und ohne Preface -> 504
         if (timed_out and not visible_preface_html and not (antwort_body and antwort_body.strip())):
-            M.close()
-            M.logout()
             return jsonify({'error': 'compose_timeout'}), 504
         # In Compose-Cache legen (Timeout-Drafts nicht für Early-Return verwenden)
         COMPOSE_CACHE[uid] = { 'html': draft_html, 'to': reply_to, 'subject': reply_subject, 'ts': now, 'timed_out': timed_out }
