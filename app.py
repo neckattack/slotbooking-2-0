@@ -386,13 +386,20 @@ def api_emails_agent_compose():
         # Neutrale Begrüßung (kein Personenname)
         from email.utils import parseaddr as _parseaddr
         greeting_html = "<p>Hallo,</p>"
-        # Preface: Jobs upcoming/past (nur wenn Anfrage thematisch passt)
+        # Preface: Jobs upcoming/past (nur bei EXPLIZITER Bitte nach Jobs/Terminen)
         visible_preface_html = ""
         _source_lc = (source_text or "").lower()
-        _preface_ok = any(k in _source_lc for k in [
-            'job', 'jobs', 'termin', 'termine', 'einsatz', 'einsätze', 'einsatzplan', 'auftrag', 'aufträge',
-            'wann arbeite', 'wo bin ich', 'zeitplan', 'kalender', 'schicht', 'schedule'
-        ])
+        _job_terms = ['job', 'jobs', 'termin', 'termine', 'einsatz', 'einsätze', 'auftrag', 'aufträge']
+        _request_terms = ['bitte', 'auflisten', 'liste', 'übersicht', 'zeige', 'meine', 'kommenden', 'letzten', 'zukünftigen', 'vergangenen']
+        _explicit_patterns = [
+            'meine jobs', 'meine termine', 'kommenden jobs', 'kommenden termine', 'letzten jobs', 'letzten termine',
+            'zukünftigen jobs', 'zukünftigen termine', 'vergangenen jobs', 'vergangenen termine',
+            'jobs auflisten', 'termine auflisten', 'übersicht deiner jobs', 'übersicht deiner termine'
+        ]
+        _preface_ok = (
+            any(t in _source_lc for t in _explicit_patterns) or
+            (any(t in _source_lc for t in _job_terms) and any(t in _source_lc for t in _request_terms))
+        )
         def _fmt_dt(val):
             from datetime import datetime as _dt
             if val is None:
@@ -457,17 +464,12 @@ def api_emails_agent_compose():
             html = re.sub(r'^\s*(hallo|hi|guten tag|guten morgen|guten abend)[^\n<]*\n+', '', html, flags=re.IGNORECASE)
             return html
         antwort_body = _strip_greeting_html(antwort_body)
-        # Antworten-HTML zusammensetzen: 
+        # Antworten-HTML zusammensetzen:
         # - Wenn Preface vorhanden ist, KEIN weiterer Body anhängen (ist bereits die gewünschte Antwortform)
-        # - Wenn kein Preface und Timeout: kurze Fallback-Antwort
         if visible_preface_html:
             antwort_html = greeting_html + visible_preface_html
         else:
-            if timed_out and not (antwort_body and antwort_body.strip()):
-                fallback = "<p>ich melde mich gleich mit einer kurzen Antwort.</p>"
-                antwort_html = greeting_html + fallback
-            else:
-                antwort_html = greeting_html + (antwort_body or "")
+            antwort_html = greeting_html + (antwort_body or "")
         # Debug + Signatur wie im Worker
         debug_info = ""
         try:
@@ -515,6 +517,11 @@ def api_emails_agent_compose():
         reply_subject = ("Re: " + subject) if subject and not subject.lower().startswith("re:") else (subject or "Antwort")
         M.close()
         M.logout()
+        # Bei Timeout ohne verwertbaren Body und ohne Preface -> 504
+        if (timed_out and not visible_preface_html and not (antwort_body and antwort_body.strip())):
+            M.close()
+            M.logout()
+            return jsonify({'error': 'compose_timeout'}), 504
         # In Compose-Cache legen (Timeout-Drafts nicht für Early-Return verwenden)
         COMPOSE_CACHE[uid] = { 'html': draft_html, 'to': reply_to, 'subject': reply_subject, 'ts': now, 'timed_out': timed_out }
         return jsonify({ 'html': draft_html, 'to': reply_to, 'subject': reply_subject })
