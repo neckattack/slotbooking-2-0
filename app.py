@@ -77,6 +77,50 @@ def _agent_respond_with_timeout(text: str, *, channel: str, user_email: str, tim
                 pass
             return "", True
 
+# Plaintext -> einfaches, sauberes HTML (Absätze, Listen, Zeilenumbrüche)
+def _plaintext_to_html_email(s: str) -> str:
+    import re as _re
+    import html as _html
+    if not s:
+        return ""
+    # Wenn schon HTML-Tags enthalten sind, nicht doppelt konvertieren
+    if '<' in s and '>' in s:
+        return s
+    # HTML-escapen
+    s = _html.escape(s)
+    # Einfache Markdown-Fettschrift **text** -> <strong>text</strong>
+    s = _re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
+    lines = s.splitlines()
+    out = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        # Listengruppe erkennen (- oder • oder Nummerierung)
+        if _re.match(r"^\s*(?:[-•]|\d+\.)\s+", lines[i]):
+            out.append('<ul>')
+            while i < n and _re.match(r"^\s*(?:[-•]|\d+\.)\s+", lines[i]):
+                li = _re.sub(r"^\s*(?:[-•]|\d+\.)\s+", '', lines[i]).strip()
+                out.append(f"<li>{li}</li>")
+                i += 1
+            out.append('</ul>')
+            # Leere Zeilen nach Liste überspringen
+            while i < n and lines[i].strip() == '':
+                i += 1
+            continue
+        # Absatz sammeln bis Leerzeile
+        para = []
+        while i < n and lines[i].strip() != '':
+            para.append(lines[i])
+            i += 1
+        # Leerzeilen überspringen
+        while i < n and lines[i].strip() == '':
+            i += 1
+        text = '<br>'.join([p.strip() for p in para])
+        if text:
+            out.append(f"<p>{text}</p>")
+    html = '\n'.join(out).strip()
+    return html or _html.escape(s)
+
 # Cached BLUE-User-Infos (TTL 120s)
 def _get_user_info_cached(email_addr: str, ttl: int = 120):
     try:
@@ -509,7 +553,8 @@ def api_emails_agent_compose():
                 M.close()
                 M.logout()
                 return jsonify({'error': 'compose_empty'}), 504
-            antwort_html = greeting_html + antwort_body
+            body_html = _plaintext_to_html_email(antwort_body)
+            antwort_html = greeting_html + body_html
         has_body = _has_meaningful_body
         # Debug + Signatur wie im Worker
         debug_info = ""
