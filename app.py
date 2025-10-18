@@ -298,7 +298,16 @@ def api_emails_agent_compose():
     import imaplib, email
     from email.header import decode_header
     data = request.get_json(silent=True) or {}
-    uid = data.get('uid')
+    uid = (data.get('uid') or '').strip()
+    # Optional: längeres Timeout anfordern (z. B. 20s), aber deckeln
+    try:
+        req_timeout = int(data.get('timeout_s')) if 'timeout_s' in data else None
+    except Exception:
+        req_timeout = None
+    if req_timeout is None:
+        timeout_s = 8
+    else:
+        timeout_s = max(4, min(30, req_timeout))
     if not uid:
         return jsonify({'error': 'uid fehlt'}), 400
     host = os.environ.get('IMAP_HOST') or os.environ.get('IMAP_SERVER')
@@ -458,7 +467,7 @@ def api_emails_agent_compose():
         except Exception:
             pass
         # Agent-Antwort mit Timeout (UI soll nicht >8s warten)
-        antwort_body, timed_out = _agent_respond_with_timeout(source_text, channel="email", user_email=from_addr, timeout_s=8)
+        antwort_body, timed_out = _agent_respond_with_timeout(source_text, channel="email", user_email=from_addr, timeout_s=timeout_s)
         # Doppelte Grußformeln entfernen, falls LLM bereits mit "Hallo ..." startet
         def _strip_greeting_html(html: str) -> str:
             import re

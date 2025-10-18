@@ -71,14 +71,14 @@
       const ct = res.headers.get('content-type') || '';
       const txt = await res.text();
       if(ct.includes('application/json')){
-        try { return { __ok: res.ok, ...(txt ? JSON.parse(txt) : {}) }; } catch(_){ return { __ok: res.ok, error: 'Ungültiges JSON vom Server', raw: txt }; }
+        try { return { __ok: res.ok, __status: res.status, ...(txt ? JSON.parse(txt) : {}) }; } catch(_){ return { __ok: res.ok, __status: res.status, error: 'Ungültiges JSON vom Server', raw: txt }; }
       }
       // Fallback: leere OK-Antwort als Erfolg behandeln (manche Proxies strippen kleine JSON-Bodies)
       if(res.ok && (!txt || txt.trim() === '')){
-        return { __ok: true };
+        return { __ok: true, __status: res.status };
       }
       // Versuche JSON, sonst Fehlertext kapseln
-      try { return { __ok: res.ok, ...(JSON.parse(txt)||{}) }; } catch(_){ return { __ok: res.ok, error: txt || 'Leere Antwort vom Server' }; }
+      try { return { __ok: res.ok, __status: res.status, ...(JSON.parse(txt)||{}) }; } catch(_){ return { __ok: res.ok, __status: res.status, error: txt || 'Leere Antwort vom Server' }; }
     }
     async function loadInbox(){
       const status = document.getElementById('status');
@@ -86,10 +86,11 @@
       status.textContent = 'lädt …';
       try{
         const res = await fetch('/api/emails/inbox?limit=20');
-        const data = await res.json();
+        const data = await parseJsonSafe(res);
+        if(!data.__ok){ throw new Error(data.error || 'Inbox-Fehler'); }
         list.innerHTML = '';
         if(!data.items || !data.items.length){
-          list.innerHTML = '<div class="sub" style="padding:12px 14px;">Keine E-Mails gefunden.</div>';
+          list.innerHTML = '<div class="sub">Keine E-Mails gefunden.</div>';
           status.textContent = '';
           return;
         }
@@ -106,7 +107,7 @@
         }
         status.textContent = `${data.items.length} E-Mails geladen`;
       }catch(e){
-        list.innerHTML = `<div class="sub" style="padding:12px 14px;">Fehler: ${e}</div>`;
+        list.innerHTML = `<div class="sub">Fehler: ${e}</div>`;
         status.textContent = '';
       }
     }
@@ -124,8 +125,8 @@
       detail.innerHTML = '<div class="sub">Lade Inhalt …</div>';
       try{
         const res = await fetch(`/api/emails/thread?uid=${encodeURIComponent(uid)}`);
-        const t = await res.json();
-        if(t.error){ throw new Error(t.error); }
+        const t = await parseJsonSafe(res);
+        if(!t.__ok){ throw new Error(t.error || 'Thread-Fehler'); }
         const html = t.html || (t.text ? `<pre>${escapeHtml(t.text)}</pre>` : '<div class="sub">Kein Inhalt</div>');
         detail.innerHTML = `
           <h2>${escapeHtml(t.subject || '')}</h2>
@@ -140,9 +141,9 @@
           const toInput = document.getElementById('compose_to');
           const subjInput = document.getElementById('compose_subject');
           const editor = document.getElementById('compose_editor');
-          const res2 = await fetch('/api/emails/agent-compose', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid}) });
+          const res2 = await fetch('/api/emails/agent-compose', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid, timeout_s: 8}) });
           const data2 = await parseJsonSafe(res2);
-          if(data2 && !data2.error && currentUid === uid){
+          if(data2 && data2.__ok && currentUid === uid){
             // Nur befüllen, wenn Editor noch leer/Marker enthält
             const htmlNow = (editor.innerHTML||'').trim();
             const isEmpty = !htmlNow || htmlNow.includes('Hier erscheint der Vorschlag');
@@ -167,9 +168,20 @@
       if(!currentUid){ status.textContent = 'Bitte zuerst eine E-Mail auswählen.'; return; }
       status.textContent = 'Vorschlag wird erstellt …';
       try{
-        const res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid}) });
-        const data = await parseJsonSafe(res);
-        if(!data.__ok && data.error){ throw new Error(data.error); }
+        // Erster Versuch (8s Timeout)
+        let res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid, timeout_s: 8}) });
+        let data = await parseJsonSafe(res);
+        if(!data.__ok){
+          // Bei 504 (compose_timeout/compose_empty) ein zweiter Versuch mit 20s Timeout
+          if(data.__status === 504){
+            status.textContent = 'Ausgelastet, zweiter Versuch (bis 20s) …';
+            res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid, timeout_s: 20}) });
+            data = await parseJsonSafe(res);
+          }
+        }
+        if(!data.__ok){
+          throw new Error(data.error || ('Fehler (' + (data.__status||'') + ')'));
+        }
         toInput.value = data.to || '';
         subjInput.value = data.subject || '';
         editor.innerHTML = data.html || '<div class="muted">(leer)</div>';
