@@ -44,19 +44,35 @@ def _cache_set(store: dict, key: str, value: dict):
 # Agent-Aufruf mit Timeout, damit UI nicht hängt
 def _agent_respond_with_timeout(text: str, *, channel: str, user_email: str, timeout_s: int = 8):
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as _TO
+    import time as _time
+    from flask import current_app as _cap
     def _call():
         try:
             return agent_respond(text, channel=channel, user_email=user_email)
-        except Exception:
+        except Exception as e:
+            try:
+                _cap.logger.error(f"[agent_respond] exception: {e}")
+            except Exception:
+                pass
             return ""
     with ThreadPoolExecutor(max_workers=1) as ex:
         fut = ex.submit(_call)
         try:
+            t0 = _time.time()
             res = fut.result(timeout=timeout_s)
+            dt = (_time.time() - t0)
+            try:
+                _cap.logger.info(f"[agent_respond] done in {dt:.2f}s (timeout_s={timeout_s}) len={len(res or '')}")
+            except Exception:
+                pass
             return res or "", False
         except _TO:
             try:
                 fut.cancel()
+            except Exception:
+                pass
+            try:
+                _cap.logger.warning(f"[agent_respond] TIMEOUT after {timeout_s}s")
             except Exception:
                 pass
             return "", True

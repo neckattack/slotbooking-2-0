@@ -5,6 +5,11 @@ from agent_core import find_next_appointment_for_name
 from db_utils import get_db_connection
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+AGENT_MODEL = os.environ.get("AGENT_MODEL", "gpt-3.5-turbo")
+try:
+    AGENT_TEMPERATURE = float(os.environ.get("AGENT_TEMPERATURE", "0.2"))
+except Exception:
+    AGENT_TEMPERATURE = 0.2
 FAQ_ONLY = os.environ.get("AGENT_FAQ_ONLY", "false").lower() == "true"  # Flag bleibt vorhanden, wird aber nicht mehr zur Blockade von SQL genutzt.
 
 def load_knowledge():
@@ -24,7 +29,29 @@ def agent_respond(user_message, channel="chat", user_email=None):
     # WICHTIG: E-Mails IMMER klar gegliedert mit Absätzen, Listen und Themenblöcken formatieren – keine Fließtexte! (Regel: email_formatting)
     """
     import logging
-    from faq_langchain import faq_answer, faq_is_relevant
+    # Lazy import + kurzer Timeout für FAQ, um Hänger zu vermeiden
+    def _faq_is_relevant_safe(text):
+        try:
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError
+            def _call():
+                from faq_langchain import faq_is_relevant
+                return faq_is_relevant(text)
+            with ThreadPoolExecutor(max_workers=1) as ex:
+                fut = ex.submit(_call)
+                return fut.result(timeout=2.5)
+        except Exception:
+            return False, None, 0.0
+    def _faq_answer_safe(text):
+        try:
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError
+            def _call():
+                from faq_langchain import faq_answer
+                return faq_answer(text)
+            with ThreadPoolExecutor(max_workers=1) as ex:
+                fut = ex.submit(_call)
+                return fut.result(timeout=3.0)
+        except Exception:
+            return None
     from datetime import datetime
     today_str = datetime.now().strftime('%Y-%m-%d')
     db_context = ""
@@ -52,7 +79,7 @@ def agent_respond(user_message, channel="chat", user_email=None):
             if any(k in t for k in db_keywords):
                 return "db"
             # 2) FAQ-Relevanz prüfen
-            is_rel, _doc, _score = faq_is_relevant(text)
+            is_rel, _doc, _score = _faq_is_relevant_safe(text)
             if is_rel:
                 return "faq"
             # 3) Offtopic zuletzt
@@ -119,7 +146,7 @@ def agent_respond(user_message, channel="chat", user_email=None):
     # 1. Schritt: FAQ-LangChain nutzen (nur wenn Intent 'faq')
     try:
         if intent == "faq":
-            faq_resp = faq_answer(user_message)
+            faq_resp = _faq_answer_safe(user_message)
             if faq_resp and len(faq_resp.strip()) > 10 and "nicht beantworten" not in faq_resp.lower():
                 return faq_resp.strip()
     except Exception as e:
@@ -142,13 +169,13 @@ def agent_respond(user_message, channel="chat", user_email=None):
         except Exception:
             env_max = default_max
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=AGENT_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
             max_tokens=env_max,
-            temperature=0.2
+            temperature=AGENT_TEMPERATURE
         )
         antwort = response.choices[0].message.content.strip()
         # Eventuelle Code-Fences am Anfang/Ende entfernen
