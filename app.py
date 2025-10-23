@@ -675,8 +675,29 @@ def api_emails_send():
                 _send_starttls()
         return jsonify({'ok': True})
     except Exception as e:
-        app.logger.error(f"[SMTP] send error: {e}")
-        return jsonify({'error': str(e)}), 500
+        import socket, smtplib, ssl, traceback
+        err_txt = f"{e}"
+        code = 'smtp_error'
+        status = 500
+        # Typisierte Fehlerklassen mappen für bessere Diagnose im UI
+        if isinstance(e, smtplib.SMTPAuthenticationError):
+            code = 'smtp_auth'
+        elif isinstance(e, smtplib.SMTPServerDisconnected):
+            code = 'smtp_disconnected'
+        elif isinstance(e, smtplib.SMTPRecipientsRefused):
+            code = 'smtp_rcpt_refused'
+        elif isinstance(e, smtplib.SMTPSenderRefused):
+            code = 'smtp_sender_refused'
+        elif isinstance(e, smtplib.SMTPDataError):
+            code = 'smtp_data_error'
+        elif isinstance(e, (socket.timeout, TimeoutError)):
+            code = 'smtp_timeout'
+        elif isinstance(e, socket.gaierror):
+            code = 'smtp_dns'
+        elif isinstance(e, ssl.SSLError):
+            code = 'smtp_ssl'
+        app.logger.error(f"[SMTP] send error ({code}): {err_txt}\n" + traceback.format_exc())
+        return jsonify({'error': err_txt, 'code': code}), status
 
 
 @app.route("/api/emails/imap-debug")
