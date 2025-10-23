@@ -769,6 +769,69 @@ def api_emails_imap_debug():
         return jsonify({"ok": False, "info": info}), 500
 
 
+@app.route('/api/emails/smtp-debug')
+def api_emails_smtp_debug():
+    """Diagnose SMTP-Erreichbarkeit (DNS, TCP, SSL/STARTTLS) mit kurzen Timeouts."""
+    import socket, ssl, smtplib, time
+    host = os.environ.get('SMTP_HOST') or os.environ.get('SMTP_SERVER')
+    user = os.environ.get('SMTP_USER') or os.environ.get('EMAIL_USER')
+    pw = os.environ.get('SMTP_PASS') or os.environ.get('EMAIL_PASS')
+    port_ssl = int(os.environ.get('SMTP_PORT', '465') or 465)
+    port_tls = int(os.environ.get('SMTP_PORT_STARTTLS', '587') or 587)
+    sec = (os.environ.get('SMTP_SECURITY') or 'auto').lower()
+    info = {
+        'env': {
+            'host': host,
+            'user': (user or '')[:3] + '***' if user else None,
+            'security': sec,
+            'port_ssl': port_ssl,
+            'port_tls': port_tls,
+        },
+        'dns': {},
+        'tcp': {},
+        'smtp': {}
+    }
+    if not host:
+        return jsonify({'ok': False, 'error': 'SMTP_HOST/SMTP_SERVER fehlt', 'info': info}), 400
+    # DNS
+    try:
+        t0 = time.time(); addrs = socket.getaddrinfo(host, None)
+        info['dns']['resolved'] = list({a[4][0] for a in addrs if a and a[4]})
+        info['dns']['time_ms'] = int((time.time()-t0)*1000)
+    except Exception as e:
+        info['dns']['error'] = str(e)
+    # TCP 465
+    try:
+        t0 = time.time(); s = socket.create_connection((host, port_ssl), timeout=5)
+        s.close(); info['tcp']['465'] = {'ok': True, 'time_ms': int((time.time()-t0)*1000)}
+    except Exception as e:
+        info['tcp']['465'] = {'ok': False, 'error': str(e)}
+    # TCP 587
+    try:
+        t0 = time.time(); s = socket.create_connection((host, port_tls), timeout=5)
+        s.close(); info['tcp']['587'] = {'ok': True, 'time_ms': int((time.time()-t0)*1000)}
+    except Exception as e:
+        info['tcp']['587'] = {'ok': False, 'error': str(e)}
+    # SMTP SSL 465 (EHLO)
+    try:
+        t0 = time.time()
+        with smtplib.SMTP_SSL(host, port_ssl, timeout=6) as srv:
+            code, msg = srv.noop()
+        info['smtp']['ssl_465'] = {'ok': True, 'noop_code': int(code), 'time_ms': int((time.time()-t0)*1000)}
+    except Exception as e:
+        info['smtp']['ssl_465'] = {'ok': False, 'error': str(e)}
+    # SMTP STARTTLS 587 (EHLO + STARTTLS)
+    try:
+        t0 = time.time()
+        with smtplib.SMTP(host, port_tls, timeout=6) as srv:
+            srv.ehlo(); srv.starttls(); srv.ehlo(); code, msg = srv.noop()
+        info['smtp']['starttls_587'] = {'ok': True, 'noop_code': int(code), 'time_ms': int((time.time()-t0)*1000)}
+    except Exception as e:
+        info['smtp']['starttls_587'] = {'ok': False, 'error': str(e)}
+    ok = any(v.get('ok') for v in info['tcp'].values())
+    status = 200 if ok else 500
+    return jsonify({'ok': ok, 'info': info}), status
+
 @app.route('/api/emails/thread')
 def api_emails_thread():
     import imaplib, email
