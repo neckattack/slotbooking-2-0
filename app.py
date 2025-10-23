@@ -95,15 +95,38 @@ def _plaintext_to_html_email(s: str) -> str:
     i = 0
     n = len(lines)
     while i < n:
-        # Listengruppe erkennen (- oder • oder Nummerierung)
-        if _re.match(r"^\s*(?:[-•]|\d+\.)\s+", lines[i]):
+        # Geordnete Liste erkennen (1. 2. 3.)
+        if _re.match(r"^\s*\d+\.\s+", lines[i]):
+            # Prüfe, ob es wirklich eine Sequenz ist; sonst Einzel-"1." verwerfen
+            j = i
+            items = []
+            while j < n and _re.match(r"^\s*\d+\.\s+", lines[j]):
+                li = _re.sub(r"^\s*\d+\.\s+", '', lines[j]).strip()
+                items.append(li)
+                j += 1
+            if len(items) >= 2:
+                out.append('<ol>')
+                for li in items:
+                    out.append(f"<li>{li}</li>")
+                out.append('</ol>')
+                i = j
+                while i < n and lines[i].strip() == '':
+                    i += 1
+                continue
+            else:
+                # Einzelne oder leere "1."-Zeile ignorieren
+                i = j
+                while i < n and lines[i].strip() == '':
+                    i += 1
+                continue
+        # Ungeordnete Liste erkennen (- oder •)
+        if _re.match(r"^\s*(?:[-•])\s+", lines[i]):
             out.append('<ul>')
-            while i < n and _re.match(r"^\s*(?:[-•]|\d+\.)\s+", lines[i]):
-                li = _re.sub(r"^\s*(?:[-•]|\d+\.)\s+", '', lines[i]).strip()
+            while i < n and _re.match(r"^\s*(?:[-•])\s+", lines[i]):
+                li = _re.sub(r"^\s*(?:[-•])\s+", '', lines[i]).strip()
                 out.append(f"<li>{li}</li>")
                 i += 1
             out.append('</ul>')
-            # Leere Zeilen nach Liste überspringen
             while i < n and lines[i].strip() == '':
                 i += 1
             continue
@@ -116,6 +139,8 @@ def _plaintext_to_html_email(s: str) -> str:
         while i < n and lines[i].strip() == '':
             i += 1
         text = '<br>'.join([p.strip() for p in para])
+        # aufeinanderfolgende <br> reduzieren
+        text = _re.sub(r"(?:<br>\s*){2,}", '<br>', text)
         if text:
             out.append(f"<p>{text}</p>")
     html = '\n'.join(out).strip()
