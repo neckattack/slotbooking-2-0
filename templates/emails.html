@@ -125,6 +125,17 @@
       // Draft-Controls aktivieren
       document.getElementById('btn_propose').disabled = false;
       document.getElementById('btn_send').disabled = false;
+      // Compose-Bereich für neue Auswahl zurücksetzen, damit alte Vorschläge nicht irritieren
+      try {
+        const toInput = document.getElementById('compose_to');
+        const subjInput = document.getElementById('compose_subject');
+        const editor = document.getElementById('compose_editor');
+        const status = document.getElementById('compose_status');
+        if (toInput) toInput.value = '';
+        if (subjInput) subjInput.value = '';
+        if (editor) editor.innerHTML = '<div class="muted">Hier erscheint der Vorschlag …</div>';
+        if (status) status.textContent = '';
+      } catch(_) {}
       // Thread laden
       const detail = document.getElementById('detail');
       detail.innerHTML = '<div class="sub">Lade Inhalt …</div>';
