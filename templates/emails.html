@@ -25,6 +25,11 @@
     .detail h2 { margin:0 0 8px; font-size:18px; }
     .detail .meta { color: var(--sub); font-size:12px; margin-bottom:14px; }
     .detail .content { background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px; }
+    .profile { margin-top:16px; background:#fff; border:1px solid var(--border); border-radius:10px; padding:12px; }
+    .profile h3 { margin:0 0 10px; font-size:16px; }
+    .profile .grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .profile .kv { font-size:13px; }
+    .profile .kv span { color: var(--sub); display:inline-block; min-width:90px; }
     .compose { border-left:1px solid var(--border); padding:16px 16px; overflow:auto; }
     .compose h3 { margin:0 0 10px; font-size:16px; }
     .compose .row { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
@@ -132,6 +137,26 @@
           <h2>${escapeHtml(t.subject || '')}</h2>
           <div class="meta">Von: ${escapeHtml(t.from||'')} · An: ${escapeHtml(t.to||'')} · ${escapeHtml(t.date||'')}</div>
           <div class="content">${html}</div>
+          <div class="profile" id="profile_panel">
+            <h3>PROFIL</h3>
+            <div class="grid">
+              <div>
+                <div class="kv"><span>Name</span><b id="prof_name">–</b></div>
+                <div class="kv"><span>E‑Mail</span><b id="prof_email">–</b></div>
+                <div class="kv"><span>Telefon</span><b id="prof_phone">–</b></div>
+                <div class="kv"><span>Ort</span><b id="prof_city">–</b></div>
+              </div>
+              <div>
+                <div class="kv"><span>Quelle</span><b id="prof_source">–</b></div>
+                <div class="kv"><span>Letzter Kontakt</span><b id="prof_last">–</b></div>
+                <div class="kv"><span>Kanäle</span><b id="prof_channels">E‑Mail</b></div>
+              </div>
+            </div>
+            <div style="margin-top:10px; font-size:13px;">
+              <div class="sub" style="margin-bottom:6px;">Zusammenfassung</div>
+              <div id="prof_summary">Noch keine Profildaten. Dieses Feld wird später automatisch aus der Kommunikation erstellt.</div>
+            </div>
+          </div>
         `;
         // Als gelesen markieren (opt-in: beim Öffnen)
         try{ await fetch('/api/emails/seen', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid, seen:true})}); }catch(_){ }
@@ -155,6 +180,24 @@
             }
           }
         } catch(_e) { /* still fine */ }
+        // Profil-Panel mit Platzhalterdaten befüllen
+        try {
+          const from = t.from || '';
+          const emailMatch = from.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+          const email = emailMatch ? emailMatch[0] : '';
+          const nameMatch = from.replace(email, '').replace(/[<>]/g,'').trim();
+          const name = nameMatch || (email ? email.split('@')[0] : '');
+          renderProfilePlaceholder({
+            name: name || '–',
+            email: email || '–',
+            phone: '–',
+            city: '–',
+            source: '—',
+            last: t.date || '–',
+            channels: 'E‑Mail',
+            summary: 'Noch keine Zusammenfassung vorhanden.'
+          });
+        } catch(_) {}
       }catch(e){
         detail.innerHTML = `<div class="sub">Fehler: ${e}</div>`;
       }
@@ -206,6 +249,18 @@
 
     function escapeHtml(s){
       return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    }
+    function renderProfilePlaceholder(p){
+      const el = document.getElementById('profile_panel'); if(!el) return;
+      const set = (id, val) => { const n = document.getElementById(id); if(n) n.textContent = val || '–'; };
+      set('prof_name', p.name);
+      set('prof_email', p.email);
+      set('prof_phone', p.phone);
+      set('prof_city', p.city);
+      set('prof_source', p.source);
+      set('prof_last', p.last);
+      set('prof_channels', p.channels);
+      const sum = document.getElementById('prof_summary'); if(sum) sum.textContent = p.summary || '–';
     }
     document.getElementById('reload').addEventListener('click', loadInbox);
     document.getElementById('btn_propose').addEventListener('click', proposeDraft);
