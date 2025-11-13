@@ -5,40 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Inbox – neckattack</title>
   <style>
-    :root { --border:#e5e7eb; --sub:#6b7280; --fg:#111827; --primary:#2563eb; --active:#f3f4f6; }
+    :root { --border:#e5e7eb; --sub:#6b7280; --fg:#111827; --primary:#111827; --active:#f5f6f7; --hover:#f0f2f4; }
     * { box-sizing:border-box; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 0; color: var(--fg); }
-    header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 0; color: var(--fg); background:#fafafa; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border); background:#ffffff; position:sticky; top:0; z-index:10; }
     h1 { margin: 0; font-size:20px; display:flex; gap:8px; align-items:center; }
     .toolbar { display:flex; align-items:center; gap:10px; }
-    button { background:var(--primary); color:#fff; border:0; padding:8px 12px; border-radius:8px; cursor:pointer; }
+    button { background:var(--primary); color:#fff; border:0; padding:8px 12px; border-radius:6px; cursor:pointer; }
     button:disabled { opacity:.6; cursor:default; }
-    .container { display:grid; grid-template-columns: 360px 1fr 460px; height: calc(100vh - 58px); }
-    .list { border-right:1px solid var(--border); overflow:auto; }
+    .container { display:grid; grid-template-columns: 340px 1fr 460px; height: calc(100vh - 58px); }
+    .list { border-right:1px solid var(--border); overflow:auto; background:#fff; }
     .item { padding:10px 14px; border-bottom:1px solid var(--border); cursor:pointer; }
-    .item:hover { background:#fafafa; }
-    .item.active { background: var(--active); }
+    .item:hover { background: var(--hover); }
+    .item.active { background: var(--active); border-left:3px solid var(--primary); padding-left:11px; }
     .item .subject { font-size:14px; }
     .item.unseen .subject { font-weight:700; }
     .item .meta { color: var(--sub); font-size:12px; margin-top:3px; display:flex; justify-content:space-between; gap:8px; }
-    .detail { overflow:auto; padding:16px 24px; }
+    .detail { overflow:auto; padding:16px 24px; background:#f9fafb; }
     .detail h2 { margin:0 0 8px; font-size:18px; }
     .detail .meta { color: var(--sub); font-size:12px; margin-bottom:14px; }
-    .detail .content { background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px; }
-    .profile { margin-top:16px; background:#fff; border:1px solid var(--border); border-radius:10px; padding:12px; }
+    .detail .content { background:#fff; border:1px solid var(--border); border-radius:8px; padding:16px; }
+    .profile { margin-top:16px; background:#fff; border:1px solid var(--border); border-radius:8px; padding:12px; }
     .profile h3 { margin:0 0 10px; font-size:16px; }
     .profile .grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
     .profile .kv { font-size:13px; }
     .profile .kv span { color: var(--sub); display:inline-block; min-width:90px; }
-    .compose { border-left:1px solid var(--border); padding:16px 16px; overflow:auto; }
+    .compose { border-left:1px solid var(--border); padding:16px 16px; overflow:auto; background:#fff; }
     .compose h3 { margin:0 0 10px; font-size:16px; }
     .compose .row { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
     .compose label { width:60px; color:var(--sub); font-size:12px; }
-    .compose input { flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:14px; }
-    .compose .editor { min-height:220px; border:1px solid var(--border); border-radius:10px; padding:12px; background:#fff; }
+    .compose input { flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px; }
+    .compose .editor { min-height:220px; border:1px solid var(--border); border-radius:8px; padding:12px; background:#fff; }
     .compose .actions { margin-top:10px; display:flex; gap:8px; }
     .muted { color:var(--sub); }
     .sub { color:var(--sub); font-size:12px; }
+    .modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.35); z-index:100; }
+    .modal .box { background:#fff; border-radius:10px; padding:16px; width:320px; border:1px solid var(--border); }
+    .modal .row { display:flex; gap:8px; margin:10px 0; align-items:center; }
+    .modal label { width:90px; color:var(--sub); font-size:12px; }
+    .modal input { flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:14px; }
   </style>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
@@ -47,6 +52,13 @@
     <h1>📥 Inbox</h1>
     <div class="toolbar">
       <button id="reload">Aktualisieren</button>
+      <div style="position:relative;">
+        <button id="settings_btn" style="background:#111827;">⚙️</button>
+        <div id="settings_menu" style="display:none; position:absolute; right:0; top:40px; background:#fff; border:1px solid var(--border); border-radius:8px; min-width:160px; box-shadow:0 6px 20px rgba(0,0,0,.08); z-index:50;">
+          <div id="menu_profile" class="item" style="border:0; padding:10px 12px;">Profil</div>
+          <div id="menu_email" class="item" style="padding:10px 12px;">E‑Mail</div>
+        </div>
+      </div>
       <span id="status" class="sub"></span>
     </div>
   </header>
@@ -67,6 +79,20 @@
         <button id="btn_send" disabled>Senden</button>
         <span id="compose_status" class="sub"></span>
       </div>
+    </div>
+  </div>
+
+  <!-- Login Modal -->
+  <div id="login_modal" class="modal">
+    <div class="box">
+      <h3 style="margin:0 0 10px;">Login</h3>
+      <div class="row"><label>E‑Mail</label><input id="login_email" placeholder="you@domain.com"></div>
+      <div class="row"><label>Passwort</label><input id="login_pass" type="password" placeholder="••••••••"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:10px;">
+        <button id="login_cancel" style="background:#6b7280;">Abbrechen</button>
+        <button id="login_submit">Login</button>
+      </div>
+      <div id="login_msg" class="sub" style="margin-top:8px;"></div>
     </div>
   </div>
 
@@ -276,6 +302,47 @@
     document.getElementById('reload').addEventListener('click', loadInbox);
     document.getElementById('btn_propose').addEventListener('click', proposeDraft);
     document.getElementById('btn_send').addEventListener('click', sendDraft);
+    // Settings dropdown behavior
+    const settingsBtn = document.getElementById('settings_btn');
+    const settingsMenu = document.getElementById('settings_menu');
+    settingsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const v = settingsMenu.style.display === 'block';
+      settingsMenu.style.display = v ? 'none' : 'block';
+    });
+    document.addEventListener('click', (e) => {
+      if(settingsMenu.style.display === 'block') settingsMenu.style.display = 'none';
+    });
+    function requireLogin(next){
+      const ses = localStorage.getItem('user_email');
+      if(ses){ next(ses); return; }
+      const modal = document.getElementById('login_modal');
+      const email = document.getElementById('login_email');
+      const pass = document.getElementById('login_pass');
+      const msg = document.getElementById('login_msg');
+      modal.style.display = 'flex'; msg.textContent=''; email.value=''; pass.value='';
+      const cleanup = () => { modal.style.display='none'; };
+      document.getElementById('login_cancel').onclick = cleanup;
+      document.getElementById('login_submit').onclick = () => {
+        if(!email.value || !pass.value){ msg.textContent='Bitte E‑Mail und Passwort eingeben.'; return; }
+        // Fake session only on client for now
+        localStorage.setItem('user_email', email.value.trim());
+        cleanup(); next(email.value.trim());
+      };
+      modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
+    }
+    document.getElementById('menu_profile').addEventListener('click', (e)=>{
+      e.stopPropagation(); settingsMenu.style.display='none';
+      requireLogin((user)=>{
+        alert('Profile settings for: ' + user + '\n(Edit UI to follow)');
+      });
+    });
+    document.getElementById('menu_email').addEventListener('click', (e)=>{
+      e.stopPropagation(); settingsMenu.style.display='none';
+      requireLogin((user)=>{
+        alert('Email settings for: ' + user + '\n(Host/Port/Username UI to follow)');
+      });
+    });
     loadInbox();
   </script>
 </body>
