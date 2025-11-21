@@ -6,6 +6,7 @@ from datetime import datetime
 import openai
 from agent_core import find_next_appointment_for_name
 from agent_gpt import agent_respond
+from encryption_utils import encrypt_password, decrypt_password
 
 load_dotenv()
 
@@ -952,6 +953,111 @@ def api_emails_seen():
     except Exception as e:
         app.logger.error(f"[IMAP] seen error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+def get_settings_db_connection():
+    """Connect to SETTINGS_DB (user_email_settings table) or fall back to main DB."""
+    host = os.environ.get('SETTINGS_DB_HOST') or os.environ.get('DB_HOST')
+    port = int(os.environ.get('SETTINGS_DB_PORT') or os.environ.get('DB_PORT', '3306'))
+    user = os.environ.get('SETTINGS_DB_USER') or os.environ.get('DB_USER')
+    pw = os.environ.get('SETTINGS_DB_PASSWORD') or os.environ.get('DB_PASSWORD')
+    db = os.environ.get('SETTINGS_DB_NAME') or os.environ.get('DB_NAME')
+    if not (host and user and pw and db):
+        raise RuntimeError("SETTINGS_DB (or DB) configuration incomplete")
+    return mysql.connector.connect(host=host, port=port, user=user, password=pw, database=db)
+
+
+@app.route('/api/user/email-settings', methods=['GET'])
+def api_user_email_settings_get():
+    """Get email settings for a user. Query param: user_email"""
+    user_email = request.args.get('user_email', '').strip()
+    if not user_email:
+        return jsonify({'error': 'user_email parameter required'}), 400
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT user_email, imap_host, imap_port, imap_user, imap_security, "
+            "smtp_host, smtp_port, smtp_user, smtp_security, created_at, updated_at "
+            "FROM user_email_settings WHERE user_email=%s",
+            (user_email,)
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if not row:
+            return jsonify({'exists': False}), 404
+        # Don't return encrypted passwords, just confirm they exist
+        return jsonify({
+            'exists': True,
+            'user_email': row['user_email'],
+            'imap_host': row['imap_host'],
+            'imap_port': row['imap_port'],
+            'imap_user': row['imap_user'],
+            'imap_security': row['imap_security'],
+            'smtp_host': row['smtp_host'],
+            'smtp_port': row['smtp_port'],
+            'smtp_user': row['smtp_user'],
+            'smtp_security': row['smtp_security'],
+            'created_at': str(row['created_at']),
+            'updated_at': str(row['updated_at'])
+        }), 200
+    except Exception as e:
+        app.logger.error(f"[GET email-settings] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/user/email-settings', methods=['POST'])
+def api_user_email_settings_post():
+    """Save/update email settings for a user. Body: { user_email, imap_*, smtp_* }"""
+    data = request.get_json(silent=True) or {}
+    user_email = data.get('user_email', '').strip()
+    if not user_email:
+        return jsonify({'error': 'user_email required'}), 400
+    imap_host = data.get('imap_host', '').strip()
+    imap_port = int(data.get('imap_port', 993))
+    imap_user = data.get('imap_user', '').strip()
+    imap_pass = data.get('imap_pass', '')
+    imap_security = data.get('imap_security', 'ssl')
+    smtp_host = data.get('smtp_host', '').strip()
+    smtp_port = int(data.get('smtp_port', 465))
+    smtp_user = data.get('smtp_user', '').strip()
+    smtp_pass = data.get('smtp_pass', '')
+    smtp_security = data.get('smtp_security', 'ssl')
+    if not (imap_host and imap_user and smtp_host and smtp_user):
+        return jsonify({'error': 'Missing required fields (imap_host, imap_user, smtp_host, smtp_user)'}), 400
+    try:
+        # Encrypt passwords
+        imap_pass_enc = encrypt_password(imap_pass) if imap_pass else ''
+        smtp_pass_enc = encrypt_password(smtp_pass) if smtp_pass else ''
+        conn = get_settings_db_connection()
+        cursor = conn.cursor()
+        # Upsert: insert or update on duplicate key
+        sql = """
+            INSERT INTO user_email_settings
+            (user_email, imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security,
+             smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_security)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON DUPLICATE KEY UPDATE
+                imap_host=VALUES(imap_host), imap_port=VALUES(imap_port),
+                imap_user=VALUES(imap_user), imap_pass_encrypted=VALUES(imap_pass_encrypted),
+                imap_security=VALUES(imap_security),
+                smtp_host=VALUES(smtp_host), smtp_port=VALUES(smtp_port),
+                smtp_user=VALUES(smtp_user), smtp_pass_encrypted=VALUES(smtp_pass_encrypted),
+                smtp_security=VALUES(smtp_security)
+        """
+        cursor.execute(sql, (
+            user_email, imap_host, imap_port, imap_user, imap_pass_enc, imap_security,
+            smtp_host, smtp_port, smtp_user, smtp_pass_enc, smtp_security
+        ))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'ok': True, 'message': 'Settings saved'}), 200
+    except Exception as e:
+        app.logger.error(f"[POST email-settings] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route("/api/termine")
 def termine():
