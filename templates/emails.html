@@ -82,7 +82,7 @@
     </div>
   </div>
 
-  <!-- Login Modal -->
+  <!-- Login Modal (commented out for later use at app start)
   <div id="login_modal" class="modal">
     <div class="box">
       <h3 style="margin:0 0 10px;">Login</h3>
@@ -93,6 +93,46 @@
         <button id="login_submit">Login</button>
       </div>
       <div id="login_msg" class="sub" style="margin-top:8px;"></div>
+    </div>
+  </div>
+  -->
+
+  <!-- E-Mail Settings Modal -->
+  <div id="email_settings_modal" class="modal">
+    <div class="box" style="width:480px; max-height:90vh; overflow:auto;">
+      <h3 style="margin:0 0 12px;">E‑Mail Einstellungen</h3>
+      <div style="margin-bottom:16px;">
+        <h4 style="margin:0 0 8px; font-size:14px;">IMAP (Empfang)</h4>
+        <div class="row"><label style="width:100px;">Host</label><input id="imap_host" placeholder="imap.example.com"></div>
+        <div class="row"><label style="width:100px;">Port</label><input id="imap_port" type="number" placeholder="993"></div>
+        <div class="row"><label style="width:100px;">Benutzername</label><input id="imap_user" placeholder="user@example.com"></div>
+        <div class="row"><label style="width:100px;">Passwort</label><input id="imap_pass" type="password" placeholder="••••••••"></div>
+        <div class="row"><label style="width:100px;">Security</label>
+          <select id="imap_security" style="flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px;">
+            <option value="ssl">SSL</option>
+            <option value="starttls">STARTTLS</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <h4 style="margin:0 0 8px; font-size:14px;">SMTP (Versand)</h4>
+        <div class="row"><label style="width:100px;">Host</label><input id="smtp_host" placeholder="smtp.example.com"></div>
+        <div class="row"><label style="width:100px;">Port</label><input id="smtp_port" type="number" placeholder="465"></div>
+        <div class="row"><label style="width:100px;">Benutzername</label><input id="smtp_user" placeholder="user@example.com"></div>
+        <div class="row"><label style="width:100px;">Passwort</label><input id="smtp_pass" type="password" placeholder="••••••••"></div>
+        <div class="row"><label style="width:100px;">Security</label>
+          <select id="smtp_security" style="flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px;">
+            <option value="ssl">SSL</option>
+            <option value="starttls">STARTTLS</option>
+            <option value="auto">Auto</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+        <button id="email_settings_cancel" style="background:#6b7280;">Abbrechen</button>
+        <button id="email_settings_save">Speichern</button>
+      </div>
+      <div id="email_settings_msg" class="sub" style="margin-top:8px;"></div>
     </div>
   </div>
 
@@ -313,35 +353,68 @@
     document.addEventListener('click', (e) => {
       if(settingsMenu.style.display === 'block') settingsMenu.style.display = 'none';
     });
-    function requireLogin(next){
-      const ses = localStorage.getItem('user_email');
-      if(ses){ next(ses); return; }
-      const modal = document.getElementById('login_modal');
-      const email = document.getElementById('login_email');
-      const pass = document.getElementById('login_pass');
-      const msg = document.getElementById('login_msg');
-      modal.style.display = 'flex'; msg.textContent=''; email.value=''; pass.value='';
+    // E-Mail settings: load from localStorage
+    function loadEmailSettings(){
+      return {
+        imap_host: localStorage.getItem('imap_host') || '',
+        imap_port: localStorage.getItem('imap_port') || '993',
+        imap_user: localStorage.getItem('imap_user') || '',
+        imap_pass: localStorage.getItem('imap_pass') || '',
+        imap_security: localStorage.getItem('imap_security') || 'ssl',
+        smtp_host: localStorage.getItem('smtp_host') || '',
+        smtp_port: localStorage.getItem('smtp_port') || '465',
+        smtp_user: localStorage.getItem('smtp_user') || '',
+        smtp_pass: localStorage.getItem('smtp_pass') || '',
+        smtp_security: localStorage.getItem('smtp_security') || 'ssl',
+      };
+    }
+    function saveEmailSettings(data){
+      Object.keys(data).forEach(k => localStorage.setItem(k, data[k]));
+    }
+    function openEmailSettingsModal(){
+      const modal = document.getElementById('email_settings_modal');
+      const msg = document.getElementById('email_settings_msg');
+      const settings = loadEmailSettings();
+      document.getElementById('imap_host').value = settings.imap_host;
+      document.getElementById('imap_port').value = settings.imap_port;
+      document.getElementById('imap_user').value = settings.imap_user;
+      document.getElementById('imap_pass').value = settings.imap_pass;
+      document.getElementById('imap_security').value = settings.imap_security;
+      document.getElementById('smtp_host').value = settings.smtp_host;
+      document.getElementById('smtp_port').value = settings.smtp_port;
+      document.getElementById('smtp_user').value = settings.smtp_user;
+      document.getElementById('smtp_pass').value = settings.smtp_pass;
+      document.getElementById('smtp_security').value = settings.smtp_security;
+      msg.textContent = '';
+      modal.style.display = 'flex';
       const cleanup = () => { modal.style.display='none'; };
-      document.getElementById('login_cancel').onclick = cleanup;
-      document.getElementById('login_submit').onclick = () => {
-        if(!email.value || !pass.value){ msg.textContent='Bitte E‑Mail und Passwort eingeben.'; return; }
-        // Fake session only on client for now
-        localStorage.setItem('user_email', email.value.trim());
-        cleanup(); next(email.value.trim());
+      document.getElementById('email_settings_cancel').onclick = cleanup;
+      document.getElementById('email_settings_save').onclick = () => {
+        const data = {
+          imap_host: document.getElementById('imap_host').value.trim(),
+          imap_port: document.getElementById('imap_port').value.trim(),
+          imap_user: document.getElementById('imap_user').value.trim(),
+          imap_pass: document.getElementById('imap_pass').value,
+          imap_security: document.getElementById('imap_security').value,
+          smtp_host: document.getElementById('smtp_host').value.trim(),
+          smtp_port: document.getElementById('smtp_port').value.trim(),
+          smtp_user: document.getElementById('smtp_user').value.trim(),
+          smtp_pass: document.getElementById('smtp_pass').value,
+          smtp_security: document.getElementById('smtp_security').value,
+        };
+        saveEmailSettings(data);
+        msg.textContent = 'Gespeichert. Seite neu laden, um Änderungen zu übernehmen.';
+        setTimeout(cleanup, 2000);
       };
       modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
     }
     document.getElementById('menu_profile').addEventListener('click', (e)=>{
       e.stopPropagation(); settingsMenu.style.display='none';
-      requireLogin((user)=>{
-        alert('Profile settings for: ' + user + '\n(Edit UI to follow)');
-      });
+      alert('Profil-Einstellungen kommen bald.');
     });
     document.getElementById('menu_email').addEventListener('click', (e)=>{
       e.stopPropagation(); settingsMenu.style.display='none';
-      requireLogin((user)=>{
-        alert('Email settings for: ' + user + '\n(Host/Port/Username UI to follow)');
-      });
+      openEmailSettingsModal();
     });
     loadInbox();
   </script>
