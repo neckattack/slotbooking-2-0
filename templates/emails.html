@@ -353,58 +353,87 @@
     document.addEventListener('click', (e) => {
       if(settingsMenu.style.display === 'block') settingsMenu.style.display = 'none';
     });
-    // E-Mail settings: load from localStorage
-    function loadEmailSettings(){
-      return {
-        imap_host: localStorage.getItem('imap_host') || '',
-        imap_port: localStorage.getItem('imap_port') || '993',
-        imap_user: localStorage.getItem('imap_user') || '',
-        imap_pass: localStorage.getItem('imap_pass') || '',
-        imap_security: localStorage.getItem('imap_security') || 'ssl',
-        smtp_host: localStorage.getItem('smtp_host') || '',
-        smtp_port: localStorage.getItem('smtp_port') || '465',
-        smtp_user: localStorage.getItem('smtp_user') || '',
-        smtp_pass: localStorage.getItem('smtp_pass') || '',
-        smtp_security: localStorage.getItem('smtp_security') || 'ssl',
-      };
+    // E-Mail settings: load/save via API
+    function getUserEmail(){
+      let email = localStorage.getItem('user_email');
+      if(!email){
+        email = prompt('Bitte gib deine E‑Mail-Adresse ein (für Settings):');
+        if(email) localStorage.setItem('user_email', email.trim());
+      }
+      return email || '';
     }
-    function saveEmailSettings(data){
-      Object.keys(data).forEach(k => localStorage.setItem(k, data[k]));
-    }
-    function openEmailSettingsModal(){
+    async function openEmailSettingsModal(){
       const modal = document.getElementById('email_settings_modal');
       const msg = document.getElementById('email_settings_msg');
-      const settings = loadEmailSettings();
-      document.getElementById('imap_host').value = settings.imap_host;
-      document.getElementById('imap_port').value = settings.imap_port;
-      document.getElementById('imap_user').value = settings.imap_user;
-      document.getElementById('imap_pass').value = settings.imap_pass;
-      document.getElementById('imap_security').value = settings.imap_security;
-      document.getElementById('smtp_host').value = settings.smtp_host;
-      document.getElementById('smtp_port').value = settings.smtp_port;
-      document.getElementById('smtp_user').value = settings.smtp_user;
-      document.getElementById('smtp_pass').value = settings.smtp_pass;
-      document.getElementById('smtp_security').value = settings.smtp_security;
-      msg.textContent = '';
+      const userEmail = getUserEmail();
+      if(!userEmail){ alert('E‑Mail-Adresse erforderlich'); return; }
+      msg.textContent = 'Lade Einstellungen...';
       modal.style.display = 'flex';
+      try{
+        const res = await fetch(`/api/user/email-settings?user_email=${encodeURIComponent(userEmail)}`);
+        const data = await parseJsonSafe(res);
+        if(data.exists){
+          document.getElementById('imap_host').value = data.imap_host || '';
+          document.getElementById('imap_port').value = data.imap_port || 993;
+          document.getElementById('imap_user').value = data.imap_user || '';
+          document.getElementById('imap_pass').value = ''; // don't prefill password
+          document.getElementById('imap_security').value = data.imap_security || 'ssl';
+          document.getElementById('smtp_host').value = data.smtp_host || '';
+          document.getElementById('smtp_port').value = data.smtp_port || 465;
+          document.getElementById('smtp_user').value = data.smtp_user || '';
+          document.getElementById('smtp_pass').value = ''; // don't prefill password
+          document.getElementById('smtp_security').value = data.smtp_security || 'ssl';
+          msg.textContent = 'Geladen';
+        } else {
+          // New user, prefill defaults
+          document.getElementById('imap_host').value = '';
+          document.getElementById('imap_port').value = 993;
+          document.getElementById('imap_user').value = userEmail;
+          document.getElementById('imap_pass').value = '';
+          document.getElementById('imap_security').value = 'ssl';
+          document.getElementById('smtp_host').value = '';
+          document.getElementById('smtp_port').value = 465;
+          document.getElementById('smtp_user').value = userEmail;
+          document.getElementById('smtp_pass').value = '';
+          document.getElementById('smtp_security').value = 'ssl';
+          msg.textContent = 'Neue Konfiguration';
+        }
+      }catch(e){
+        msg.textContent = 'Fehler beim Laden: ' + e;
+      }
       const cleanup = () => { modal.style.display='none'; };
       document.getElementById('email_settings_cancel').onclick = cleanup;
-      document.getElementById('email_settings_save').onclick = () => {
+      document.getElementById('email_settings_save').onclick = async () => {
+        msg.textContent = 'Speichere...';
         const data = {
+          user_email: userEmail,
           imap_host: document.getElementById('imap_host').value.trim(),
-          imap_port: document.getElementById('imap_port').value.trim(),
+          imap_port: parseInt(document.getElementById('imap_port').value.trim()) || 993,
           imap_user: document.getElementById('imap_user').value.trim(),
           imap_pass: document.getElementById('imap_pass').value,
           imap_security: document.getElementById('imap_security').value,
           smtp_host: document.getElementById('smtp_host').value.trim(),
-          smtp_port: document.getElementById('smtp_port').value.trim(),
+          smtp_port: parseInt(document.getElementById('smtp_port').value.trim()) || 465,
           smtp_user: document.getElementById('smtp_user').value.trim(),
           smtp_pass: document.getElementById('smtp_pass').value,
           smtp_security: document.getElementById('smtp_security').value,
         };
-        saveEmailSettings(data);
-        msg.textContent = 'Gespeichert. Seite neu laden, um Änderungen zu übernehmen.';
-        setTimeout(cleanup, 2000);
+        try{
+          const res = await fetch('/api/user/email-settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+          });
+          const result = await parseJsonSafe(res);
+          if(result.__ok){
+            msg.textContent = 'Gespeichert! Seite neu laden, um Änderungen zu übernehmen.';
+            setTimeout(cleanup, 2000);
+          } else {
+            msg.textContent = 'Fehler: ' + (result.error || 'Unbekannt');
+          }
+        }catch(e){
+          msg.textContent = 'Fehler beim Speichern: ' + e;
+        }
       };
       modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
     }
