@@ -1065,6 +1065,76 @@ def get_users_db_connection():
     return get_settings_db_connection()
 
 
+@app.route('/api/auth/debug', methods=['GET'])
+def api_auth_debug():
+    """Debug endpoint: shows DB config (without passwords) and connection status."""
+    import socket
+    
+    # Get DB config from ENV
+    settings_host = os.environ.get('SETTINGS_DB_HOST') or os.environ.get('DB_HOST')
+    settings_port = os.environ.get('SETTINGS_DB_PORT') or os.environ.get('DB_PORT', '3306')
+    settings_user = os.environ.get('SETTINGS_DB_USER') or os.environ.get('DB_USER')
+    settings_db = os.environ.get('SETTINGS_DB_NAME') or os.environ.get('DB_NAME')
+    jwt_secret_set = bool(os.environ.get('JWT_SECRET_KEY'))
+    
+    info = {
+        'config': {
+            'SETTINGS_DB_HOST': settings_host or '(not set)',
+            'SETTINGS_DB_PORT': settings_port,
+            'SETTINGS_DB_USER': settings_user or '(not set)',
+            'SETTINGS_DB_NAME': settings_db or '(not set)',
+            'SETTINGS_DB_PASSWORD': '***' if os.environ.get('SETTINGS_DB_PASSWORD') else '(not set)',
+            'JWT_SECRET_KEY': 'SET' if jwt_secret_set else '(not set)',
+        },
+        'fallback': {
+            'DB_HOST': os.environ.get('DB_HOST') or '(not set)',
+            'DB_PORT': os.environ.get('DB_PORT', '3306'),
+            'DB_USER': os.environ.get('DB_USER') or '(not set)',
+            'DB_NAME': os.environ.get('DB_NAME') or '(not set)',
+            'DB_PASSWORD': '***' if os.environ.get('DB_PASSWORD') else '(not set)',
+        },
+        'connection_test': {},
+        'tables': []
+    }
+    
+    # Test DB connection
+    if settings_host and settings_user and settings_db:
+        try:
+            conn = get_users_db_connection()
+            cursor = conn.cursor()
+            
+            # Check if users table exists
+            cursor.execute("SHOW TABLES")
+            tables = [row[0] for row in cursor.fetchall()]
+            info['tables'] = tables
+            
+            if 'users' in tables:
+                cursor.execute("SELECT COUNT(*) as count FROM users")
+                count = cursor.fetchone()[0]
+                info['connection_test']['users_table'] = f'EXISTS ({count} rows)'
+            else:
+                info['connection_test']['users_table'] = 'NOT FOUND'
+            
+            cursor.close()
+            conn.close()
+            info['connection_test']['status'] = 'SUCCESS'
+        except Exception as e:
+            info['connection_test']['status'] = 'FAILED'
+            info['connection_test']['error'] = str(e)
+    else:
+        info['connection_test']['status'] = 'INCOMPLETE CONFIG'
+    
+    # Test DNS resolution
+    if settings_host:
+        try:
+            ip = socket.gethostbyname(settings_host)
+            info['connection_test']['dns_resolved'] = ip
+        except Exception as e:
+            info['connection_test']['dns_error'] = str(e)
+    
+    return jsonify(info), 200
+
+
 @app.route('/api/auth/login', methods=['POST'])
 def api_auth_login():
     """Login endpoint. Body: { email, password }. Returns JWT token."""

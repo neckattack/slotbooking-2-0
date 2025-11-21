@@ -89,9 +89,10 @@
       <div class="row"><label>E‑Mail</label><input id="login_email" placeholder="you@domain.com"></div>
       <div class="row"><label>Passwort</label><input id="login_pass" type="password" placeholder="••••••••"></div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:10px;">
+        <button id="login_debug" style="background:#6b7280;">Debug</button>
         <button id="login_submit">Login</button>
       </div>
-      <div id="login_msg" class="sub" style="margin-top:8px;"></div>
+      <div id="login_msg" class="sub" style="margin-top:8px; white-space:pre-wrap; text-align:left;"></div>
     </div>
   </div>
 
@@ -437,6 +438,31 @@
       pass.addEventListener('keypress', (e) => {
         if(e.key === 'Enter') document.getElementById('login_submit').click();
       });
+      document.getElementById('login_debug').onclick = async () => {
+        msg.textContent = 'Lade Debug-Info...';
+        try{
+          const res = await fetch('/api/auth/debug');
+          const data = await res.json();
+          let debugText = '=== DB CONFIG ===\n';
+          Object.entries(data.config || {}).forEach(([k,v]) => {
+            debugText += `${k}: ${v}\n`;
+          });
+          debugText += '\n=== FALLBACK CONFIG ===\n';
+          Object.entries(data.fallback || {}).forEach(([k,v]) => {
+            debugText += `${k}: ${v}\n`;
+          });
+          debugText += '\n=== CONNECTION TEST ===\n';
+          Object.entries(data.connection_test || {}).forEach(([k,v]) => {
+            debugText += `${k}: ${v}\n`;
+          });
+          if(data.tables && data.tables.length){
+            debugText += '\n=== TABLES ===\n' + data.tables.join(', ');
+          }
+          msg.textContent = debugText;
+        }catch(e){
+          msg.textContent = 'Debug-Fehler: ' + e;
+        }
+      };
     }
     async function openEmailSettingsModal(){
       const modal = document.getElementById('email_settings_modal');
