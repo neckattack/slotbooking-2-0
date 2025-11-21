@@ -82,20 +82,18 @@
     </div>
   </div>
 
-  <!-- Login Modal (commented out for later use at app start)
-  <div id="login_modal" class="modal">
+  <!-- Login Modal (required at app start) -->
+  <div id="login_modal" class="modal" style="display:none;">
     <div class="box">
       <h3 style="margin:0 0 10px;">Login</h3>
       <div class="row"><label>E‑Mail</label><input id="login_email" placeholder="you@domain.com"></div>
       <div class="row"><label>Passwort</label><input id="login_pass" type="password" placeholder="••••••••"></div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:10px;">
-        <button id="login_cancel" style="background:#6b7280;">Abbrechen</button>
         <button id="login_submit">Login</button>
       </div>
       <div id="login_msg" class="sub" style="margin-top:8px;"></div>
     </div>
   </div>
-  -->
 
   <!-- E-Mail Settings Modal -->
   <div id="email_settings_modal" class="modal">
@@ -353,14 +351,92 @@
     document.addEventListener('click', (e) => {
       if(settingsMenu.style.display === 'block') settingsMenu.style.display = 'none';
     });
-    // E-Mail settings: load/save via API
+    // Auth: get JWT token and user email
+    function getAuthToken(){
+      return localStorage.getItem('jwt_token') || '';
+    }
     function getUserEmail(){
-      let email = localStorage.getItem('user_email');
-      if(!email){
-        email = prompt('Bitte gib deine E‑Mail-Adresse ein (für Settings):');
-        if(email) localStorage.setItem('user_email', email.trim());
+      const token = getAuthToken();
+      if(!token) return '';
+      try{
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.user_email || '';
+      }catch(e){
+        return '';
       }
-      return email || '';
+    }
+    function getAuthHeaders(){
+      const token = getAuthToken();
+      return token ? {'Authorization': 'Bearer ' + token} : {};
+    }
+    async function checkAuth(){
+      const token = getAuthToken();
+      if(!token){
+        showLoginModal();
+        return false;
+      }
+      try{
+        const res = await fetch('/api/auth/me', {
+          headers: getAuthHeaders()
+        });
+        const data = await parseJsonSafe(res);
+        if(data.__ok && data.user){
+          localStorage.setItem('current_user', JSON.stringify(data.user));
+          return true;
+        } else {
+          localStorage.removeItem('jwt_token');
+          localStorage.removeItem('current_user');
+          showLoginModal();
+          return false;
+        }
+      }catch(e){
+        localStorage.removeItem('jwt_token');
+        localStorage.removeItem('current_user');
+        showLoginModal();
+        return false;
+      }
+    }
+    function showLoginModal(){
+      const modal = document.getElementById('login_modal');
+      const email = document.getElementById('login_email');
+      const pass = document.getElementById('login_pass');
+      const msg = document.getElementById('login_msg');
+      modal.style.display = 'flex';
+      msg.textContent = '';
+      email.value = '';
+      pass.value = '';
+      email.focus();
+      document.getElementById('login_submit').onclick = async () => {
+        const emailVal = email.value.trim();
+        const passVal = pass.value;
+        if(!emailVal || !passVal){
+          msg.textContent = 'E‑Mail und Passwort erforderlich';
+          return;
+        }
+        msg.textContent = 'Login...';
+        try{
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email: emailVal, password: passVal})
+          });
+          const data = await parseJsonSafe(res);
+          if(data.ok && data.token){
+            localStorage.setItem('jwt_token', data.token);
+            localStorage.setItem('current_user', JSON.stringify(data.user));
+            modal.style.display = 'none';
+            msg.textContent = '';
+            loadInbox();
+          } else {
+            msg.textContent = data.error || 'Login fehlgeschlagen';
+          }
+        }catch(e){
+          msg.textContent = 'Fehler: ' + e;
+        }
+      };
+      pass.addEventListener('keypress', (e) => {
+        if(e.key === 'Enter') document.getElementById('login_submit').click();
+      });
     }
     async function openEmailSettingsModal(){
       const modal = document.getElementById('email_settings_modal');
@@ -370,7 +446,9 @@
       msg.textContent = 'Lade Einstellungen...';
       modal.style.display = 'flex';
       try{
-        const res = await fetch(`/api/user/email-settings?user_email=${encodeURIComponent(userEmail)}`);
+        const res = await fetch(`/api/user/email-settings?user_email=${encodeURIComponent(userEmail)}`, {
+          headers: getAuthHeaders()
+        });
         const data = await parseJsonSafe(res);
         if(data.exists){
           document.getElementById('imap_host').value = data.imap_host || '';
@@ -421,7 +499,7 @@
         try{
           const res = await fetch('/api/user/email-settings', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
             body: JSON.stringify(data)
           });
           const result = await parseJsonSafe(res);
@@ -445,7 +523,10 @@
       e.stopPropagation(); settingsMenu.style.display='none';
       openEmailSettingsModal();
     });
-    loadInbox();
+    // Check auth on app start
+    checkAuth().then(ok => {
+      if(ok) loadInbox();
+    });
   </script>
 </body>
 </html>
