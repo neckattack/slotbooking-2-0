@@ -7,6 +7,7 @@ import openai
 from agent_core import find_next_appointment_for_name
 from agent_gpt import agent_respond
 from encryption_utils import encrypt_password, decrypt_password
+from auth_utils import create_jwt_token, decode_jwt_token, verify_password, require_auth
 
 load_dotenv()
 
@@ -1056,6 +1057,183 @@ def api_user_email_settings_post():
         return jsonify({'ok': True, 'message': 'Settings saved'}), 200
     except Exception as e:
         app.logger.error(f"[POST email-settings] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+def get_users_db_connection():
+    """Connect to users DB (same as SETTINGS_DB or main DB)."""
+    return get_settings_db_connection()
+
+
+@app.route('/api/auth/debug', methods=['GET'])
+def api_auth_debug():
+    """Debug endpoint: shows DB config (without passwords) and connection status."""
+    import socket
+    
+    # Get DB config from ENV
+    settings_host = os.environ.get('SETTINGS_DB_HOST') or os.environ.get('DB_HOST')
+    settings_port = os.environ.get('SETTINGS_DB_PORT') or os.environ.get('DB_PORT', '3306')
+    settings_user = os.environ.get('SETTINGS_DB_USER') or os.environ.get('DB_USER')
+    settings_db = os.environ.get('SETTINGS_DB_NAME') or os.environ.get('DB_NAME')
+    jwt_secret_set = bool(os.environ.get('JWT_SECRET_KEY'))
+    
+    info = {
+        'config': {
+            'SETTINGS_DB_HOST': settings_host or '(not set)',
+            'SETTINGS_DB_PORT': settings_port,
+            'SETTINGS_DB_USER': settings_user or '(not set)',
+            'SETTINGS_DB_NAME': settings_db or '(not set)',
+            'SETTINGS_DB_PASSWORD': '***' if os.environ.get('SETTINGS_DB_PASSWORD') else '(not set)',
+            'JWT_SECRET_KEY': 'SET' if jwt_secret_set else '(not set)',
+        },
+        'fallback': {
+            'DB_HOST': os.environ.get('DB_HOST') or '(not set)',
+            'DB_PORT': os.environ.get('DB_PORT', '3306'),
+            'DB_USER': os.environ.get('DB_USER') or '(not set)',
+            'DB_NAME': os.environ.get('DB_NAME') or '(not set)',
+            'DB_PASSWORD': '***' if os.environ.get('DB_PASSWORD') else '(not set)',
+        },
+        'connection_test': {},
+        'tables': []
+    }
+    
+    # Test DB connection
+    if settings_host and settings_user and settings_db:
+        try:
+            conn = get_users_db_connection()
+            cursor = conn.cursor()
+            
+            # Check if users table exists
+            cursor.execute("SHOW TABLES")
+            tables = [row[0] for row in cursor.fetchall()]
+            info['tables'] = tables
+            
+            if 'users' in tables:
+                cursor.execute("SELECT COUNT(*) as count FROM users")
+                count = cursor.fetchone()[0]
+                info['connection_test']['users_table'] = f'EXISTS ({count} rows)'
+            else:
+                info['connection_test']['users_table'] = 'NOT FOUND'
+            
+            cursor.close()
+            conn.close()
+            info['connection_test']['status'] = 'SUCCESS'
+        except Exception as e:
+            info['connection_test']['status'] = 'FAILED'
+            info['connection_test']['error'] = str(e)
+    else:
+        info['connection_test']['status'] = 'INCOMPLETE CONFIG'
+    
+    # Test DNS resolution
+    if settings_host:
+        try:
+            ip = socket.gethostbyname(settings_host)
+            info['connection_test']['dns_resolved'] = ip
+        except Exception as e:
+            info['connection_test']['dns_error'] = str(e)
+    
+    return jsonify(info), 200
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def api_auth_login():
+    """Login endpoint. Body: { email, password }. Returns JWT token."""
+    data = request.get_json(silent=True) or {}
+    email = data.get('email', '').strip().lower()
+    password = data.get('password', '')
+    
+    if not email or not password:
+        return jsonify({'error': 'Email and password required'}), 400
+    
+    try:
+        conn = get_users_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, email, password_hash, role, first_name, last_name, active "
+            "FROM users WHERE email=%s",
+            (email,)
+        )
+        user = cursor.fetchone()
+        cursor.close()
+        
+        if not user:
+            conn.close()
+            return jsonify({'error': 'Invalid email or password'}), 401
+        
+        if not user['active']:
+            conn.close()
+            return jsonify({'error': 'Account is deactivated'}), 403
+        
+        if not verify_password(password, user['password_hash']):
+            conn.close()
+            return jsonify({'error': 'Invalid email or password'}), 401
+        
+        # Update last_login
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET last_login=NOW() WHERE id=%s", (user['id'],))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        # Create JWT token
+        token = create_jwt_token(
+            user_email=user['email'],
+            role=user['role'],
+            user_id=user['id']
+        )
+        
+        return jsonify({
+            'ok': True,
+            'token': token,
+            'user': {
+                'id': user['id'],
+                'email': user['email'],
+                'role': user['role'],
+                'first_name': user['first_name'],
+                'last_name': user['last_name']
+            }
+        }), 200
+    except Exception as e:
+        app.logger.error(f"[Login] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/auth/me', methods=['GET'])
+@require_auth
+def api_auth_me(current_user):
+    """Get current user info from JWT token. Requires Authorization header."""
+    try:
+        conn = get_users_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, email, role, first_name, last_name, active, created_at, last_login "
+            "FROM users WHERE id=%s",
+            (current_user['user_id'],)
+        )
+        user = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        if not user['active']:
+            return jsonify({'error': 'Account is deactivated'}), 403
+        
+        return jsonify({
+            'ok': True,
+            'user': {
+                'id': user['id'],
+                'email': user['email'],
+                'role': user['role'],
+                'first_name': user['first_name'],
+                'last_name': user['last_name'],
+                'created_at': str(user['created_at']) if user['created_at'] else None,
+                'last_login': str(user['last_login']) if user['last_login'] else None
+            }
+        }), 200
+    except Exception as e:
+        app.logger.error(f"[Auth/me] error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
