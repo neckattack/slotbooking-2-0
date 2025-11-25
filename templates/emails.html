@@ -54,9 +54,12 @@
       <button id="reload">Aktualisieren</button>
       <div style="position:relative;">
         <button id="settings_btn" style="background:#111827;">⚙️</button>
-        <div id="settings_menu" style="display:none; position:absolute; right:0; top:40px; background:#fff; border:1px solid var(--border); border-radius:8px; min-width:160px; box-shadow:0 6px 20px rgba(0,0,0,.08); z-index:50;">
-          <div id="menu_profile" class="item" style="border:0; padding:10px 12px;">Profil</div>
-          <div id="menu_email" class="item" style="padding:10px 12px;">E‑Mail</div>
+        <div id="settings_menu" style="display:none; position:absolute; right:0; top:40px; background:#fff; border:1px solid var(--border); border-radius:8px; min-width:180px; box-shadow:0 6px 20px rgba(0,0,0,.08); z-index:50;">
+          <div id="menu_profile" class="item" style="border:0; padding:10px 12px;">👤 Profil</div>
+          <div id="menu_email" class="item" style="padding:10px 12px;">⚙️ E‑Mail-Einstellungen</div>
+          <div id="menu_users" class="item" style="padding:10px 12px; display:none;">👥 User-Verwaltung</div>
+          <div style="border-top:1px solid var(--border); margin:4px 0;"></div>
+          <div id="menu_logout" class="item" style="padding:10px 12px; color:#dc2626;">🚪 Logout</div>
         </div>
       </div>
       <span id="status" class="sub"></span>
@@ -132,6 +135,46 @@
         <button id="email_settings_save">Speichern</button>
       </div>
       <div id="email_settings_msg" class="sub" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <!-- User Management Modal -->
+  <div id="user_management_modal" class="modal">
+    <div class="box" style="width:640px; max-height:90vh; overflow:auto;">
+      <h3 style="margin:0 0 12px;">👥 User-Verwaltung</h3>
+      <div style="display:flex; gap:8px; margin-bottom:16px;">
+        <button id="btn_new_user" style="background:#059669;">➕ Neuer User</button>
+      </div>
+      <div id="user_list" style="background:#f9fafb; border:1px solid var(--border); border-radius:8px; padding:12px; min-height:200px;">
+        <div class="sub">Lade User...</div>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+        <button id="user_management_close" style="background:#6b7280;">Schließen</button>
+      </div>
+      <div id="user_management_msg" class="sub" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <!-- New User Modal -->
+  <div id="new_user_modal" class="modal">
+    <div class="box" style="width:420px;">
+      <h3 style="margin:0 0 12px;">➕ Neuer User</h3>
+      <div class="row"><label style="width:100px;">E‑Mail</label><input id="new_user_email" placeholder="user@example.com"></div>
+      <div class="row"><label style="width:100px;">Vorname</label><input id="new_user_first" placeholder="Max"></div>
+      <div class="row"><label style="width:100px;">Nachname</label><input id="new_user_last" placeholder="Mustermann"></div>
+      <div class="row"><label style="width:100px;">Passwort</label><input id="new_user_pass" type="password" placeholder="min. 6 Zeichen"></div>
+      <div class="row"><label style="width:100px;">Rolle</label>
+        <select id="new_user_role" style="flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px;">
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+          <option value="superadmin">Superadmin</option>
+        </select>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+        <button id="new_user_cancel" style="background:#6b7280;">Abbrechen</button>
+        <button id="new_user_save" style="background:#059669;">Erstellen</button>
+      </div>
+      <div id="new_user_msg" class="sub" style="margin-top:8px;"></div>
     </div>
   </div>
 
@@ -366,6 +409,23 @@
         return '';
       }
     }
+    function getCurrentUser(){
+      try{
+        const user = localStorage.getItem('current_user');
+        return user ? JSON.parse(user) : null;
+      }catch(e){
+        return null;
+      }
+    }
+    function updateMenuForUser(){
+      const user = getCurrentUser();
+      const menuUsers = document.getElementById('menu_users');
+      if(user && user.role === 'superadmin'){
+        menuUsers.style.display = 'block';
+      } else {
+        menuUsers.style.display = 'none';
+      }
+    }
     function getAuthHeaders(){
       const token = getAuthToken();
       return token ? {'Authorization': 'Bearer ' + token} : {};
@@ -383,6 +443,7 @@
         const data = await parseJsonSafe(res);
         if(data.__ok && data.user){
           localStorage.setItem('current_user', JSON.stringify(data.user));
+          updateMenuForUser();
           return true;
         } else {
           localStorage.removeItem('jwt_token');
@@ -425,6 +486,7 @@
           if(data.ok && data.token){
             localStorage.setItem('jwt_token', data.token);
             localStorage.setItem('current_user', JSON.stringify(data.user));
+            updateMenuForUser();
             modal.style.display = 'none';
             msg.textContent = '';
             loadInbox();
@@ -549,6 +611,135 @@
       e.stopPropagation(); settingsMenu.style.display='none';
       openEmailSettingsModal();
     });
+    document.getElementById('menu_users').addEventListener('click', (e)=>{
+      e.stopPropagation(); settingsMenu.style.display='none';
+      openUserManagementModal();
+    });
+    document.getElementById('menu_logout').addEventListener('click', (e)=>{
+      e.stopPropagation(); settingsMenu.style.display='none';
+      logout();
+    });
+    function logout(){
+      localStorage.removeItem('jwt_token');
+      localStorage.removeItem('current_user');
+      location.reload();
+    }
+    function openUserManagementModal(){
+      const modal = document.getElementById('user_management_modal');
+      const list = document.getElementById('user_list');
+      const msg = document.getElementById('user_management_msg');
+      modal.style.display = 'flex';
+      msg.textContent = '';
+      loadUserList();
+      document.getElementById('user_management_close').onclick = () => {
+        modal.style.display = 'none';
+      };
+      document.getElementById('btn_new_user').onclick = () => {
+        openNewUserModal();
+      };
+      modal.onclick = (ev) => { if(ev.target === modal) modal.style.display = 'none'; };
+    }
+    async function loadUserList(){
+      const list = document.getElementById('user_list');
+      list.innerHTML = '<div class="sub">Lade User...</div>';
+      try{
+        const res = await fetch('/api/admin/users', {
+          headers: getAuthHeaders()
+        });
+        const data = await parseJsonSafe(res);
+        if(data.__ok && data.users){
+          if(data.users.length === 0){
+            list.innerHTML = '<div class="sub">Keine User vorhanden</div>';
+            return;
+          }
+          let html = '<div style="display:grid; gap:8px;">';
+          data.users.forEach(u => {
+            const activeLabel = u.active ? '✅' : '❌';
+            const roleLabel = u.role === 'superadmin' ? '🔑' : u.role === 'admin' ? '⚙️' : '👤';
+            html += `<div style="background:#fff; border:1px solid var(--border); border-radius:6px; padding:10px; display:flex; justify-content:space-between; align-items:center;">`;
+            html += `<div><div style="font-weight:600;">${roleLabel} ${escapeHtml(u.email)}</div>`;
+            html += `<div class="sub">${escapeHtml(u.first_name || '')} ${escapeHtml(u.last_name || '')} · ${u.role} · ${activeLabel}</div></div>`;
+            html += `<button onclick="deleteUser(${u.id}, '${escapeHtml(u.email)}')" style="background:#dc2626; padding:6px 10px; font-size:12px;">🗑️ Löschen</button>`;
+            html += `</div>`;
+          });
+          html += '</div>';
+          list.innerHTML = html;
+        } else {
+          list.innerHTML = '<div class="sub" style="color:#dc2626;">Fehler beim Laden: ' + (data.error || 'Unbekannt') + '</div>';
+        }
+      }catch(e){
+        list.innerHTML = '<div class="sub" style="color:#dc2626;">Fehler: ' + e + '</div>';
+      }
+    }
+    function openNewUserModal(){
+      const modal = document.getElementById('new_user_modal');
+      const msg = document.getElementById('new_user_msg');
+      modal.style.display = 'flex';
+      msg.textContent = '';
+      document.getElementById('new_user_email').value = '';
+      document.getElementById('new_user_first').value = '';
+      document.getElementById('new_user_last').value = '';
+      document.getElementById('new_user_pass').value = '';
+      document.getElementById('new_user_role').value = 'user';
+      const cleanup = () => { modal.style.display = 'none'; };
+      document.getElementById('new_user_cancel').onclick = cleanup;
+      document.getElementById('new_user_save').onclick = async () => {
+        const email = document.getElementById('new_user_email').value.trim();
+        const first = document.getElementById('new_user_first').value.trim();
+        const last = document.getElementById('new_user_last').value.trim();
+        const pass = document.getElementById('new_user_pass').value;
+        const role = document.getElementById('new_user_role').value;
+        if(!email || !pass){
+          msg.textContent = 'E‑Mail und Passwort erforderlich';
+          return;
+        }
+        if(pass.length < 6){
+          msg.textContent = 'Passwort muss mindestens 6 Zeichen haben';
+          return;
+        }
+        msg.textContent = 'Erstelle User...';
+        try{
+          const res = await fetch('/api/admin/users', {
+            method: 'POST',
+            headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+            body: JSON.stringify({email, first_name: first, last_name: last, password: pass, role})
+          });
+          const data = await parseJsonSafe(res);
+          if(data.__ok){
+            msg.textContent = '✅ User erstellt!';
+            setTimeout(() => {
+              cleanup();
+              loadUserList();
+            }, 1500);
+          } else {
+            msg.textContent = 'Fehler: ' + (data.error || 'Unbekannt');
+          }
+        }catch(e){
+          msg.textContent = 'Fehler: ' + e;
+        }
+      };
+      modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
+    }
+    window.deleteUser = async function(userId, email){
+      if(!confirm(`User "${email}" wirklich löschen?`)) return;
+      const msg = document.getElementById('user_management_msg');
+      msg.textContent = 'Lösche User...';
+      try{
+        const res = await fetch(`/api/admin/users/${userId}`, {
+          method: 'DELETE',
+          headers: getAuthHeaders()
+        });
+        const data = await parseJsonSafe(res);
+        if(data.__ok){
+          msg.textContent = '✅ User gelöscht';
+          loadUserList();
+        } else {
+          msg.textContent = 'Fehler: ' + (data.error || 'Unbekannt');
+        }
+      }catch(e){
+        msg.textContent = 'Fehler: ' + e;
+      }
+    };
     // Check auth on app start
     checkAuth().then(ok => {
       if(ok) loadInbox();

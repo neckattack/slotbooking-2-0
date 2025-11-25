@@ -7,7 +7,7 @@ import openai
 from agent_core import find_next_appointment_for_name
 from agent_gpt import agent_respond
 from encryption_utils import encrypt_password, decrypt_password
-from auth_utils import create_jwt_token, decode_jwt_token, verify_password, require_auth
+from auth_utils import create_jwt_token, decode_jwt_token, verify_password, hash_password, require_auth, require_role
 
 load_dotenv()
 
@@ -1234,6 +1234,125 @@ def api_auth_me(current_user):
         }), 200
     except Exception as e:
         app.logger.error(f"[Auth/me] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/users', methods=['GET'])
+@require_auth
+@require_role(['superadmin'])
+def api_admin_users_list(current_user):
+    """List all users. Superadmin only."""
+    try:
+        conn = get_users_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, email, role, first_name, last_name, active, created_at, last_login "
+            "FROM users ORDER BY created_at DESC"
+        )
+        users = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        # Convert datetime to string
+        for u in users:
+            if u.get('created_at'):
+                u['created_at'] = str(u['created_at'])
+            if u.get('last_login'):
+                u['last_login'] = str(u['last_login'])
+        
+        return jsonify({'ok': True, 'users': users}), 200
+    except Exception as e:
+        app.logger.error(f"[Admin/users/list] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/users', methods=['POST'])
+@require_auth
+@require_role(['superadmin'])
+def api_admin_users_create(current_user):
+    """Create a new user. Superadmin only. Body: { email, first_name, last_name, password, role }."""
+    data = request.get_json(silent=True) or {}
+    email = data.get('email', '').strip().lower()
+    first_name = data.get('first_name', '').strip()
+    last_name = data.get('last_name', '').strip()
+    password = data.get('password', '')
+    role = data.get('role', 'user').strip().lower()
+    
+    if not email or not password:
+        return jsonify({'error': 'Email and password required'}), 400
+    
+    if role not in ['user', 'admin', 'superadmin']:
+        return jsonify({'error': 'Invalid role'}), 400
+    
+    if len(password) < 6:
+        return jsonify({'error': 'Password must be at least 6 characters'}), 400
+    
+    try:
+        # Check if user already exists
+        conn = get_users_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id FROM users WHERE email=%s", (email,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'User with this email already exists'}), 400
+        
+        # Hash password
+        password_hash = hash_password(password)
+        
+        # Insert user
+        cursor.execute(
+            "INSERT INTO users (email, password_hash, role, first_name, last_name, active, created_at) "
+            "VALUES (%s, %s, %s, %s, %s, TRUE, NOW())",
+            (email, password_hash, role, first_name, last_name)
+        )
+        conn.commit()
+        new_user_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            'ok': True,
+            'user': {
+                'id': new_user_id,
+                'email': email,
+                'role': role,
+                'first_name': first_name,
+                'last_name': last_name,
+                'active': True
+            }
+        }), 201
+    except Exception as e:
+        app.logger.error(f"[Admin/users/create] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@require_auth
+@require_role(['superadmin'])
+def api_admin_users_delete(current_user, user_id):
+    """Delete a user. Superadmin only."""
+    try:
+        # Don't allow deleting yourself
+        if user_id == current_user['user_id']:
+            return jsonify({'error': 'Cannot delete your own account'}), 400
+        
+        conn = get_users_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM users WHERE id=%s", (user_id,))
+        conn.commit()
+        affected = cursor.rowcount
+        cursor.close()
+        conn.close()
+        
+        if affected == 0:
+            return jsonify({'error': 'User not found'}), 404
+        
+        return jsonify({'ok': True, 'message': 'User deleted'}), 200
+    except Exception as e:
+        app.logger.error(f"[Admin/users/delete] error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
