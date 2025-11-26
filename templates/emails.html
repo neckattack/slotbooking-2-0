@@ -52,6 +52,7 @@
     <h1>📥 Inbox</h1>
     <div class="toolbar">
       <button id="reload">Aktualisieren</button>
+      <button id="user_badge" style="background:#111827; display:none;">👤 Lade...</button>
       <div style="position:relative;">
         <button id="settings_btn" style="background:#111827;">⚙️</button>
         <div id="settings_menu" style="display:none; position:absolute; right:0; top:40px; background:#fff; border:1px solid var(--border); border-radius:8px; min-width:180px; box-shadow:0 6px 20px rgba(0,0,0,.08); z-index:50;">
@@ -155,6 +156,27 @@
     </div>
   </div>
 
+  <!-- Profile Modal -->
+  <div id="profile_modal" class="modal">
+    <div class="box" style="width:420px;">
+      <h3 style="margin:0 0 12px;">👤 Mein Profil</h3>
+      <div class="row"><label style="width:100px;">E‑Mail</label><input id="profile_email" disabled style="background:#f3f4f6;"></div>
+      <div class="row"><label style="width:100px;">Vorname</label><input id="profile_first" placeholder="Vorname"></div>
+      <div class="row"><label style="width:100px;">Nachname</label><input id="profile_last" placeholder="Nachname"></div>
+      <div class="row"><label style="width:100px;">Rolle</label><input id="profile_role" disabled style="background:#f3f4f6;"></div>
+      <div style="border-top:1px solid var(--border); margin:16px 0; padding-top:16px;">
+        <h4 style="margin:0 0 8px; font-size:14px;">🔒 Passwort ändern (optional)</h4>
+        <div class="row"><label style="width:100px;">Neu</label><input id="profile_new_pass" type="password" placeholder="min. 6 Zeichen"></div>
+        <div class="row"><label style="width:100px;">Wiederholen</label><input id="profile_confirm_pass" type="password" placeholder="bestätigen"></div>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+        <button id="profile_cancel" style="background:#6b7280;">Abbrechen</button>
+        <button id="profile_save" style="background:#059669;">Speichern</button>
+      </div>
+      <div id="profile_msg" class="sub" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
   <!-- New User Modal -->
   <div id="new_user_modal" class="modal">
     <div class="box" style="width:420px;">
@@ -198,12 +220,30 @@
       const list = document.getElementById('list');
       status.textContent = 'lädt …';
       try{
-        const res = await fetch('/api/emails/inbox?limit=20');
+        const res = await fetch('/api/emails/inbox?limit=20', {
+          headers: getAuthHeaders()
+        });
         const data = await parseJsonSafe(res);
-        if(!data.__ok){ throw new Error(data.error || 'Inbox-Fehler'); }
+        if(!data.__ok){ 
+          // Check if user needs to configure email settings
+          if(data.error && data.error.includes('configure email settings')){
+            list.innerHTML = `
+              <div style="padding:20px; text-align:center;">
+                <div style="font-size:48px; margin-bottom:16px;">📧</div>
+                <div style="font-size:16px; font-weight:600; margin-bottom:8px;">E-Mail-Einstellungen fehlen</div>
+                <div class="sub" style="margin-bottom:16px;">Bitte konfigurieren Sie zuerst Ihre IMAP/SMTP-Zugangsdaten</div>
+                <button id="setup_email_btn" style="background:#059669; color:#fff; border:0; padding:10px 20px; border-radius:6px; cursor:pointer; font-size:14px;">⚙️ E-Mail-Einstellungen konfigurieren</button>
+              </div>
+            `;
+            document.getElementById('setup_email_btn').addEventListener('click', openEmailSettingsModal);
+            status.textContent = '';
+            return;
+          }
+          throw new Error(data.error || 'Inbox-Fehler'); 
+        }
         list.innerHTML = '';
         if(!data.items || !data.items.length){
-          list.innerHTML = '<div class="sub">Keine E-Mails gefunden.</div>';
+          list.innerHTML = '<div class="sub" style="padding:20px; text-align:center;">Keine E-Mails gefunden.</div>';
           status.textContent = '';
           return;
         }
@@ -220,7 +260,7 @@
         }
         status.textContent = `${data.items.length} E-Mails geladen`;
       }catch(e){
-        list.innerHTML = `<div class="sub">Fehler: ${e}</div>`;
+        list.innerHTML = `<div class="sub" style="padding:20px;">Fehler: ${e}</div>`;
         status.textContent = '';
       }
     }
@@ -425,6 +465,13 @@
       } else {
         menuUsers.style.display = 'none';
       }
+      // Update user badge
+      const badge = document.getElementById('user_badge');
+      if(user && badge){
+        const name = user.first_name ? user.first_name : user.email.split('@')[0];
+        badge.textContent = `👤 ${name}`;
+        badge.style.display = 'inline-block';
+      }
     }
     function getAuthHeaders(){
       const token = getAuthToken();
@@ -603,9 +650,79 @@
       };
       modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
     }
+    function openProfileModal(){
+      const modal = document.getElementById('profile_modal');
+      const msg = document.getElementById('profile_msg');
+      const user = getCurrentUser();
+      if(!user){ alert('Bitte erst einloggen'); return; }
+      
+      modal.style.display = 'flex';
+      msg.textContent = '';
+      
+      // Fill current data
+      document.getElementById('profile_email').value = user.email || '';
+      document.getElementById('profile_first').value = user.first_name || '';
+      document.getElementById('profile_last').value = user.last_name || '';
+      document.getElementById('profile_role').value = user.role || 'user';
+      document.getElementById('profile_new_pass').value = '';
+      document.getElementById('profile_confirm_pass').value = '';
+      
+      const cleanup = () => { modal.style.display = 'none'; };
+      document.getElementById('profile_cancel').onclick = cleanup;
+      document.getElementById('profile_save').onclick = async () => {
+        const first = document.getElementById('profile_first').value.trim();
+        const last = document.getElementById('profile_last').value.trim();
+        const newPass = document.getElementById('profile_new_pass').value;
+        const confirmPass = document.getElementById('profile_confirm_pass').value;
+        
+        // Validate password if provided
+        if(newPass || confirmPass){
+          if(newPass !== confirmPass){
+            msg.textContent = 'Passwörter stimmen nicht überein';
+            return;
+          }
+          if(newPass.length < 6){
+            msg.textContent = 'Passwort muss mindestens 6 Zeichen haben';
+            return;
+          }
+        }
+        
+        msg.textContent = 'Speichere...';
+        const updateData = {
+          first_name: first,
+          last_name: last
+        };
+        if(newPass){
+          updateData.password = newPass;
+        }
+        
+        try{
+          const res = await fetch('/api/user/profile', {
+            method: 'PUT',
+            headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+            body: JSON.stringify(updateData)
+          });
+          const data = await parseJsonSafe(res);
+          if(data.__ok){
+            // Update localStorage
+            user.first_name = first;
+            user.last_name = last;
+            localStorage.setItem('current_user', JSON.stringify(user));
+            updateMenuForUser();
+            msg.textContent = '✅ Profil gespeichert!';
+            setTimeout(cleanup, 1500);
+          } else {
+            msg.textContent = 'Fehler: ' + (data.error || 'Unbekannt');
+          }
+        }catch(e){
+          msg.textContent = 'Fehler: ' + e;
+        }
+      };
+      modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
+    }
     document.getElementById('menu_profile').addEventListener('click', (e)=>{
       e.stopPropagation(); settingsMenu.style.display='none';
-      alert('Profil-Einstellungen kommen bald.');
+      openProfileModal();
     });
     document.getElementById('menu_email').addEventListener('click', (e)=>{
       e.stopPropagation(); settingsMenu.style.display='none';

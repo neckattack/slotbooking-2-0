@@ -296,17 +296,48 @@ def emails_page():
     return render_template("emails.html")
 
 @app.route("/api/emails/inbox")
-def api_emails_inbox():
+@require_auth
+def api_emails_inbox(current_user):
     import imaplib, email
     from email.header import decode_header
     limit = request.args.get('limit', default=20, type=int)
-    host = os.environ.get('IMAP_HOST') or os.environ.get('IMAP_SERVER')
-    port = int(os.environ.get('IMAP_PORT', '993'))
-    user = os.environ.get('IMAP_USER') or os.environ.get('EMAIL_USER')
-    pw = os.environ.get('IMAP_PASS') or os.environ.get('EMAIL_PASS')
-    mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
+    
+    # Check if user has email settings configured
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT imap_host, imap_port, imap_user, imap_pass, imap_security "
+            "FROM user_email_settings WHERE user_email=%s",
+            (user_email,)
+        )
+        settings = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if settings and settings.get('imap_host'):
+            # Use user's settings
+            from encryption_utils import decrypt_password
+            host = settings['imap_host']
+            port = int(settings.get('imap_port', 993))
+            user = settings['imap_user']
+            pw = decrypt_password(settings['imap_pass']) if settings['imap_pass'] else ''
+            mailbox = 'INBOX'
+        else:
+            # No user settings - return error to prompt configuration
+            return jsonify({"error": "Please configure email settings first", "needs_config": True}), 400
+    except Exception as e:
+        app.logger.error(f"[IMAP] Error checking user settings: {e}")
+        # Fallback to global env settings (for backward compatibility)
+        host = os.environ.get('IMAP_HOST') or os.environ.get('IMAP_SERVER')
+        port = int(os.environ.get('IMAP_PORT', '993'))
+        user = os.environ.get('IMAP_USER') or os.environ.get('EMAIL_USER')
+        pw = os.environ.get('IMAP_PASS') or os.environ.get('EMAIL_PASS')
+        mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
+    
     if not (host and user and pw):
-        return jsonify({"error": "IMAP Konfiguration unvollständig (IMAP_HOST/USER/PASS)."}), 500
+        return jsonify({"error": "IMAP configuration incomplete. Please configure email settings."}), 400
     try:
         # Cache nutzen
         cache_key = f"{host}:{port}:{user}:{mailbox}:{limit}"
@@ -1234,6 +1265,55 @@ def api_auth_me(current_user):
         }), 200
     except Exception as e:
         app.logger.error(f"[Auth/me] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/user/profile', methods=['PUT'])
+@require_auth
+def api_user_profile_update(current_user):
+    """Update current user's profile (first_name, last_name, password)."""
+    data = request.get_json(silent=True) or {}
+    first_name = data.get('first_name', '').strip()
+    last_name = data.get('last_name', '').strip()
+    password = data.get('password', '')
+    
+    try:
+        conn = get_users_db_connection()
+        cursor = conn.cursor()
+        
+        # Update first_name and last_name
+        cursor.execute(
+            "UPDATE users SET first_name=%s, last_name=%s WHERE id=%s",
+            (first_name, last_name, current_user['user_id'])
+        )
+        
+        # Update password if provided
+        if password:
+            if len(password) < 6:
+                cursor.close()
+                conn.close()
+                return jsonify({'error': 'Password must be at least 6 characters'}), 400
+            
+            password_hash = hash_password(password)
+            cursor.execute(
+                "UPDATE users SET password_hash=%s WHERE id=%s",
+                (password_hash, current_user['user_id'])
+            )
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            'ok': True,
+            'message': 'Profile updated',
+            'user': {
+                'first_name': first_name,
+                'last_name': last_name
+            }
+        }), 200
+    except Exception as e:
+        app.logger.error(f"[User/profile] error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
