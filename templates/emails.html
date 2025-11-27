@@ -639,8 +639,11 @@
           });
           const result = await parseJsonSafe(res);
           if(result.__ok){
-            msg.textContent = 'Gespeichert! Seite neu laden, um Änderungen zu übernehmen.';
-            setTimeout(cleanup, 2000);
+            msg.textContent = '✅ Gespeichert! E-Mails werden geladen...';
+            setTimeout(() => {
+              cleanup();
+              loadInbox(); // Automatisch E-Mails laden
+            }, 1500);
           } else {
             msg.textContent = 'Fehler: ' + (result.error || 'Unbekannt');
           }
