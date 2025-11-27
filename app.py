@@ -308,7 +308,7 @@ def api_emails_inbox(current_user):
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT imap_host, imap_port, imap_user, imap_pass, imap_security "
+            "SELECT imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security "
             "FROM user_email_settings WHERE user_email=%s",
             (user_email,)
         )
@@ -322,7 +322,7 @@ def api_emails_inbox(current_user):
             host = settings['imap_host']
             port = int(settings.get('imap_port', 993))
             user = settings['imap_user']
-            pw = decrypt_password(settings['imap_pass']) if settings['imap_pass'] else ''
+            pw = decrypt_password(settings['imap_pass_encrypted']) if settings['imap_pass_encrypted'] else ''
             mailbox = 'INBOX'
         else:
             # No user settings - return error to prompt configuration
