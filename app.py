@@ -329,12 +329,8 @@ def api_emails_inbox(current_user):
             return jsonify({"error": "Please configure email settings first", "needs_config": True}), 400
     except Exception as e:
         app.logger.error(f"[IMAP] Error checking user settings: {e}")
-        # Fallback to global env settings (for backward compatibility)
-        host = os.environ.get('IMAP_HOST') or os.environ.get('IMAP_SERVER')
-        port = int(os.environ.get('IMAP_PORT', '993'))
-        user = os.environ.get('IMAP_USER') or os.environ.get('EMAIL_USER')
-        pw = os.environ.get('IMAP_PASS') or os.environ.get('EMAIL_PASS')
-        mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
+        # No fallback - user must configure their own email settings
+        return jsonify({"error": "Email settings error. Please configure your email settings.", "needs_config": True}), 400
     
     if not (host and user and pw):
         return jsonify({"error": "IMAP configuration incomplete. Please configure email settings."}), 400
