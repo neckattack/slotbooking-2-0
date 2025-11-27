@@ -1,16 +1,16 @@
 """
 Encryption utilities for user email password storage.
-Uses Fernet (symmetric encryption) with key from ENCRYPTION_KEY env var.
+Uses Fernet (symmetric encryption) with key from EMAIL_ENCRYPTION_KEY env var.
 """
 import os
 from cryptography.fernet import Fernet
 
 
 def get_cipher():
-    """Get Fernet cipher from ENCRYPTION_KEY env var."""
-    key = os.environ.get('ENCRYPTION_KEY')
+    """Get Fernet cipher from EMAIL_ENCRYPTION_KEY env var."""
+    key = os.environ.get('EMAIL_ENCRYPTION_KEY')
     if not key:
-        raise RuntimeError("ENCRYPTION_KEY not set in environment")
+        raise RuntimeError("EMAIL_ENCRYPTION_KEY not set in environment")
     return Fernet(key.encode())
 
 
