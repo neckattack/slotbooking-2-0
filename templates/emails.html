@@ -288,7 +288,9 @@
       const detail = document.getElementById('detail');
       detail.innerHTML = '<div class="sub">Lade Inhalt …</div>';
       try{
-        const res = await fetch(`/api/emails/thread?uid=${encodeURIComponent(uid)}`);
+        const res = await fetch(`/api/emails/thread?uid=${encodeURIComponent(uid)}`, {
+          headers: getAuthHeaders()
+        });
         const t = await parseJsonSafe(res);
         if(!t.__ok){ throw new Error(t.error || 'Thread-Fehler'); }
         const html = t.html || (t.text ? `<pre>${escapeHtml(t.text)}</pre>` : '<div class="sub">Kein Inhalt</div>');
@@ -371,13 +373,13 @@
       status.textContent = 'Vorschlag wird erstellt …';
       try{
         // Erster Versuch (8s Timeout)
-        let res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid, timeout_s: 8}) });
+        let res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid, timeout_s: 8}) });
         let data = await parseJsonSafe(res);
         if(!data.__ok){
           // Bei 504 (compose_timeout/compose_empty) ein zweiter Versuch mit 20s Timeout
           if(data.__status === 504){
             status.textContent = 'Ausgelastet, zweiter Versuch (bis 20s) …';
-            res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid, timeout_s: 20}) });
+            res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid, timeout_s: 20}) });
             data = await parseJsonSafe(res);
           }
         }
@@ -399,7 +401,7 @@
       if(!toInput.value){ status.textContent = 'Empfänger fehlt.'; return; }
       status.textContent = 'Sende …';
       try{
-        const res = await fetch('/api/emails/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({to: toInput.value, subject: subjInput.value, html: editor.innerHTML}) });
+        const res = await fetch('/api/emails/send', { method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body: JSON.stringify({to: toInput.value, subject: subjInput.value, html: editor.innerHTML}) });
         const data = await parseJsonSafe(res);
         if(!data.__ok && data.error){ throw new Error(data.error); }
         status.textContent = 'Gesendet';

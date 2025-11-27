@@ -404,7 +404,8 @@ def api_emails_inbox(current_user):
 
 
 @app.route('/api/emails/agent-compose', methods=['POST'])
-def api_emails_agent_compose():
+@require_auth
+def api_emails_agent_compose(current_user):
     """Erstellt einen Antwortvorschlag (HTML) für eine gegebene Mail-UID.
     Request: { uid: string }
     Response: { html, to, subject }
@@ -424,13 +425,36 @@ def api_emails_agent_compose():
         timeout_s = max(4, min(30, req_timeout))
     if not uid:
         return jsonify({'error': 'uid fehlt'}), 400
-    host = os.environ.get('IMAP_HOST') or os.environ.get('IMAP_SERVER')
-    port = int(os.environ.get('IMAP_PORT', '993'))
-    user = os.environ.get('IMAP_USER') or os.environ.get('EMAIL_USER')
-    pw = os.environ.get('IMAP_PASS') or os.environ.get('EMAIL_PASS')
-    mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
+    
+    # Get user-specific email settings
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security "
+            "FROM user_email_settings WHERE user_email=%s",
+            (user_email,)
+        )
+        settings = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if settings and settings.get('imap_host'):
+            from encryption_utils import decrypt_password
+            host = settings['imap_host']
+            port = int(settings.get('imap_port', 993))
+            user = settings['imap_user']
+            pw = decrypt_password(settings['imap_pass_encrypted']) if settings['imap_pass_encrypted'] else ''
+            mailbox = 'INBOX'
+        else:
+            return jsonify({'error': 'Please configure email settings first'}), 400
+    except Exception as e:
+        app.logger.error(f"[Agent-Compose] Error loading user settings: {e}")
+        return jsonify({'error': 'Email settings error'}), 400
+    
     if not (host and user and pw):
-        return jsonify({'error': 'IMAP Konfiguration unvollständig'}), 500
+        return jsonify({'error': 'IMAP configuration incomplete'}), 400
     try:
         # Compose-Cache Early-Return (TTL 300s) für schnelle Wiederholungen
         import time as _t
@@ -677,7 +701,8 @@ def api_emails_agent_compose():
 
 
 @app.route('/api/emails/send', methods=['POST'])
-def api_emails_send():
+@require_auth
+def api_emails_send(current_user):
     """Versendet eine Mail (HTML). Request: { to, subject, html } """
     import smtplib
     from email.mime.text import MIMEText
@@ -688,13 +713,36 @@ def api_emails_send():
     html = data.get('html') or ''
     if not to_addr or not html:
         return jsonify({'error': 'to und html sind erforderlich'}), 400
-    smtp_host = os.environ.get('SMTP_HOST') or os.environ.get('SMTP_SERVER')
-    smtp_port = int(os.environ.get('SMTP_PORT', '465'))
-    smtp_user = os.environ.get('SMTP_USER') or os.environ.get('EMAIL_USER')
-    smtp_pass = os.environ.get('SMTP_PASS') or os.environ.get('EMAIL_PASS')
-    smtp_security = (os.environ.get('SMTP_SECURITY') or 'auto').lower()  # ssl | starttls | auto
+    
+    # Get user-specific email settings
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_security "
+            "FROM user_email_settings WHERE user_email=%s",
+            (user_email,)
+        )
+        settings = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if settings and settings.get('smtp_host'):
+            from encryption_utils import decrypt_password
+            smtp_host = settings['smtp_host']
+            smtp_port = int(settings.get('smtp_port', 465))
+            smtp_user = settings['smtp_user']
+            smtp_pass = decrypt_password(settings['smtp_pass_encrypted']) if settings['smtp_pass_encrypted'] else ''
+            smtp_security = (settings.get('smtp_security') or 'auto').lower()
+        else:
+            return jsonify({'error': 'Please configure email settings first'}), 400
+    except Exception as e:
+        app.logger.error(f"[Send] Error loading user settings: {e}")
+        return jsonify({'error': 'Email settings error'}), 400
+    
     if not (smtp_host and smtp_user and smtp_pass):
-        return jsonify({'error': 'SMTP Konfiguration unvollständig'}), 500
+        return jsonify({'error': 'SMTP configuration incomplete'}), 400
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
@@ -862,19 +910,43 @@ def api_emails_smtp_debug():
     return jsonify({'ok': ok, 'info': info}), status
 
 @app.route('/api/emails/thread')
-def api_emails_thread():
+@require_auth
+def api_emails_thread(current_user):
     import imaplib, email
     from email.header import decode_header
     uid = request.args.get('uid')
     if not uid:
         return jsonify({'error': 'uid fehlt'}), 400
-    host = os.environ.get('IMAP_HOST') or os.environ.get('IMAP_SERVER')
-    port = int(os.environ.get('IMAP_PORT', '993'))
-    user = os.environ.get('IMAP_USER') or os.environ.get('EMAIL_USER')
-    pw = os.environ.get('IMAP_PASS') or os.environ.get('EMAIL_PASS')
-    mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
+    
+    # Get user-specific email settings
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security "
+            "FROM user_email_settings WHERE user_email=%s",
+            (user_email,)
+        )
+        settings = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if settings and settings.get('imap_host'):
+            from encryption_utils import decrypt_password
+            host = settings['imap_host']
+            port = int(settings.get('imap_port', 993))
+            user = settings['imap_user']
+            pw = decrypt_password(settings['imap_pass_encrypted']) if settings['imap_pass_encrypted'] else ''
+            mailbox = 'INBOX'
+        else:
+            return jsonify({'error': 'Please configure email settings first'}), 400
+    except Exception as e:
+        app.logger.error(f"[Thread] Error loading user settings: {e}")
+        return jsonify({'error': 'Email settings error'}), 400
+    
     if not (host and user and pw):
-        return jsonify({'error': 'IMAP Konfiguration unvollständig'}), 500
+        return jsonify({'error': 'IMAP configuration incomplete'}), 400
     try:
         M = imaplib.IMAP4_SSL(host, port)
         M.login(user, pw)
