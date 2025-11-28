@@ -1394,7 +1394,7 @@ def api_user_agent_settings_get(current_user):
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT role, instructions, faq_text, created_at, updated_at "
+            "SELECT role, instructions, faq_text, document_links, created_at, updated_at "
             "FROM user_agent_settings WHERE user_email=%s",
             (user_email,)
         )
@@ -1403,12 +1403,13 @@ def api_user_agent_settings_get(current_user):
         conn.close()
         
         if not row:
-            return jsonify({'role': '', 'instructions': '', 'faq_text': ''}), 200
+            return jsonify({'role': '', 'instructions': '', 'faq_text': '', 'document_links': ''}), 200
         
         return jsonify({
             'role': row['role'] or '',
             'instructions': row['instructions'] or '',
             'faq_text': row['faq_text'] or '',
+            'document_links': row['document_links'] or '',
             'created_at': str(row['created_at']) if row['created_at'] else None,
             'updated_at': str(row['updated_at']) if row['updated_at'] else None
         }), 200
@@ -1425,6 +1426,7 @@ def api_user_agent_settings_post(current_user):
     role = (data.get('role') or '').strip()
     instructions = (data.get('instructions') or '').strip()
     faq_text = (data.get('faq_text') or '').strip()
+    document_links = (data.get('document_links') or '').strip()
     user_email = current_user.get('user_email')
     
     try:
@@ -1439,18 +1441,36 @@ def api_user_agent_settings_post(current_user):
         existing = cursor.fetchone()
         
         if existing:
-            # Update
-            cursor.execute(
-                "UPDATE user_agent_settings SET role=%s, instructions=%s, faq_text=%s, updated_at=NOW() "
-                "WHERE user_email=%s",
-                (role, instructions, faq_text, user_email)
-            )
+            # Update - only update fields that are provided
+            update_fields = []
+            update_values = []
+            
+            if 'role' in data:
+                update_fields.append('role=%s')
+                update_values.append(role)
+            if 'instructions' in data:
+                update_fields.append('instructions=%s')
+                update_values.append(instructions)
+            if 'faq_text' in data:
+                update_fields.append('faq_text=%s')
+                update_values.append(faq_text)
+            if 'document_links' in data:
+                update_fields.append('document_links=%s')
+                update_values.append(document_links)
+            
+            if update_fields:
+                update_fields.append('updated_at=NOW()')
+                update_values.append(user_email)
+                cursor.execute(
+                    f"UPDATE user_agent_settings SET {', '.join(update_fields)} WHERE user_email=%s",
+                    tuple(update_values)
+                )
         else:
             # Insert
             cursor.execute(
-                "INSERT INTO user_agent_settings (user_email, role, instructions, faq_text) "
-                "VALUES (%s, %s, %s, %s)",
-                (user_email, role, instructions, faq_text)
+                "INSERT INTO user_agent_settings (user_email, role, instructions, faq_text, document_links) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (user_email, role, instructions, faq_text, document_links)
             )
         
         conn.commit()
