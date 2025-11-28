@@ -169,6 +169,28 @@
         <div class="row"><label style="width:100px;">Neu</label><input id="profile_new_pass" type="password" placeholder="min. 6 Zeichen"></div>
         <div class="row"><label style="width:100px;">Wiederholen</label><input id="profile_confirm_pass" type="password" placeholder="bestätigen"></div>
       </div>
+      <div style="border-top:1px solid var(--border); margin:16px 0; padding-top:16px;">
+        <h4 style="margin:0 0 8px; font-size:14px;">🤖 Agent-Einstellungen</h4>
+        <div class="row">
+          <label style="width:100px;">Agent-Rolle</label>
+          <select id="profile_agent_role" style="flex:1;">
+            <option value="">-- Bitte wählen --</option>
+            <option value="Vertrieb">Vertrieb</option>
+            <option value="Support">Support</option>
+            <option value="Manager">Manager</option>
+            <option value="Controller">Controller</option>
+            <option value="HR">HR / Personalwesen</option>
+            <option value="Sonstige">Sonstige</option>
+          </select>
+        </div>
+        <div class="row" style="align-items:flex-start;">
+          <label style="width:100px; padding-top:8px;">Anweisungen</label>
+          <div style="flex:1;">
+            <textarea id="profile_instructions" placeholder="z.B. 'Antworte immer kurz und höflich...'" rows="4" maxlength="500" style="width:100%; resize:vertical; font-family:inherit; font-size:13px; padding:8px; border:1px solid var(--border); border-radius:4px;"></textarea>
+            <small class="sub">Max. 500 Zeichen</small>
+          </div>
+        </div>
+      </div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
         <button id="profile_cancel" style="background:#6b7280;">Abbrechen</button>
         <button id="profile_save" style="background:#059669;">Speichern</button>
@@ -671,6 +693,16 @@
       document.getElementById('profile_role').value = user.role || 'user';
       document.getElementById('profile_new_pass').value = '';
       document.getElementById('profile_confirm_pass').value = '';
+      document.getElementById('profile_agent_role').value = '';
+      document.getElementById('profile_instructions').value = '';
+      
+      // Load agent settings
+      fetch('/api/user/agent-settings', {
+        headers: getAuthHeaders()
+      }).then(res => res.json()).then(data => {
+        if(data.role) document.getElementById('profile_agent_role').value = data.role;
+        if(data.instructions) document.getElementById('profile_instructions').value = data.instructions;
+      }).catch(() => {});
       
       const cleanup = () => { modal.style.display = 'none'; };
       document.getElementById('profile_cancel').onclick = cleanup;
@@ -702,23 +734,42 @@
         }
         
         try{
+          // Save profile
           const res = await fetch('/api/user/profile', {
             method: 'PUT',
             headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
             body: JSON.stringify(updateData)
           });
           const data = await parseJsonSafe(res);
-          if(data.__ok){
-            // Update localStorage
-            user.first_name = first;
-            user.last_name = last;
-            localStorage.setItem('current_user', JSON.stringify(user));
-            updateMenuForUser();
-            msg.textContent = '✅ Profil gespeichert!';
-            setTimeout(cleanup, 1500);
-          } else {
+          if(!data.__ok){
             msg.textContent = 'Fehler: ' + (data.error || 'Unbekannt');
+            return;
           }
+          
+          // Save agent settings
+          const agentRole = document.getElementById('profile_agent_role').value;
+          const agentInstructions = document.getElementById('profile_instructions').value.trim();
+          const agentRes = await fetch('/api/user/agent-settings', {
+            method: 'POST',
+            headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              role: agentRole,
+              instructions: agentInstructions
+            })
+          });
+          const agentData = await parseJsonSafe(agentRes);
+          if(!agentData.__ok){
+            msg.textContent = 'Profil OK, aber Agent-Einstellungen Fehler: ' + (agentData.error || 'Unbekannt');
+            return;
+          }
+          
+          // Update localStorage
+          user.first_name = first;
+          user.last_name = last;
+          localStorage.setItem('current_user', JSON.stringify(user));
+          updateMenuForUser();
+          msg.textContent = '✅ Profil gespeichert!';
+          setTimeout(cleanup, 1500);
         }catch(e){
           msg.textContent = 'Fehler: ' + e;
         }

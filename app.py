@@ -1385,6 +1385,82 @@ def api_user_profile_update(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/user/agent-settings', methods=['GET'])
+@require_auth
+def api_user_agent_settings_get(current_user):
+    """Get agent settings for current user."""
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT role, instructions, created_at, updated_at "
+            "FROM user_agent_settings WHERE user_email=%s",
+            (user_email,)
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not row:
+            return jsonify({'role': '', 'instructions': ''}), 200
+        
+        return jsonify({
+            'role': row['role'] or '',
+            'instructions': row['instructions'] or '',
+            'created_at': str(row['created_at']) if row['created_at'] else None,
+            'updated_at': str(row['updated_at']) if row['updated_at'] else None
+        }), 200
+    except Exception as e:
+        app.logger.error(f"[Agent-Settings GET] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/user/agent-settings', methods=['POST'])
+@require_auth
+def api_user_agent_settings_post(current_user):
+    """Save/update agent settings for current user."""
+    data = request.get_json(silent=True) or {}
+    role = (data.get('role') or '').strip()
+    instructions = (data.get('instructions') or '').strip()
+    user_email = current_user.get('user_email')
+    
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if settings exist
+        cursor.execute(
+            "SELECT id FROM user_agent_settings WHERE user_email=%s",
+            (user_email,)
+        )
+        existing = cursor.fetchone()
+        
+        if existing:
+            # Update
+            cursor.execute(
+                "UPDATE user_agent_settings SET role=%s, instructions=%s, updated_at=NOW() "
+                "WHERE user_email=%s",
+                (role, instructions, user_email)
+            )
+        else:
+            # Insert
+            cursor.execute(
+                "INSERT INTO user_agent_settings (user_email, role, instructions) "
+                "VALUES (%s, %s, %s)",
+                (user_email, role, instructions)
+            )
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({'ok': True, 'message': 'Agent settings saved'}), 200
+    except Exception as e:
+        app.logger.error(f"[Agent-Settings POST] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/admin/users', methods=['GET'])
 @require_auth
 @require_role(['superadmin'])
