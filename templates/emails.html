@@ -71,9 +71,9 @@
     <h1>📥 Inbox</h1>
     <div class="toolbar">
       <button id="reload">Aktualisieren</button>
+      <span id="status" class="sub" style="margin-right:auto;"></span>
       <button id="user_badge" style="background:#111827; display:none;">👤 Lade...</button>
       <button id="menu_btn" style="background:#111827; font-size:20px; padding:8px 14px;">☰</button>
-      <span id="status" class="sub"></span>
     </div>
   </header>
   <div class="container">
@@ -224,6 +224,48 @@
         <button id="new_user_save" style="background:#059669;">Erstellen</button>
       </div>
       <div id="new_user_msg" class="sub" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <!-- Agent Setup Modal -->
+  <div id="agent_setup_modal" class="modal">
+    <div class="box" style="width:520px; max-height:90vh; overflow-y:auto;">
+      <h3 style="margin:0 0 12px;">🤖 Agent-Setup</h3>
+      
+      <div class="row">
+        <label style="width:120px;">Agent-Rolle</label>
+        <select id="agent_role">
+          <option value="">-- Bitte wählen --</option>
+          <option value="Vertrieb">Vertrieb</option>
+          <option value="Support">Support</option>
+          <option value="Manager">Manager</option>
+          <option value="Controller">Controller</option>
+          <option value="HR">HR / Personalwesen</option>
+          <option value="Sonstige">Sonstige</option>
+        </select>
+      </div>
+      
+      <div class="row" style="align-items:flex-start; margin-top:16px;">
+        <label style="width:120px; padding-top:12px;">Anweisungen</label>
+        <div style="flex:1;">
+          <textarea id="agent_instructions" placeholder="z.B. 'Antworte immer kurz und höflich...'" rows="5" maxlength="500"></textarea>
+          <small class="sub" style="display:block; margin-top:4px;">Max. 500 Zeichen</small>
+        </div>
+      </div>
+      
+      <div class="row" style="align-items:flex-start; margin-top:16px;">
+        <label style="width:120px; padding-top:12px;">FAQ-Wissen</label>
+        <div style="flex:1;">
+          <textarea id="agent_faq" placeholder="Kopiere deine FAQs hier rein&#10;&#10;z.B.&#10;F: Wie lange dauert die Lieferung?&#10;A: 2-3 Werktage&#10;&#10;F: Was kostet der Versand?&#10;A: Versandkostenfrei ab 50€" rows="10" maxlength="5000"></textarea>
+          <small class="sub" style="display:block; margin-top:4px;">Max. 5000 Zeichen - Später auch Datei-Upload möglich</small>
+        </div>
+      </div>
+      
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+        <button id="agent_setup_cancel" style="background:#6b7280;">Abbrechen</button>
+        <button id="agent_setup_save" style="background:#059669;">Speichern</button>
+      </div>
+      <div id="agent_setup_msg" class="sub" style="margin-top:8px;"></div>
     </div>
   </div>
 
@@ -767,7 +809,7 @@
     });
     document.getElementById('sidebar_agent').addEventListener('click', (e)=>{
       e.preventDefault(); closeSidebar();
-      alert('Agent-Setup kommt in Schritt 2!');
+      openAgentSetupModal();
     });
     document.getElementById('sidebar_knowledge').addEventListener('click', (e)=>{
       e.preventDefault(); closeSidebar();
@@ -789,6 +831,65 @@
       localStorage.removeItem('jwt_token');
       localStorage.removeItem('current_user');
       location.reload();
+    }
+    
+    function openAgentSetupModal(){
+      const modal = document.getElementById('agent_setup_modal');
+      const msg = document.getElementById('agent_setup_msg');
+      const user = getCurrentUser();
+      if(!user){ alert('Bitte erst einloggen'); return; }
+      
+      modal.style.display = 'flex';
+      msg.textContent = 'Lade Einstellungen...';
+      
+      // Reset fields
+      document.getElementById('agent_role').value = '';
+      document.getElementById('agent_instructions').value = '';
+      document.getElementById('agent_faq').value = '';
+      
+      // Load agent settings
+      fetch('/api/user/agent-settings', {
+        headers: getAuthHeaders()
+      }).then(res => res.json()).then(data => {
+        if(data.role) document.getElementById('agent_role').value = data.role;
+        if(data.instructions) document.getElementById('agent_instructions').value = data.instructions;
+        if(data.faq_text) document.getElementById('agent_faq').value = data.faq_text;
+        msg.textContent = '';
+      }).catch((e) => {
+        msg.textContent = 'Fehler beim Laden: ' + e;
+      });
+      
+      const cleanup = () => { modal.style.display = 'none'; };
+      document.getElementById('agent_setup_cancel').onclick = cleanup;
+      document.getElementById('agent_setup_save').onclick = async () => {
+        const role = document.getElementById('agent_role').value;
+        const instructions = document.getElementById('agent_instructions').value.trim();
+        const faqText = document.getElementById('agent_faq').value.trim();
+        
+        msg.textContent = 'Speichere...';
+        
+        try{
+          const res = await fetch('/api/user/agent-settings', {
+            method: 'POST',
+            headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              role: role,
+              instructions: instructions,
+              faq_text: faqText
+            })
+          });
+          const data = await parseJsonSafe(res);
+          if(data.__ok){
+            msg.textContent = '✅ Gespeichert!';
+            setTimeout(cleanup, 1500);
+          } else {
+            msg.textContent = 'Fehler: ' + (data.error || 'Unbekannt');
+          }
+        }catch(e){
+          msg.textContent = 'Fehler: ' + e;
+        }
+      };
+      modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
     }
     function openUserManagementModal(){
       const modal = document.getElementById('user_management_modal');

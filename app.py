@@ -1394,7 +1394,7 @@ def api_user_agent_settings_get(current_user):
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT role, instructions, created_at, updated_at "
+            "SELECT role, instructions, faq_text, created_at, updated_at "
             "FROM user_agent_settings WHERE user_email=%s",
             (user_email,)
         )
@@ -1403,11 +1403,12 @@ def api_user_agent_settings_get(current_user):
         conn.close()
         
         if not row:
-            return jsonify({'role': '', 'instructions': ''}), 200
+            return jsonify({'role': '', 'instructions': '', 'faq_text': ''}), 200
         
         return jsonify({
             'role': row['role'] or '',
             'instructions': row['instructions'] or '',
+            'faq_text': row['faq_text'] or '',
             'created_at': str(row['created_at']) if row['created_at'] else None,
             'updated_at': str(row['updated_at']) if row['updated_at'] else None
         }), 200
@@ -1423,6 +1424,7 @@ def api_user_agent_settings_post(current_user):
     data = request.get_json(silent=True) or {}
     role = (data.get('role') or '').strip()
     instructions = (data.get('instructions') or '').strip()
+    faq_text = (data.get('faq_text') or '').strip()
     user_email = current_user.get('user_email')
     
     try:
@@ -1439,16 +1441,16 @@ def api_user_agent_settings_post(current_user):
         if existing:
             # Update
             cursor.execute(
-                "UPDATE user_agent_settings SET role=%s, instructions=%s, updated_at=NOW() "
+                "UPDATE user_agent_settings SET role=%s, instructions=%s, faq_text=%s, updated_at=NOW() "
                 "WHERE user_email=%s",
-                (role, instructions, user_email)
+                (role, instructions, faq_text, user_email)
             )
         else:
             # Insert
             cursor.execute(
-                "INSERT INTO user_agent_settings (user_email, role, instructions) "
-                "VALUES (%s, %s, %s)",
-                (user_email, role, instructions)
+                "INSERT INTO user_agent_settings (user_email, role, instructions, faq_text) "
+                "VALUES (%s, %s, %s, %s)",
+                (user_email, role, instructions, faq_text)
             )
         
         conn.commit()
