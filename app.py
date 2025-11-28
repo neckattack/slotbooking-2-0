@@ -841,6 +841,101 @@ def api_emails_send(current_user):
         return jsonify({'error': err_txt, 'code': code}), status
 
 
+@app.route('/api/emails/smtp-test', methods=['POST'])
+@require_auth
+def api_emails_smtp_test(current_user):
+    """Test SMTP connection with user settings."""
+    import smtplib
+    user_email = current_user.get('user_email')
+    
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_security "
+            "FROM user_email_settings WHERE user_email=%s",
+            (user_email,)
+        )
+        settings = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not settings or not settings.get('smtp_host'):
+            return jsonify({'ok': False, 'error': 'Keine SMTP-Einstellungen gefunden'}), 400
+        
+        from encryption_utils import decrypt_password
+        smtp_host = settings['smtp_host']
+        smtp_port = int(settings.get('smtp_port', 465))
+        smtp_user = settings['smtp_user']
+        smtp_pass = decrypt_password(settings['smtp_pass_encrypted']) if settings['smtp_pass_encrypted'] else ''
+        smtp_security = (settings.get('smtp_security') or 'auto').lower()
+        
+        if not (smtp_host and smtp_user and smtp_pass):
+            return jsonify({'ok': False, 'error': 'SMTP-Konfiguration unvollständig'}), 400
+        
+        # Test connection
+        test_result = {
+            'host': smtp_host,
+            'port': smtp_port,
+            'user': smtp_user[:3] + '***' if len(smtp_user) > 3 else smtp_user,
+            'security': smtp_security,
+            'tests': []
+        }
+        
+        def test_ssl():
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
+                server.login(smtp_user, smtp_pass)
+            return True
+        
+        def test_starttls():
+            port_tls = smtp_port if smtp_security == 'starttls' else 587
+            with smtplib.SMTP(smtp_host, port_tls, timeout=10) as server:
+                server.ehlo()
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+            return True
+        
+        # Run tests based on security mode
+        if smtp_security == 'ssl':
+            try:
+                test_ssl()
+                test_result['tests'].append({'method': 'SSL', 'success': True, 'message': f'Verbindung erfolgreich auf Port {smtp_port}'})
+            except Exception as e:
+                test_result['tests'].append({'method': 'SSL', 'success': False, 'message': str(e)})
+                return jsonify({'ok': False, **test_result}), 500
+        elif smtp_security == 'starttls':
+            try:
+                test_starttls()
+                test_result['tests'].append({'method': 'STARTTLS', 'success': True, 'message': f'Verbindung erfolgreich auf Port {smtp_port}'})
+            except Exception as e:
+                test_result['tests'].append({'method': 'STARTTLS', 'success': False, 'message': str(e)})
+                return jsonify({'ok': False, **test_result}), 500
+        else:  # auto
+            # Try SSL first
+            ssl_success = False
+            try:
+                test_ssl()
+                test_result['tests'].append({'method': 'SSL', 'success': True, 'message': f'Verbindung erfolgreich auf Port {smtp_port}'})
+                ssl_success = True
+            except Exception as e:
+                test_result['tests'].append({'method': 'SSL', 'success': False, 'message': str(e)})
+            
+            # Try STARTTLS
+            if not ssl_success:
+                try:
+                    test_starttls()
+                    test_result['tests'].append({'method': 'STARTTLS', 'success': True, 'message': 'Verbindung erfolgreich auf Port 587'})
+                except Exception as e:
+                    test_result['tests'].append({'method': 'STARTTLS', 'success': False, 'message': str(e)})
+                    return jsonify({'ok': False, **test_result}), 500
+        
+        return jsonify({'ok': True, **test_result}), 200
+        
+    except Exception as e:
+        import traceback
+        return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
 @app.route("/api/emails/imap-debug")
 def api_emails_imap_debug():
     import imaplib

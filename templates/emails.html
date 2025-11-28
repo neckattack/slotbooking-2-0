@@ -141,6 +141,10 @@
           </select>
         </div>
       </div>
+      <div style="margin-bottom:12px; padding:12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;">
+        <button id="smtp_test_btn" style="background:#0284c7; color:#fff; width:100%;">🔧 SMTP-Verbindung testen</button>
+        <div id="smtp_test_result" class="sub" style="margin-top:8px;"></div>
+      </div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
         <button id="email_settings_cancel" style="background:#6b7280;">Abbrechen</button>
         <button id="email_settings_save">Speichern</button>
@@ -732,6 +736,53 @@
           msg.textContent = 'Fehler beim Speichern: ' + e;
         }
       };
+      
+      // SMTP Test Button
+      document.getElementById('smtp_test_btn').onclick = async () => {
+        const resultDiv = document.getElementById('smtp_test_result');
+        const btn = document.getElementById('smtp_test_btn');
+        resultDiv.textContent = 'Teste Verbindung...';
+        btn.disabled = true;
+        
+        try {
+          const res = await fetch('/api/emails/smtp-test', {
+            method: 'POST',
+            headers: getAuthHeaders()
+          });
+          const data = await parseJsonSafe(res);
+          
+          if (data.ok) {
+            let resultText = `✅ SMTP-Verbindung erfolgreich!\n\nServer: ${data.host}:${data.port}\nSecurity: ${data.security}\n\n`;
+            if (data.tests && data.tests.length > 0) {
+              resultText += 'Tests:\n';
+              data.tests.forEach(test => {
+                const icon = test.success ? '✅' : '✅';
+                resultText += `${icon} ${test.method}: ${test.message}\n`;
+              });
+            }
+            resultDiv.textContent = resultText;
+            resultDiv.style.color = '#059669';
+          } else {
+            let errorText = `❌ SMTP-Test fehlgeschlagen\n\n`;
+            if (data.error) errorText += `Fehler: ${data.error}\n\n`;
+            if (data.tests && data.tests.length > 0) {
+              errorText += 'Details:\n';
+              data.tests.forEach(test => {
+                const icon = test.success ? '✅' : '❌';
+                errorText += `${icon} ${test.method}: ${test.message}\n`;
+              });
+            }
+            resultDiv.textContent = errorText;
+            resultDiv.style.color = '#dc2626';
+          }
+        } catch (e) {
+          resultDiv.textContent = `❌ Fehler beim Test: ${e}`;
+          resultDiv.style.color = '#dc2626';
+        } finally {
+          btn.disabled = false;
+        }
+      };
+      
       modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
     }
     function openProfileModal(){
