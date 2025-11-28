@@ -1261,11 +1261,26 @@ def api_user_email_settings_post():
     if not (imap_host and imap_user and smtp_host and smtp_user):
         return jsonify({'error': 'Missing required fields (imap_host, imap_user, smtp_host, smtp_user)'}), 400
     try:
-        # Encrypt passwords
-        imap_pass_enc = encrypt_password(imap_pass) if imap_pass else ''
-        smtp_pass_enc = encrypt_password(smtp_pass) if smtp_pass else ''
         conn = get_settings_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Check if settings exist
+        cursor.execute("SELECT imap_pass_encrypted, smtp_pass_encrypted FROM user_email_settings WHERE user_email=%s", (user_email,))
+        existing = cursor.fetchone()
+        
+        # Only encrypt/update password if provided, otherwise keep existing
+        if existing:
+            imap_pass_enc = encrypt_password(imap_pass) if imap_pass else existing['imap_pass_encrypted']
+            smtp_pass_enc = encrypt_password(smtp_pass) if smtp_pass else existing['smtp_pass_encrypted']
+        else:
+            # New entry: require passwords
+            if not imap_pass or not smtp_pass:
+                cursor.close()
+                conn.close()
+                return jsonify({'error': 'Passwords required for new configuration'}), 400
+            imap_pass_enc = encrypt_password(imap_pass)
+            smtp_pass_enc = encrypt_password(smtp_pass)
+        
         # Upsert: insert or update on duplicate key
         sql = """
             INSERT INTO user_email_settings
