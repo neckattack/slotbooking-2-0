@@ -19,12 +19,13 @@ def load_knowledge():
     except Exception:
         return ""
 
-def agent_respond(user_message, channel="chat", user_email=None):
+def agent_respond(user_message, channel="chat", user_email=None, agent_settings=None):
     """
     Liefert eine GPT-Antwort mit neckattack-Kontext und DB-Infos.
     - user_message: Die Frage/Bitte des Nutzers (Mailtext, Chat, ...)
     - channel: "chat", "email" etc.
     - user_email: falls bekannt, für Kontext (z.B. bei E-Mail)
+    - agent_settings: dict mit role, instructions, faq_text, document_links (optional)
 
     # WICHTIG: E-Mails IMMER klar gegliedert mit Absätzen, Listen und Themenblöcken formatieren – keine Fließtexte! (Regel: email_formatting)
     """
@@ -89,8 +90,28 @@ def agent_respond(user_message, channel="chat", user_email=None):
         except Exception:
             return "general"
 
+    # Build system prompt with user-specific agent settings
+    agent_role = ""
+    agent_instructions = ""
+    agent_faq = ""
+    agent_docs = ""
+    
+    if agent_settings:
+        if agent_settings.get('role'):
+            agent_role = f"\n\n🎭 DEINE ROLLE: {agent_settings['role']}\nAntworte immer aus der Perspektive dieser Rolle und berücksichtige ihre typischen Aufgaben und Anliegen.\n"
+        if agent_settings.get('instructions'):
+            agent_instructions = f"\n\n📝 ANWEISUNGEN FÜR ANTWORTEN:\n{agent_settings['instructions']}\n\nBefolge diese Anweisungen STRENG bei jeder Antwort!\n"
+        if agent_settings.get('faq_text'):
+            agent_faq = f"\n\n📚 FAQ & WISSENSDATENBANK:\n{agent_settings['faq_text']}\n\nNutze dieses Wissen bevorzugt für Antworten. Diese Informationen haben höchste Priorität!\n"
+        if agent_settings.get('document_links'):
+            agent_docs = f"\n\n🔗 VERFÜGBARE DOKUMENTE:\n{agent_settings['document_links']}\n\nDu kannst auf diese Dokumente verweisen, wenn sie zur Frage passen.\n"
+    
     system_prompt = (
         f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str}.\n"
+        f"{agent_role}"
+        f"{agent_instructions}"
+        f"{agent_faq}"
+        f"{agent_docs}"
         "Antworte so: Prüfe zuerst, ob die Knowledgebase (FAQ) relevant ist und nutze sie bevorzugt.\n"
         "Wenn die Frage klar nach Datenbankinhalten verlangt (Termine, Slots, Kunden, Reservierungen, gebucht/frei, Einsätze), darfst du SQL generieren.\n"
         "Wenn weder FAQ noch Datenbank passend sind, antworte mit deinem allgemeinen Wissen.\n"

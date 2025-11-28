@@ -44,13 +44,13 @@ def _cache_set(store: dict, key: str, value: dict):
     return value
 
 # Agent-Aufruf mit Timeout, damit UI nicht hängt
-def _agent_respond_with_timeout(text: str, *, channel: str, user_email: str, timeout_s: int = 8):
+def _agent_respond_with_timeout(text: str, *, channel: str, user_email: str, timeout_s: int = 8, agent_settings: dict = None):
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as _TO
     import time as _time
     from flask import current_app as _cap
     def _call():
         try:
-            return agent_respond(text, channel=channel, user_email=user_email)
+            return agent_respond(text, channel=channel, user_email=user_email, agent_settings=agent_settings)
         except Exception as e:
             try:
                 _cap.logger.error(f"[agent_respond] exception: {e}")
@@ -604,8 +604,32 @@ def api_emails_agent_compose(current_user):
                 visible_preface_html = ("<!-- PREFACE-BEGIN -->" "<div style=\"margin-bottom:14px;\">" + intro + "".join(blocks) + "</div>" "<!-- PREFACE-END -->")
         except Exception:
             pass
+        
+        # Load user agent settings for personalized responses
+        agent_settings = {}
+        try:
+            conn_settings = get_settings_db_connection()
+            cursor_settings = conn_settings.cursor(dictionary=True)
+            cursor_settings.execute(
+                "SELECT role, instructions, faq_text, document_links "
+                "FROM user_agent_settings WHERE user_email=%s",
+                (user_email,)
+            )
+            settings_row = cursor_settings.fetchone()
+            cursor_settings.close()
+            conn_settings.close()
+            if settings_row:
+                agent_settings = {
+                    'role': settings_row.get('role') or '',
+                    'instructions': settings_row.get('instructions') or '',
+                    'faq_text': settings_row.get('faq_text') or '',
+                    'document_links': settings_row.get('document_links') or ''
+                }
+        except Exception as e:
+            app.logger.warning(f"[Agent-Compose] Could not load agent settings: {e}")
+        
         # Agent-Antwort mit Timeout (UI soll nicht >8s warten)
-        antwort_body, timed_out = _agent_respond_with_timeout(source_text, channel="email", user_email=from_addr, timeout_s=timeout_s)
+        antwort_body, timed_out = _agent_respond_with_timeout(source_text, channel="email", user_email=from_addr, timeout_s=timeout_s, agent_settings=agent_settings)
         # Doppelte Grußformeln entfernen, falls LLM bereits mit "Hallo ..." startet
         def _strip_greeting_html(html: str) -> str:
             import re
