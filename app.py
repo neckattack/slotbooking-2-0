@@ -767,6 +767,9 @@ def api_emails_send(current_user):
     
     if not (smtp_host and smtp_user and smtp_pass):
         return jsonify({'error': 'SMTP configuration incomplete'}), 400
+    
+    app.logger.info(f"[Send] Attempting to send email to {to_addr} via {smtp_host}:{smtp_port} (security: {smtp_security})")
+    
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
@@ -776,29 +779,41 @@ def api_emails_send(current_user):
         msg.attach(part)
 
         def _send_ssl():
+            app.logger.debug(f"[Send] Trying SSL on {smtp_host}:{smtp_port}")
             with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=12) as server:
                 server.login(smtp_user, smtp_pass)
                 server.sendmail(smtp_user, [to_addr], msg.as_string())
+            app.logger.info(f"[Send] Email sent successfully via SSL")
 
         def _send_starttls():
-            port_tls = int(os.environ.get('SMTP_PORT_STARTTLS', '587'))
+            # Use smtp_port from user settings, not env variable
+            port_tls = smtp_port if smtp_security == 'starttls' else int(os.environ.get('SMTP_PORT_STARTTLS', '587'))
+            app.logger.debug(f"[Send] Trying STARTTLS on {smtp_host}:{port_tls}")
             with smtplib.SMTP(smtp_host, port_tls, timeout=12) as server:
                 server.ehlo()
                 server.starttls()
                 server.login(smtp_user, smtp_pass)
                 server.sendmail(smtp_user, [to_addr], msg.as_string())
+            app.logger.info(f"[Send] Email sent successfully via STARTTLS")
 
         if smtp_security == 'ssl':
             _send_ssl()
         elif smtp_security == 'starttls':
             _send_starttls()
         else:
-            # auto: erst SSL, dann Fallback auf STARTTLS
+            # auto: Try both SSL and STARTTLS
+            ssl_error = None
             try:
                 _send_ssl()
             except Exception as e1:
-                app.logger.warning(f"[SMTP] SSL failed, trying STARTTLS: {e1}")
-                _send_starttls()
+                ssl_error = e1
+                app.logger.warning(f"[SMTP] SSL (port {smtp_port}) failed: {e1}, trying STARTTLS...")
+                try:
+                    _send_starttls()
+                except Exception as e2:
+                    app.logger.error(f"[SMTP] STARTTLS also failed: {e2}")
+                    # Raise the more specific error
+                    raise e2
         return jsonify({'ok': True})
     except Exception as e:
         import socket, smtplib, ssl, traceback
