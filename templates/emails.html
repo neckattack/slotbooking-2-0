@@ -126,6 +126,9 @@
             <option value="starttls">STARTTLS</option>
           </select>
         </div>
+        <div id="imap_port_hint" class="sub" style="margin-top:8px; padding:8px; background:#fef3c7; border:1px solid #fbbf24; border-radius:4px; display:none;">
+          💡 <span id="imap_port_hint_text"></span>
+        </div>
       </div>
       <div style="margin-bottom:16px;">
         <h4 style="margin:0 0 8px; font-size:14px;">SMTP (Versand)</h4>
@@ -139,6 +142,9 @@
             <option value="starttls">STARTTLS</option>
             <option value="auto">Auto</option>
           </select>
+        </div>
+        <div id="smtp_port_hint" class="sub" style="margin-top:8px; padding:8px; background:#fef3c7; border:1px solid #fbbf24; border-radius:4px; display:none;">
+          💡 <span id="smtp_port_hint_text"></span>
         </div>
       </div>
       <div style="margin-bottom:12px; padding:12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;">
@@ -699,6 +705,69 @@
       }catch(e){
         msg.textContent = 'Fehler beim Laden: ' + e;
       }
+      
+      // Auto-detect security based on SMTP port
+      const smtpPortInput = document.getElementById('smtp_port');
+      const smtpSecuritySelect = document.getElementById('smtp_security');
+      const smtpHintDiv = document.getElementById('smtp_port_hint');
+      const smtpHintText = document.getElementById('smtp_port_hint_text');
+      
+      function updateSmtpSecurityHint() {
+        const port = parseInt(smtpPortInput.value);
+        if (port === 587) {
+          smtpSecuritySelect.value = 'starttls';
+          smtpHintDiv.style.display = 'block';
+          smtpHintText.textContent = 'Port 587 nutzt STARTTLS - automatisch ausgewählt';
+        } else if (port === 465) {
+          smtpSecuritySelect.value = 'ssl';
+          smtpHintDiv.style.display = 'block';
+          smtpHintText.textContent = 'Port 465 nutzt SSL - automatisch ausgewählt';
+        } else if (port === 25) {
+          smtpSecuritySelect.value = 'starttls';
+          smtpHintDiv.style.display = 'block';
+          smtpHintText.textContent = 'Port 25 nutzt meist STARTTLS - bitte prüfen';
+        } else {
+          smtpHintDiv.style.display = 'none';
+        }
+      }
+      
+      smtpPortInput.addEventListener('input', updateSmtpSecurityHint);
+      smtpPortInput.addEventListener('change', updateSmtpSecurityHint);
+      
+      // Run once on load if port is already filled
+      if (smtpPortInput.value) {
+        updateSmtpSecurityHint();
+      }
+      
+      // Auto-detect security based on IMAP port
+      const imapPortInput = document.getElementById('imap_port');
+      const imapSecuritySelect = document.getElementById('imap_security');
+      const imapHintDiv = document.getElementById('imap_port_hint');
+      const imapHintText = document.getElementById('imap_port_hint_text');
+      
+      function updateImapSecurityHint() {
+        const port = parseInt(imapPortInput.value);
+        if (port === 993) {
+          imapSecuritySelect.value = 'ssl';
+          imapHintDiv.style.display = 'block';
+          imapHintText.textContent = 'Port 993 nutzt SSL - automatisch ausgewählt';
+        } else if (port === 143) {
+          imapSecuritySelect.value = 'starttls';
+          imapHintDiv.style.display = 'block';
+          imapHintText.textContent = 'Port 143 nutzt STARTTLS - automatisch ausgewählt';
+        } else {
+          imapHintDiv.style.display = 'none';
+        }
+      }
+      
+      imapPortInput.addEventListener('input', updateImapSecurityHint);
+      imapPortInput.addEventListener('change', updateImapSecurityHint);
+      
+      // Run once on load if port is already filled
+      if (imapPortInput.value) {
+        updateImapSecurityHint();
+      }
+      
       const cleanup = () => { modal.style.display='none'; };
       document.getElementById('email_settings_cancel').onclick = cleanup;
       document.getElementById('email_settings_save').onclick = async () => {
