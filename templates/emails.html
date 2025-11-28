@@ -50,6 +50,19 @@
     .modal textarea { flex:1; padding:12px 14px; border:2px solid var(--border); border-radius:8px; font-size:14px; font-family:inherit; resize:vertical; transition:all 0.2s; }
     .modal textarea:hover { border-color:#111827; }
     .modal textarea:focus { outline:none; border-color:#059669; box-shadow:0 0 0 3px rgba(5,150,105,0.1); }
+    .sidebar { position:fixed; top:0; right:-320px; width:320px; height:100vh; background:#fff; box-shadow:-4px 0 20px rgba(0,0,0,0.1); z-index:200; transition:right 0.3s ease; overflow-y:auto; }
+    .sidebar.open { right:0; }
+    .sidebar-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.3); z-index:199; display:none; transition:opacity 0.3s; }
+    .sidebar-overlay.open { display:block; }
+    .sidebar-header { padding:20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+    .sidebar-header h3 { margin:0; font-size:18px; }
+    .sidebar-close { background:none; border:0; font-size:24px; cursor:pointer; color:var(--sub); padding:0; width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:6px; }
+    .sidebar-close:hover { background:var(--hover); color:var(--fg); }
+    .sidebar-menu { padding:0; margin:0; list-style:none; }
+    .sidebar-menu li { border-bottom:1px solid var(--border); }
+    .sidebar-menu li a { display:flex; align-items:center; gap:12px; padding:16px 20px; text-decoration:none; color:var(--fg); font-size:15px; transition:background 0.2s; }
+    .sidebar-menu li a:hover { background:var(--hover); }
+    .sidebar-menu li a .icon { font-size:20px; width:24px; }
   </style>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
@@ -59,16 +72,7 @@
     <div class="toolbar">
       <button id="reload">Aktualisieren</button>
       <button id="user_badge" style="background:#111827; display:none;">👤 Lade...</button>
-      <div style="position:relative;">
-        <button id="settings_btn" style="background:#111827;">⚙️</button>
-        <div id="settings_menu" style="display:none; position:absolute; right:0; top:40px; background:#fff; border:1px solid var(--border); border-radius:8px; min-width:180px; box-shadow:0 6px 20px rgba(0,0,0,.08); z-index:50;">
-          <div id="menu_profile" class="item" style="border:0; padding:10px 12px;">👤 Profil</div>
-          <div id="menu_email" class="item" style="padding:10px 12px;">⚙️ E‑Mail-Einstellungen</div>
-          <div id="menu_users" class="item" style="padding:10px 12px; display:none;">👥 User-Verwaltung</div>
-          <div style="border-top:1px solid var(--border); margin:4px 0;"></div>
-          <div id="menu_logout" class="item" style="padding:10px 12px; color:#dc2626;">🚪 Logout</div>
-        </div>
-      </div>
+      <button id="menu_btn" style="background:#111827; font-size:20px; padding:8px 14px;">☰</button>
       <span id="status" class="sub"></span>
     </div>
   </header>
@@ -162,6 +166,23 @@
     </div>
   </div>
 
+  <!-- Sidebar Menu -->
+  <div class="sidebar-overlay" id="sidebar_overlay"></div>
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h3>⚙️ Einstellungen</h3>
+      <button class="sidebar-close" id="sidebar_close">✕</button>
+    </div>
+    <ul class="sidebar-menu">
+      <li><a href="#" id="sidebar_profile"><span class="icon">👤</span> Profil</a></li>
+      <li><a href="#" id="sidebar_agent"><span class="icon">🤖</span> Agent-Setup</a></li>
+      <li><a href="#" id="sidebar_knowledge"><span class="icon">📚</span> Wissensdatenbank</a></li>
+      <li><a href="#" id="sidebar_email"><span class="icon">✉️</span> E-Mail-Einstellungen</a></li>
+      <li id="sidebar_users_item" style="display:none;"><a href="#" id="sidebar_users"><span class="icon">👥</span> User-Verwaltung</a></li>
+      <li style="border-top:2px solid var(--border);"><a href="#" id="sidebar_logout" style="color:#dc2626;"><span class="icon">🚪</span> Logout</a></li>
+    </ul>
+  </div>
+
   <!-- Profile Modal -->
   <div id="profile_modal" class="modal">
     <div class="box" style="width:420px;">
@@ -174,28 +195,6 @@
         <h4 style="margin:0 0 8px; font-size:14px;">🔒 Passwort ändern (optional)</h4>
         <div class="row"><label style="width:100px;">Neu</label><input id="profile_new_pass" type="password" placeholder="min. 6 Zeichen"></div>
         <div class="row"><label style="width:100px;">Wiederholen</label><input id="profile_confirm_pass" type="password" placeholder="bestätigen"></div>
-      </div>
-      <div style="border-top:1px solid var(--border); margin:16px 0; padding-top:16px;">
-        <h4 style="margin:0 0 8px; font-size:14px;">🤖 Agent-Einstellungen</h4>
-        <div class="row">
-          <label style="width:100px;">Agent-Rolle</label>
-          <select id="profile_agent_role" style="flex:1;">
-            <option value="">-- Bitte wählen --</option>
-            <option value="Vertrieb">Vertrieb</option>
-            <option value="Support">Support</option>
-            <option value="Manager">Manager</option>
-            <option value="Controller">Controller</option>
-            <option value="HR">HR / Personalwesen</option>
-            <option value="Sonstige">Sonstige</option>
-          </select>
-        </div>
-        <div class="row" style="align-items:flex-start;">
-          <label style="width:100px; padding-top:12px;">Anweisungen</label>
-          <div style="flex:1;">
-            <textarea id="profile_instructions" placeholder="z.B. 'Antworte immer kurz und höflich...'" rows="5" maxlength="500"></textarea>
-            <small class="sub" style="display:block; margin-top:4px;">Max. 500 Zeichen</small>
-          </div>
-        </div>
       </div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
         <button id="profile_cancel" style="background:#6b7280;">Abbrechen</button>
@@ -454,17 +453,6 @@
     document.getElementById('reload').addEventListener('click', loadInbox);
     document.getElementById('btn_propose').addEventListener('click', proposeDraft);
     document.getElementById('btn_send').addEventListener('click', sendDraft);
-    // Settings dropdown behavior
-    const settingsBtn = document.getElementById('settings_btn');
-    const settingsMenu = document.getElementById('settings_menu');
-    settingsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const v = settingsMenu.style.display === 'block';
-      settingsMenu.style.display = v ? 'none' : 'block';
-    });
-    document.addEventListener('click', (e) => {
-      if(settingsMenu.style.display === 'block') settingsMenu.style.display = 'none';
-    });
     // Auth: get JWT token and user email
     function getAuthToken(){
       return localStorage.getItem('jwt_token') || '';
@@ -489,11 +477,11 @@
     }
     function updateMenuForUser(){
       const user = getCurrentUser();
-      const menuUsers = document.getElementById('menu_users');
+      const sidebarUsersItem = document.getElementById('sidebar_users_item');
       if(user && user.role === 'superadmin'){
-        menuUsers.style.display = 'block';
+        if(sidebarUsersItem) sidebarUsersItem.style.display = 'block';
       } else {
-        menuUsers.style.display = 'none';
+        if(sidebarUsersItem) sidebarUsersItem.style.display = 'none';
       }
       // Update user badge
       const badge = document.getElementById('user_badge');
@@ -699,16 +687,6 @@
       document.getElementById('profile_role').value = user.role || 'user';
       document.getElementById('profile_new_pass').value = '';
       document.getElementById('profile_confirm_pass').value = '';
-      document.getElementById('profile_agent_role').value = '';
-      document.getElementById('profile_instructions').value = '';
-      
-      // Load agent settings
-      fetch('/api/user/agent-settings', {
-        headers: getAuthHeaders()
-      }).then(res => res.json()).then(data => {
-        if(data.role) document.getElementById('profile_agent_role').value = data.role;
-        if(data.instructions) document.getElementById('profile_instructions').value = data.instructions;
-      }).catch(() => {});
       
       const cleanup = () => { modal.style.display = 'none'; };
       document.getElementById('profile_cancel').onclick = cleanup;
@@ -740,62 +718,71 @@
         }
         
         try{
-          // Save profile
           const res = await fetch('/api/user/profile', {
             method: 'PUT',
             headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
             body: JSON.stringify(updateData)
           });
           const data = await parseJsonSafe(res);
-          if(!data.__ok){
+          if(data.__ok){
+            // Update localStorage
+            user.first_name = first;
+            user.last_name = last;
+            localStorage.setItem('current_user', JSON.stringify(user));
+            updateMenuForUser();
+            msg.textContent = '✅ Profil gespeichert!';
+            setTimeout(cleanup, 1500);
+          } else {
             msg.textContent = 'Fehler: ' + (data.error || 'Unbekannt');
-            return;
           }
-          
-          // Save agent settings
-          const agentRole = document.getElementById('profile_agent_role').value;
-          const agentInstructions = document.getElementById('profile_instructions').value.trim();
-          const agentRes = await fetch('/api/user/agent-settings', {
-            method: 'POST',
-            headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-            body: JSON.stringify({
-              role: agentRole,
-              instructions: agentInstructions
-            })
-          });
-          const agentData = await parseJsonSafe(agentRes);
-          if(!agentData.__ok){
-            msg.textContent = 'Profil OK, aber Agent-Einstellungen Fehler: ' + (agentData.error || 'Unbekannt');
-            return;
-          }
-          
-          // Update localStorage
-          user.first_name = first;
-          user.last_name = last;
-          localStorage.setItem('current_user', JSON.stringify(user));
-          updateMenuForUser();
-          msg.textContent = '✅ Profil gespeichert!';
-          setTimeout(cleanup, 1500);
         }catch(e){
           msg.textContent = 'Fehler: ' + e;
         }
       };
       modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
     }
-    document.getElementById('menu_profile').addEventListener('click', (e)=>{
-      e.stopPropagation(); settingsMenu.style.display='none';
+    
+    // Sidebar Menu
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebar_overlay');
+    const menuBtn = document.getElementById('menu_btn');
+    const sidebarClose = document.getElementById('sidebar_close');
+    
+    function openSidebar(){
+      sidebar.classList.add('open');
+      sidebarOverlay.classList.add('open');
+    }
+    function closeSidebar(){
+      sidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('open');
+    }
+    
+    menuBtn.addEventListener('click', openSidebar);
+    sidebarClose.addEventListener('click', closeSidebar);
+    sidebarOverlay.addEventListener('click', closeSidebar);
+    
+    document.getElementById('sidebar_profile').addEventListener('click', (e)=>{
+      e.preventDefault(); closeSidebar();
       openProfileModal();
     });
-    document.getElementById('menu_email').addEventListener('click', (e)=>{
-      e.stopPropagation(); settingsMenu.style.display='none';
+    document.getElementById('sidebar_agent').addEventListener('click', (e)=>{
+      e.preventDefault(); closeSidebar();
+      alert('Agent-Setup kommt in Schritt 2!');
+    });
+    document.getElementById('sidebar_knowledge').addEventListener('click', (e)=>{
+      e.preventDefault(); closeSidebar();
+      alert('Wissensdatenbank kommt später!');
+    });
+    document.getElementById('sidebar_email').addEventListener('click', (e)=>{
+      e.preventDefault(); closeSidebar();
       openEmailSettingsModal();
     });
-    document.getElementById('menu_users').addEventListener('click', (e)=>{
-      e.stopPropagation(); settingsMenu.style.display='none';
+    document.getElementById('sidebar_users').addEventListener('click', (e)=>{
+      e.preventDefault(); closeSidebar();
       openUserManagementModal();
     });
-    document.getElementById('menu_logout').addEventListener('click', (e)=>{
-      e.stopPropagation(); settingsMenu.style.display='none';
+    document.getElementById('sidebar_logout').addEventListener('click', (e)=>{
+      e.preventDefault(); closeSidebar();
       logout();
     });
     function logout(){
