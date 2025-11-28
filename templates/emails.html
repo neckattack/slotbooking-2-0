@@ -44,6 +44,12 @@
     .modal .row { display:flex; gap:8px; margin:10px 0; align-items:center; }
     .modal label { width:90px; color:var(--sub); font-size:12px; }
     .modal input { flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:14px; }
+    .modal select { flex:1; padding:12px 14px; border:2px solid var(--border); border-radius:8px; font-size:15px; font-weight:500; background:#fff; cursor:pointer; transition:all 0.2s; appearance:none; background-image:url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23111827' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center; padding-right:36px; }
+    .modal select:hover { border-color:#111827; }
+    .modal select:focus { outline:none; border-color:#059669; box-shadow:0 0 0 3px rgba(5,150,105,0.1); }
+    .modal textarea { flex:1; padding:12px 14px; border:2px solid var(--border); border-radius:8px; font-size:14px; font-family:inherit; resize:vertical; transition:all 0.2s; }
+    .modal textarea:hover { border-color:#111827; }
+    .modal textarea:focus { outline:none; border-color:#059669; box-shadow:0 0 0 3px rgba(5,150,105,0.1); }
   </style>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
@@ -184,10 +190,10 @@
           </select>
         </div>
         <div class="row" style="align-items:flex-start;">
-          <label style="width:100px; padding-top:8px;">Anweisungen</label>
+          <label style="width:100px; padding-top:12px;">Anweisungen</label>
           <div style="flex:1;">
-            <textarea id="profile_instructions" placeholder="z.B. 'Antworte immer kurz und höflich...'" rows="4" maxlength="500" style="width:100%; resize:vertical; font-family:inherit; font-size:13px; padding:8px; border:1px solid var(--border); border-radius:4px;"></textarea>
-            <small class="sub">Max. 500 Zeichen</small>
+            <textarea id="profile_instructions" placeholder="z.B. 'Antworte immer kurz und höflich...'" rows="5" maxlength="500"></textarea>
+            <small class="sub" style="display:block; margin-top:4px;">Max. 500 Zeichen</small>
           </div>
         </div>
       </div>
