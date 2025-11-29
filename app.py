@@ -1208,6 +1208,13 @@ def api_emails_list(current_user):
         )
         total_all_folders = cursor.fetchone()['total']
         
+        # Check if user has email settings (to know if we can sync more)
+        cursor.execute(
+            "SELECT imap_host FROM user_email_settings WHERE user_email=%s",
+            (user_email,)
+        )
+        has_imap_settings = cursor.fetchone() is not None
+        
         cursor.close()
         conn.close()
         
@@ -1234,7 +1241,8 @@ def api_emails_list(current_user):
             'emails': formatted_emails,
             'total': total,
             'total_all_folders': total_all_folders,
-            'has_more': (offset + limit) < total
+            'has_more': (offset + limit) < total,  # More in DB
+            'can_sync_more': has_imap_settings  # Can check server for more
         }), 200
         
     except Exception as e:

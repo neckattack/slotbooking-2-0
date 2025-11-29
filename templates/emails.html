@@ -407,9 +407,15 @@
         // Show/hide "Load more" button
         const loadMoreBtn = document.getElementById('load_more_btn');
         const totalInDB = data.total || 0;
+        
         if(data.has_more){
+          // More emails in DB
           loadMoreBtn.style.display = 'inline-block';
           loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${totalInDB - data.emails.length} verfügbar)`;
+        } else if(data.can_sync_more){
+          // All DB emails loaded, but can check server for more
+          loadMoreBtn.style.display = 'inline-block';
+          loadMoreBtn.textContent = `📥 Nach neuen E-Mails suchen`;
         } else {
           loadMoreBtn.style.display = 'none';
         }
