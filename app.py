@@ -1287,6 +1287,130 @@ def api_emails_get(current_user, email_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/contacts/list', methods=['GET'])
+@require_auth
+def api_contacts_list(current_user):
+    """Get all contacts for current user"""
+    user_email = current_user.get('user_email')
+    search = request.args.get('search', '').strip()
+    
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        if search:
+            # Search by name or email
+            cursor.execute(
+                """
+                SELECT id, contact_email, name, first_name, email_count, 
+                       first_contact_at, last_contact_at
+                FROM contacts
+                WHERE user_email = %s AND (name LIKE %s OR contact_email LIKE %s)
+                ORDER BY last_contact_at DESC
+                LIMIT 100
+                """,
+                (user_email, f'%{search}%', f'%{search}%')
+            )
+        else:
+            # Get all contacts
+            cursor.execute(
+                """
+                SELECT id, contact_email, name, first_name, email_count, 
+                       first_contact_at, last_contact_at
+                FROM contacts
+                WHERE user_email = %s
+                ORDER BY last_contact_at DESC
+                LIMIT 100
+                """,
+                (user_email,)
+            )
+        
+        contacts = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        # Format for frontend
+        formatted = []
+        for c in contacts:
+            formatted.append({
+                'id': c['id'],
+                'name': c['name'] or c['contact_email'],
+                'email': c['contact_email'],
+                'email_count': c['email_count'],
+                'first_contact': c['first_contact_at'].strftime('%d.%m.%Y') if c['first_contact_at'] else '–',
+                'last_contact': c['last_contact_at'].strftime('%d.%m.%Y %H:%M') if c['last_contact_at'] else '–'
+            })
+        
+        return jsonify({'contacts': formatted, 'total': len(formatted)}), 200
+        
+    except Exception as e:
+        app.logger.error(f"[List Contacts] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/contacts/<int:contact_id>/emails', methods=['GET'])
+@require_auth
+def api_contacts_emails(current_user, contact_id):
+    """Get all emails from a specific contact"""
+    user_email = current_user.get('user_email')
+    
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verify contact belongs to user
+        cursor.execute(
+            "SELECT id, name, contact_email, email_count FROM contacts WHERE id=%s AND user_email=%s",
+            (contact_id, user_email)
+        )
+        contact = cursor.fetchone()
+        
+        if not contact:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Contact not found'}), 404
+        
+        # Get all emails from this contact
+        cursor.execute(
+            """
+            SELECT id, subject, body_text, received_at, is_read, has_attachments
+            FROM emails
+            WHERE contact_id = %s AND user_email = %s
+            ORDER BY received_at DESC
+            """,
+            (contact_id, user_email)
+        )
+        emails = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        # Format emails
+        formatted_emails = []
+        for e in emails:
+            formatted_emails.append({
+                'id': e['id'],
+                'subject': e['subject'] or '(Kein Betreff)',
+                'preview': (e['body_text'] or '')[:150],
+                'date': e['received_at'].strftime('%d.%m.%Y %H:%M') if e['received_at'] else '',
+                'is_read': e['is_read'],
+                'has_attachments': e['has_attachments']
+            })
+        
+        return jsonify({
+            'contact': {
+                'id': contact['id'],
+                'name': contact['name'],
+                'email': contact['contact_email'],
+                'email_count': contact['email_count']
+            },
+            'emails': formatted_emails
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"[Contact Emails] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route("/api/emails/imap-debug")
 def api_emails_imap_debug():
     import imaplib

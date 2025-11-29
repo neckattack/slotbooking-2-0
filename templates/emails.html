@@ -71,6 +71,7 @@
     <h1>📥 Inbox</h1>
     <div class="toolbar">
       <button id="reload">Aktualisieren</button>
+      <button id="load_more_btn" style="background:#0284c7; display:none;">📥 Weitere E-Mails laden</button>
       <span id="status" class="sub" style="margin-right:auto;"></span>
       <button id="user_badge" style="background:#111827; display:none;">👤 Lade...</button>
       <button id="menu_btn" style="background:#111827; font-size:20px; padding:8px 14px;">☰</button>
@@ -187,6 +188,7 @@
       <li><a href="#" id="sidebar_profile"><span class="icon">👤</span> Profil</a></li>
       <li><a href="#" id="sidebar_agent"><span class="icon">🤖</span> Agent-Setup</a></li>
       <li><a href="#" id="sidebar_knowledge"><span class="icon">📚</span> Wissensdatenbank</a></li>
+      <li><a href="#" id="sidebar_contacts"><span class="icon">📇</span> Kontakte</a></li>
       <li><a href="#" id="sidebar_email"><span class="icon">✉️</span> E-Mail-Einstellungen</a></li>
       <li id="sidebar_users_item" style="display:none;"><a href="#" id="sidebar_users"><span class="icon">👥</span> User-Verwaltung</a></li>
       <li style="border-top:2px solid var(--border);"><a href="#" id="sidebar_logout" style="color:#dc2626;"><span class="icon">🚪</span> Logout</a></li>
@@ -300,6 +302,41 @@
     </div>
   </div>
 
+  <!-- Contacts Modal -->
+  <div id="contacts_modal" class="modal">
+    <div class="box" style="width:700px; max-height:90vh; overflow:auto;">
+      <h3 style="margin:0 0 16px;">📇 Kontakte</h3>
+      <div style="margin-bottom:16px;">
+        <input id="contacts_search" type="text" placeholder="🔍 Suche nach Name oder E-Mail..." style="width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; font-size:14px;">
+      </div>
+      <div id="contacts_list" style="min-height:200px;">
+        <div class="sub" style="text-align:center; padding:20px;">Lade Kontakte...</div>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+        <button id="contacts_close" style="background:#6b7280;">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contact Detail Modal -->
+  <div id="contact_detail_modal" class="modal">
+    <div class="box" style="width:800px; max-height:90vh; overflow:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:16px;">
+        <div>
+          <h3 id="contact_detail_name" style="margin:0 0 4px;">Kontakt</h3>
+          <div class="sub" id="contact_detail_email">email@example.com</div>
+        </div>
+        <button id="contact_detail_close" style="background:#6b7280; padding:8px 12px;">✕</button>
+      </div>
+      <div class="sub" style="margin-bottom:12px;">
+        <strong id="contact_detail_count">0</strong> E-Mails insgesamt
+      </div>
+      <div id="contact_detail_emails" style="border-top:1px solid var(--border); padding-top:16px;">
+        <div class="sub" style="text-align:center; padding:20px;">Lade E-Mails...</div>
+      </div>
+    </div>
+  </div>
+
   <script>
     let currentUid = null;
     async function parseJsonSafe(res){
@@ -366,10 +403,80 @@
           div.addEventListener('click', () => selectItem(it.uid, div));
           list.appendChild(div);
         }
-        status.textContent = `${data.emails.length} E-Mails geladen`;
+        
+        // Show/hide "Load more" button
+        const loadMoreBtn = document.getElementById('load_more_btn');
+        const totalInDB = data.total || 0;
+        if(data.has_more){
+          loadMoreBtn.style.display = 'inline-block';
+          loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${totalInDB - data.emails.length} verfügbar)`;
+        } else {
+          loadMoreBtn.style.display = 'none';
+        }
+        
+        status.textContent = `${data.emails.length} von ${totalInDB} E-Mails geladen`;
       }catch(e){
         list.innerHTML = `<div class="sub" style="padding:20px;">Fehler: ${e}</div>`;
         status.textContent = '';
+      }
+    }
+    
+    async function loadMoreEmails(){
+      const loadMoreBtn = document.getElementById('load_more_btn');
+      const originalText = loadMoreBtn.textContent;
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.textContent = '⏳ Lädt...';
+      
+      // Show dialog to choose how many
+      const choice = await new Promise((resolve) => {
+        const dialog = document.createElement('div');
+        dialog.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; padding:30px; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.3); z-index:10000; max-width:400px;';
+        dialog.innerHTML = `
+          <h3 style="margin:0 0 16px;">Wie viele E-Mails laden?</h3>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <button class="load-choice" data-count="20" style="background:#059669; color:#fff; border:0; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">📥 Weitere 20 E-Mails</button>
+            <button class="load-choice" data-count="50" style="background:#0284c7; color:#fff; border:0; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">📥 Weitere 50 E-Mails</button>
+            <button class="load-choice" data-count="100" style="background:#7c3aed; color:#fff; border:0; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">📥 Weitere 100 E-Mails</button>
+            <button class="load-choice" data-count="0" style="background:#6b7280; color:#fff; border:0; padding:12px; border-radius:8px; cursor:pointer; font-size:15px;">Abbrechen</button>
+          </div>
+        `;
+        document.body.appendChild(dialog);
+        
+        dialog.querySelectorAll('.load-choice').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const count = parseInt(btn.dataset.count);
+            document.body.removeChild(dialog);
+            resolve(count);
+          });
+        });
+      });
+      
+      if(choice === 0){
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = originalText;
+        return;
+      }
+      
+      try{
+        // Sync more emails
+        const syncRes = await fetch('/api/emails/sync', {
+          method: 'POST',
+          headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+          body: JSON.stringify({ limit: choice })
+        });
+        const syncData = await parseJsonSafe(syncRes);
+        
+        if(!syncData.__ok){
+          throw new Error(syncData.error || 'Sync fehlgeschlagen');
+        }
+        
+        // Reload inbox
+        await loadInbox();
+        
+      }catch(e){
+        alert('Fehler beim Laden: ' + e);
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = originalText;
       }
     }
     
@@ -518,28 +625,33 @@
         const t = await parseJsonSafe(res);
         if(!t.__ok){ throw new Error(t.error || 'E-Mail konnte nicht geladen werden'); }
         const html = t.body_html || (t.body_text ? `<pre>${escapeHtml(t.body_text)}</pre>` : '<div class="sub">Kein Inhalt</div>');
+        
+        // Extract contact info
+        const contactName = t.contact_name || t.from || '–';
+        const contactEmail = t.contact_email || t.from_addr || '–';
+        const emailCount = t.contact_email_count || 1;
+        
         detail.innerHTML = `
           <h2>${escapeHtml(t.subject || '')}</h2>
           <div class="meta">Von: ${escapeHtml(t.from||'')} · An: ${escapeHtml(t.to||'')} · ${escapeHtml(t.date||'')}</div>
           <div class="content">${html}</div>
           <div class="profile" id="profile_panel">
-            <h3>PROFIL</h3>
+            <h3>👤 KONTAKT-PROFIL</h3>
             <div class="grid">
               <div>
-                <div class="kv"><span>Name</span><b id="prof_name">–</b></div>
-                <div class="kv"><span>E‑Mail</span><b id="prof_email">–</b></div>
-                <div class="kv"><span>Telefon</span><b id="prof_phone">–</b></div>
-                <div class="kv"><span>Ort</span><b id="prof_city">–</b></div>
-              </div>
-              <div>
-                <div class="kv"><span>Quelle</span><b id="prof_source">–</b></div>
-                <div class="kv"><span>Letzter Kontakt</span><b id="prof_last">–</b></div>
-                <div class="kv"><span>Kanäle</span><b id="prof_channels">E‑Mail</b></div>
+                <div class="kv"><span>Name</span><b>${escapeHtml(contactName)}</b></div>
+                <div class="kv"><span>E‑Mail</span><b>${escapeHtml(contactEmail)}</b></div>
+                <div class="kv"><span>E-Mails</span><b>${emailCount} Nachricht${emailCount !== 1 ? 'en' : ''}</b></div>
               </div>
             </div>
-            <div style="margin-top:10px; font-size:13px;">
-              <div class="sub" style="margin-bottom:6px;">Zusammenfassung</div>
-              <div id="prof_summary">Noch keine Profildaten. Dieses Feld wird später automatisch aus der Kommunikation erstellt.</div>
+            <div style="margin-top:12px;">
+              <button id="view_all_contact_emails" style="background:#0284c7; color:#fff; border:0; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:13px; width:100%;">
+                📧 Alle E-Mails von diesem Kontakt (${emailCount})
+              </button>
+            </div>
+            <div style="margin-top:12px; font-size:13px;">
+              <div class="sub" style="margin-bottom:6px;">Agent-Zusammenfassung</div>
+              <div id="prof_summary" class="sub">Noch nicht verfügbar. Wird in zukünftigen Updates automatisch generiert.</div>
             </div>
           </div>
         `;
@@ -648,6 +760,7 @@
       const sum = document.getElementById('prof_summary'); if(sum) sum.textContent = p.summary || '–';
     }
     document.getElementById('reload').addEventListener('click', loadInbox);
+    document.getElementById('load_more_btn').addEventListener('click', loadMoreEmails);
     document.getElementById('btn_propose').addEventListener('click', proposeDraft);
     document.getElementById('btn_send').addEventListener('click', sendDraft);
     // Auth: get JWT token and user email
@@ -1080,6 +1193,10 @@
       e.preventDefault(); closeSidebar();
       openKnowledgeModal();
     });
+    document.getElementById('sidebar_contacts').addEventListener('click', (e)=>{
+      e.preventDefault(); closeSidebar();
+      openContactsModal();
+    });
     document.getElementById('sidebar_email').addEventListener('click', (e)=>{
       e.preventDefault(); closeSidebar();
       openEmailSettingsModal();
@@ -1207,6 +1324,137 @@
       };
       modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
     }
+    
+    function openContactsModal(){
+      const modal = document.getElementById('contacts_modal');
+      const list = document.getElementById('contacts_list');
+      const searchInput = document.getElementById('contacts_search');
+      
+      modal.style.display = 'flex';
+      
+      async function loadContacts(search = ''){
+        list.innerHTML = '<div class="sub" style="text-align:center; padding:20px;">Lade Kontakte...</div>';
+        
+        try{
+          const url = search ? `/api/contacts/list?search=${encodeURIComponent(search)}` : '/api/contacts/list';
+          const res = await fetch(url, { headers: getAuthHeaders() });
+          const data = await parseJsonSafe(res);
+          
+          if(!data.__ok || !data.contacts){
+            throw new Error(data.error || 'Fehler beim Laden');
+          }
+          
+          if(data.contacts.length === 0){
+            list.innerHTML = '<div class="sub" style="text-align:center; padding:40px;">Keine Kontakte gefunden.</div>';
+            return;
+          }
+          
+          list.innerHTML = '';
+          for(const contact of data.contacts){
+            const div = document.createElement('div');
+            div.style.cssText = 'padding:14px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; cursor:pointer; transition:all 0.2s;';
+            div.innerHTML = `
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                  <div style="font-weight:600; margin-bottom:4px;">📧 ${escapeHtml(contact.name)}</div>
+                  <div class="sub">${escapeHtml(contact.email)}</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-weight:600; color:#0284c7;">${contact.email_count} E-Mail${contact.email_count !== 1 ? 's' : ''}</div>
+                  <div class="sub">Letzter Kontakt: ${contact.last_contact}</div>
+                </div>
+              </div>
+            `;
+            div.addEventListener('mouseenter', () => { div.style.background = '#f3f4f6'; });
+            div.addEventListener('mouseleave', () => { div.style.background = 'transparent'; });
+            div.addEventListener('click', () => {
+              openContactDetailModal(contact.id, contact.name, contact.email);
+            });
+            list.appendChild(div);
+          }
+          
+        }catch(e){
+          list.innerHTML = `<div class="sub" style="text-align:center; padding:40px; color:#dc2626;">Fehler: ${e}</div>`;
+        }
+      }
+      
+      loadContacts();
+      
+      // Search functionality
+      let searchTimeout;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+          loadContacts(searchInput.value.trim());
+        }, 300);
+      });
+      
+      const cleanup = () => { modal.style.display = 'none'; };
+      document.getElementById('contacts_close').onclick = cleanup;
+      modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
+    }
+    
+    function openContactDetailModal(contactId, contactName, contactEmail){
+      const modal = document.getElementById('contact_detail_modal');
+      const nameEl = document.getElementById('contact_detail_name');
+      const emailEl = document.getElementById('contact_detail_email');
+      const countEl = document.getElementById('contact_detail_count');
+      const emailsEl = document.getElementById('contact_detail_emails');
+      
+      modal.style.display = 'flex';
+      nameEl.textContent = contactName;
+      emailEl.textContent = contactEmail;
+      emailsEl.innerHTML = '<div class="sub" style="text-align:center; padding:20px;">Lade E-Mails...</div>';
+      
+      // Load emails from this contact
+      fetch(`/api/contacts/${contactId}/emails`, { headers: getAuthHeaders() })
+        .then(res => res.json())
+        .then(data => {
+          if(!data || !data.emails){
+            throw new Error('Keine E-Mails gefunden');
+          }
+          
+          countEl.textContent = data.contact.email_count;
+          
+          if(data.emails.length === 0){
+            emailsEl.innerHTML = '<div class="sub" style="text-align:center; padding:40px;">Keine E-Mails gefunden.</div>';
+            return;
+          }
+          
+          emailsEl.innerHTML = '';
+          for(const email of data.emails){
+            const div = document.createElement('div');
+            div.style.cssText = 'padding:12px; border:1px solid var(--border); border-radius:6px; margin-bottom:8px; cursor:pointer; transition:all 0.2s;';
+            div.innerHTML = `
+              <div style="font-weight:600; margin-bottom:4px;">${escapeHtml(email.subject)}</div>
+              <div class="sub" style="margin-bottom:6px;">${escapeHtml(email.preview)}...</div>
+              <div class="sub">${email.date}${email.has_attachments ? ' · 📎 Anhang' : ''}</div>
+            `;
+            div.addEventListener('mouseenter', () => { div.style.background = '#f3f4f6'; });
+            div.addEventListener('mouseleave', () => { div.style.background = 'transparent'; });
+            div.addEventListener('click', () => {
+              // Close contact detail modal and open email in main view
+              modal.style.display = 'none';
+              document.getElementById('contacts_modal').style.display = 'none';
+              // Select the email in list (if exists)
+              const emailItem = document.querySelector(`[data-uid="${email.id}"]`);
+              if(emailItem){
+                emailItem.click();
+              }
+            });
+            emailsEl.appendChild(div);
+          }
+          
+        })
+        .catch(e => {
+          emailsEl.innerHTML = `<div class="sub" style="text-align:center; padding:40px; color:#dc2626;">Fehler: ${e}</div>`;
+        });
+      
+      const cleanup = () => { modal.style.display = 'none'; };
+      document.getElementById('contact_detail_close').onclick = cleanup;
+      modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
+    }
+    
     function openUserManagementModal(){
       const modal = document.getElementById('user_management_modal');
       const list = document.getElementById('user_list');
