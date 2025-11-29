@@ -936,6 +936,357 @@ def api_emails_smtp_test(current_user):
         return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
 
 
+@app.route('/api/emails/sync', methods=['POST'])
+@require_auth
+def api_emails_sync(current_user):
+    """Sync emails from IMAP to database. Body: { limit: 20, count_only: false }"""
+    import imaplib, email
+    from email.header import decode_header
+    import re
+    
+    data = request.get_json(silent=True) or {}
+    limit = data.get('limit')  # None = all new, 20/50/100 = specific count
+    count_only = data.get('count_only', False)  # Just count emails on server
+    
+    user_email = current_user.get('user_email')
+    
+    try:
+        # Get user IMAP settings
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security "
+            "FROM user_email_settings WHERE user_email=%s",
+            (user_email,)
+        )
+        settings = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not settings or not settings.get('imap_host'):
+            return jsonify({'error': 'IMAP settings not configured'}), 400
+        
+        from encryption_utils import decrypt_password
+        host = settings['imap_host']
+        port = int(settings.get('imap_port', 993))
+        user = settings['imap_user']
+        pw = decrypt_password(settings['imap_pass_encrypted']) if settings['imap_pass_encrypted'] else ''
+        
+        # Connect to IMAP
+        M = imaplib.IMAP4_SSL(host, port, timeout=15)
+        M.login(user, pw)
+        M.select('INBOX')
+        
+        # Search all emails
+        typ, data = M.search(None, 'ALL')
+        if typ != 'OK':
+            M.close()
+            M.logout()
+            return jsonify({'error': 'IMAP search failed'}), 500
+        
+        all_uids = data[0].split()
+        total_on_server = len(all_uids)
+        
+        # If just counting
+        if count_only:
+            M.close()
+            M.logout()
+            return jsonify({'total_on_server': total_on_server}), 200
+        
+        # Get already synced message_ids from DB
+        conn_db = get_settings_db_connection()
+        cursor_db = conn_db.cursor()
+        cursor_db.execute(
+            "SELECT message_id FROM emails WHERE user_email=%s",
+            (user_email,)
+        )
+        synced_ids = set(row[0] for row in cursor_db.fetchall() if row[0])
+        
+        # Determine which emails to fetch
+        if limit:
+            # Fetch latest N emails
+            uids_to_fetch = all_uids[-limit:] if len(all_uids) > limit else all_uids
+        else:
+            # Fetch all (careful!)
+            uids_to_fetch = all_uids
+        
+        synced_count = 0
+        new_contacts_count = 0
+        
+        for uid in uids_to_fetch:
+            try:
+                typ, msg_data = M.fetch(uid, '(RFC822)')
+                if typ != 'OK':
+                    continue
+                
+                raw_email = msg_data[0][1]
+                msg = email.message_from_bytes(raw_email)
+                
+                # Extract message_id
+                message_id = msg.get('Message-ID', '').strip()
+                if not message_id:
+                    message_id = f"no-id-{uid.decode()}"
+                
+                # Skip if already synced
+                if message_id in synced_ids:
+                    continue
+                
+                # Extract headers
+                from_addr = msg.get('From', '')
+                to_addrs = msg.get('To', '')
+                subject = msg.get('Subject', '')
+                date_str = msg.get('Date', '')
+                
+                # Decode headers
+                def decode_header_value(value):
+                    if not value:
+                        return ''
+                    parts = decode_header(value)
+                    decoded = []
+                    for content, encoding in parts:
+                        if isinstance(content, bytes):
+                            decoded.append(content.decode(encoding or 'utf-8', errors='ignore'))
+                        else:
+                            decoded.append(str(content))
+                    return ' '.join(decoded)
+                
+                from_addr = decode_header_value(from_addr)
+                subject = decode_header_value(subject)
+                
+                # Extract email address and name from "Name <email@example.com>"
+                from_email = from_addr
+                from_name = ''
+                email_match = re.search(r'<(.+?)>', from_addr)
+                if email_match:
+                    from_email = email_match.group(1)
+                    from_name = from_addr.split('<')[0].strip().strip('"')
+                
+                # Parse date
+                from email.utils import parsedate_to_datetime
+                try:
+                    received_at = parsedate_to_datetime(date_str)
+                except:
+                    received_at = datetime.now()
+                
+                # Extract body
+                body_text = ''
+                body_html = ''
+                has_attachments = False
+                
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        ctype = part.get_content_type()
+                        if ctype == 'text/plain' and not body_text:
+                            try:
+                                payload = part.get_payload(decode=True)
+                                body_text = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
+                            except:
+                                pass
+                        elif ctype == 'text/html' and not body_html:
+                            try:
+                                payload = part.get_payload(decode=True)
+                                body_html = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
+                            except:
+                                pass
+                        elif part.get_filename():
+                            has_attachments = True
+                else:
+                    try:
+                        payload = msg.get_payload(decode=True)
+                        if msg.get_content_type() == 'text/html':
+                            body_html = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
+                        else:
+                            body_text = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
+                    except:
+                        pass
+                
+                # Get or create contact
+                cursor_db.execute(
+                    "SELECT id FROM contacts WHERE user_email=%s AND contact_email=%s",
+                    (user_email, from_email)
+                )
+                contact_row = cursor_db.fetchone()
+                
+                if contact_row:
+                    contact_id = contact_row[0]
+                    # Update contact stats
+                    cursor_db.execute(
+                        "UPDATE contacts SET email_count=email_count+1, last_contact_at=%s, "
+                        "name=%s WHERE id=%s",
+                        (received_at, from_name or from_email, contact_id)
+                    )
+                else:
+                    # Create new contact
+                    cursor_db.execute(
+                        "INSERT INTO contacts (user_email, contact_email, name, first_name, "
+                        "email_count, first_contact_at, last_contact_at) "
+                        "VALUES (%s, %s, %s, %s, 1, %s, %s)",
+                        (user_email, from_email, from_name or from_email, from_name.split()[0] if from_name else '', 
+                         received_at, received_at)
+                    )
+                    contact_id = cursor_db.lastrowid
+                    new_contacts_count += 1
+                
+                # Insert email
+                cursor_db.execute(
+                    "INSERT INTO emails (message_id, user_email, contact_id, from_addr, from_name, "
+                    "to_addrs, subject, body_text, body_html, received_at, folder, has_attachments) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'inbox', %s)",
+                    (message_id, user_email, contact_id, from_email, from_name, to_addrs, 
+                     subject, body_text[:50000] if body_text else '', body_html[:100000] if body_html else '',
+                     received_at, has_attachments)
+                )
+                
+                synced_count += 1
+                synced_ids.add(message_id)
+                
+            except Exception as e:
+                app.logger.error(f"[Sync] Error processing email {uid}: {e}")
+                continue
+        
+        conn_db.commit()
+        cursor_db.close()
+        conn_db.close()
+        
+        M.close()
+        M.logout()
+        
+        return jsonify({
+            'ok': True,
+            'synced': synced_count,
+            'total_on_server': total_on_server,
+            'new_contacts': new_contacts_count,
+            'already_synced': len(synced_ids) - synced_count
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"[Sync] Error: {e}")
+        import traceback
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/emails/list', methods=['GET'])
+@require_auth
+def api_emails_list(current_user):
+    """Get emails from database. Query params: folder (default: inbox), limit, offset"""
+    user_email = current_user.get('user_email')
+    folder = request.args.get('folder', 'inbox')
+    limit = int(request.args.get('limit', 50))
+    offset = int(request.args.get('offset', 0))
+    
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get emails with contact info
+        cursor.execute(
+            """
+            SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
+                   e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.starred,
+                   e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
+            FROM emails e
+            LEFT JOIN contacts c ON e.contact_id = c.id
+            WHERE e.user_email = %s AND e.folder = %s
+            ORDER BY e.received_at DESC
+            LIMIT %s OFFSET %s
+            """,
+            (user_email, folder, limit, offset)
+        )
+        emails = cursor.fetchall()
+        
+        # Get total count
+        cursor.execute(
+            "SELECT COUNT(*) as total FROM emails WHERE user_email=%s AND folder=%s",
+            (user_email, folder)
+        )
+        total = cursor.fetchone()['total']
+        
+        # Check if any emails exist at all (to know if sync is needed)
+        cursor.execute(
+            "SELECT COUNT(*) as total FROM emails WHERE user_email=%s",
+            (user_email,)
+        )
+        total_all_folders = cursor.fetchone()['total']
+        
+        cursor.close()
+        conn.close()
+        
+        # Format emails for frontend
+        formatted_emails = []
+        for email_row in emails:
+            formatted_emails.append({
+                'id': email_row['id'],
+                'uid': str(email_row['id']),  # Use DB id as uid for compatibility
+                'from': email_row['from_name'] or email_row['from_addr'],
+                'from_addr': email_row['from_addr'],
+                'subject': email_row['subject'] or '(Kein Betreff)',
+                'date': email_row['received_at'].strftime('%d.%m.%Y %H:%M') if email_row['received_at'] else '',
+                'body_preview': (email_row['body_text'] or '')[:200],
+                'is_read': email_row['is_read'],
+                'starred': email_row['starred'],
+                'has_attachments': email_row['has_attachments'],
+                'contact_name': email_row['contact_name'],
+                'contact_email': email_row['contact_email'],
+                'contact_email_count': email_row['contact_email_count']
+            })
+        
+        return jsonify({
+            'emails': formatted_emails,
+            'total': total,
+            'total_all_folders': total_all_folders,
+            'has_more': (offset + limit) < total
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"[List Emails] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/emails/get/<int:email_id>', methods=['GET'])
+@require_auth
+def api_emails_get(current_user, email_id):
+    """Get single email by ID from database"""
+    user_email = current_user.get('user_email')
+    
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute(
+            """
+            SELECT e.*, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
+            FROM emails e
+            LEFT JOIN contacts c ON e.contact_id = c.id
+            WHERE e.id = %s AND e.user_email = %s
+            """,
+            (email_id, user_email)
+        )
+        email_row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not email_row:
+            return jsonify({'error': 'Email not found'}), 404
+        
+        return jsonify({
+            'id': email_row['id'],
+            'from': email_row['from_name'] or email_row['from_addr'],
+            'from_addr': email_row['from_addr'],
+            'to': email_row['to_addrs'],
+            'subject': email_row['subject'] or '(Kein Betreff)',
+            'date': email_row['received_at'].strftime('%d.%m.%Y %H:%M') if email_row['received_at'] else '',
+            'body_html': email_row['body_html'] or '',
+            'body_text': email_row['body_text'] or '',
+            'has_attachments': email_row['has_attachments'],
+            'contact_name': email_row['contact_name'],
+            'contact_email': email_row['contact_email']
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"[Get Email] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route("/api/emails/imap-debug")
 def api_emails_imap_debug():
     import imaplib

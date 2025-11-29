@@ -320,13 +320,14 @@
       const list = document.getElementById('list');
       status.textContent = 'lädt …';
       try{
-        const res = await fetch('/api/emails/inbox?limit=20', {
+        // Load emails from database
+        const res = await fetch('/api/emails/list?folder=inbox&limit=50', {
           headers: getAuthHeaders()
         });
         const data = await parseJsonSafe(res);
         if(!data.__ok){ 
           // Check if user needs to configure email settings
-          if(data.error && data.error.includes('configure email settings')){
+          if(data.error && (data.error.includes('configure email settings') || data.error.includes('IMAP settings'))){
             list.innerHTML = `
               <div style="padding:20px; text-align:center;">
                 <div style="font-size:48px; margin-bottom:16px;">📧</div>
@@ -341,15 +342,22 @@
           }
           throw new Error(data.error || 'Inbox-Fehler'); 
         }
+        
+        // Check if initial sync is needed
+        if(data.total_all_folders === 0){
+          await showInitialSyncDialog();
+          return;
+        }
+        
         list.innerHTML = '';
-        if(!data.items || !data.items.length){
-          list.innerHTML = '<div class="sub" style="padding:20px; text-align:center;">Keine E-Mails gefunden.</div>';
+        if(!data.emails || !data.emails.length){
+          list.innerHTML = '<div class="sub" style="padding:20px; text-align:center;">Keine E-Mails im Posteingang.</div>';
           status.textContent = '';
           return;
         }
-        for(const it of data.items){
+        for(const it of data.emails){
           const div = document.createElement('div');
-          div.className = 'item' + (!it.seen ? ' unseen' : '');
+          div.className = 'item' + (!it.is_read ? ' unseen' : '');
           div.dataset.uid = it.uid;
           div.innerHTML = `
             <div class="subject">${escapeHtml(it.subject || '(ohne Betreff)')}</div>
@@ -358,10 +366,126 @@
           div.addEventListener('click', () => selectItem(it.uid, div));
           list.appendChild(div);
         }
-        status.textContent = `${data.items.length} E-Mails geladen`;
+        status.textContent = `${data.emails.length} E-Mails geladen`;
       }catch(e){
         list.innerHTML = `<div class="sub" style="padding:20px;">Fehler: ${e}</div>`;
         status.textContent = '';
+      }
+    }
+    
+    async function showInitialSyncDialog(){
+      const status = document.getElementById('status');
+      const list = document.getElementById('list');
+      
+      status.textContent = 'Prüfe Postfach...';
+      
+      // Count emails on server
+      try{
+        const countRes = await fetch('/api/emails/sync', {
+          method: 'POST',
+          headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+          body: JSON.stringify({ count_only: true })
+        });
+        const countData = await parseJsonSafe(countRes);
+        
+        if(!countData.__ok){
+          status.textContent = 'Fehler beim Zählen';
+          list.innerHTML = `<div class="sub" style="padding:20px;">Fehler: ${countData.error}</div>`;
+          return;
+        }
+        
+        const total = countData.total_on_server;
+        status.textContent = '';
+        
+        // Show dialog
+        list.innerHTML = `
+          <div style="padding:40px; text-align:center;">
+            <div style="font-size:48px; margin-bottom:16px;">📬</div>
+            <div style="font-size:18px; font-weight:600; margin-bottom:12px;">Postfach noch nicht synchronisiert</div>
+            <div class="sub" style="margin-bottom:24px;">Es wurden <strong>${total} E-Mails</strong> auf dem Server gefunden.<br>Wie viele möchten Sie laden?</div>
+            
+            <div style="display:flex; flex-direction:column; gap:12px; max-width:400px; margin:0 auto;">
+              <button class="sync-btn" data-limit="20" style="background:#059669; color:#fff; border:0; padding:14px 20px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">
+                📥 Erste 20 E-Mails
+              </button>
+              <button class="sync-btn" data-limit="50" style="background:#0284c7; color:#fff; border:0; padding:14px 20px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">
+                📥 Erste 50 E-Mails
+              </button>
+              <button class="sync-btn" data-limit="100" style="background:#7c3aed; color:#fff; border:0; padding:14px 20px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">
+                📥 Erste 100 E-Mails
+              </button>
+              ${total > 100 ? `
+                <button class="sync-btn" data-limit="all" style="background:#dc2626; color:#fff; border:0; padding:14px 20px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">
+                  ⚠️ Alle ${total} E-Mails (Vorsicht!)
+                </button>
+              ` : ''}
+            </div>
+            
+            <div class="sub" style="margin-top:20px;">💡 Sie können später jederzeit weitere E-Mails nachladen</div>
+          </div>
+        `;
+        
+        // Add click handlers
+        document.querySelectorAll('.sync-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const limit = btn.dataset.limit === 'all' ? null : parseInt(btn.dataset.limit);
+            await performSync(limit);
+          });
+        });
+        
+      }catch(e){
+        status.textContent = 'Fehler';
+        list.innerHTML = `<div class="sub" style="padding:20px;">Fehler: ${e}</div>`;
+      }
+    }
+    
+    async function performSync(limit){
+      const status = document.getElementById('status');
+      const list = document.getElementById('list');
+      
+      list.innerHTML = `
+        <div style="padding:40px; text-align:center;">
+          <div style="font-size:48px; margin-bottom:16px;">⏳</div>
+          <div style="font-size:18px; font-weight:600; margin-bottom:12px;">Synchronisiere E-Mails...</div>
+          <div id="sync-progress" class="sub" style="margin-bottom:16px;">Starte...</div>
+          <div style="width:80%; max-width:400px; height:8px; background:#e5e7eb; border-radius:4px; margin:0 auto; overflow:hidden;">
+            <div id="sync-progress-bar" style="width:0%; height:100%; background:#059669; transition:width 0.3s;"></div>
+          </div>
+        </div>
+      `;
+      
+      try{
+        const syncRes = await fetch('/api/emails/sync', {
+          method: 'POST',
+          headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+          body: JSON.stringify({ limit: limit })
+        });
+        const syncData = await parseJsonSafe(syncRes);
+        
+        if(!syncData.__ok){
+          throw new Error(syncData.error || 'Sync fehlgeschlagen');
+        }
+        
+        document.getElementById('sync-progress').textContent = 
+          `✅ ${syncData.synced} E-Mails geladen, ${syncData.new_contacts} neue Kontakte gefunden!`;
+        document.getElementById('sync-progress-bar').style.width = '100%';
+        
+        // Reload inbox after 1 second
+        setTimeout(() => {
+          loadInbox();
+        }, 1000);
+        
+      }catch(e){
+        list.innerHTML = `
+          <div style="padding:40px; text-align:center;">
+            <div style="font-size:48px; margin-bottom:16px;">❌</div>
+            <div style="font-size:18px; font-weight:600; margin-bottom:12px;">Synchronisierung fehlgeschlagen</div>
+            <div class="sub" style="margin-bottom:20px;">${e}</div>
+            <button onclick="loadInbox()" style="background:#059669; color:#fff; border:0; padding:10px 20px; border-radius:6px; cursor:pointer;">
+              Erneut versuchen
+            </button>
+          </div>
+        `;
       }
     }
 
@@ -384,16 +508,16 @@
         if (editor) editor.innerHTML = '<div class="muted">Hier erscheint der Vorschlag …</div>';
         if (status) status.textContent = '';
       } catch(_) {}
-      // Thread laden
+      // Load email from database
       const detail = document.getElementById('detail');
       detail.innerHTML = '<div class="sub">Lade Inhalt …</div>';
       try{
-        const res = await fetch(`/api/emails/thread?uid=${encodeURIComponent(uid)}`, {
+        const res = await fetch(`/api/emails/get/${uid}`, {
           headers: getAuthHeaders()
         });
         const t = await parseJsonSafe(res);
-        if(!t.__ok){ throw new Error(t.error || 'Thread-Fehler'); }
-        const html = t.html || (t.text ? `<pre>${escapeHtml(t.text)}</pre>` : '<div class="sub">Kein Inhalt</div>');
+        if(!t.__ok){ throw new Error(t.error || 'E-Mail konnte nicht geladen werden'); }
+        const html = t.body_html || (t.body_text ? `<pre>${escapeHtml(t.body_text)}</pre>` : '<div class="sub">Kein Inhalt</div>');
         detail.innerHTML = `
           <h2>${escapeHtml(t.subject || '')}</h2>
           <div class="meta">Von: ${escapeHtml(t.from||'')} · An: ${escapeHtml(t.to||'')} · ${escapeHtml(t.date||'')}</div>
