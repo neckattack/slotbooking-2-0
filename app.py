@@ -409,14 +409,12 @@ def api_emails_inbox(current_user):
 @app.route('/api/emails/agent-compose', methods=['POST'])
 @require_auth
 def api_emails_agent_compose(current_user):
-    """Erstellt einen Antwortvorschlag (HTML) für eine gegebene Mail-UID.
-    Request: { uid: string }
+    """Erstellt einen Antwortvorschlag (HTML) für eine gegebene E-Mail-ID aus DB.
+    Request: { uid: email_id (int) }
     Response: { html, to, subject }
     """
-    import imaplib, email
-    from email.header import decode_header
     data = request.get_json(silent=True) or {}
-    uid = (data.get('uid') or '').strip()
+    email_id = data.get('uid')  # uid ist jetzt email_id aus DB
     # Optional: längeres Timeout anfordern (z. B. 20s), aber deckeln
     try:
         req_timeout = int(data.get('timeout_s')) if 'timeout_s' in data else None
@@ -426,101 +424,56 @@ def api_emails_agent_compose(current_user):
         timeout_s = 8
     else:
         timeout_s = max(4, min(30, req_timeout))
-    if not uid:
-        return jsonify({'error': 'uid fehlt'}), 400
+    if not email_id:
+        return jsonify({'error': 'email_id fehlt'}), 400
     
-    # Get user-specific email settings
-    user_email = current_user.get('user_email')
     try:
-        conn = get_settings_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            "SELECT imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security "
-            "FROM user_email_settings WHERE user_email=%s",
-            (user_email,)
-        )
-        settings = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        
-        if settings and settings.get('imap_host'):
-            from encryption_utils import decrypt_password
-            host = settings['imap_host']
-            port = int(settings.get('imap_port', 993))
-            user = settings['imap_user']
-            pw = decrypt_password(settings['imap_pass_encrypted']) if settings['imap_pass_encrypted'] else ''
-            mailbox = 'INBOX'
-        else:
-            return jsonify({'error': 'Please configure email settings first'}), 400
-    except Exception as e:
-        app.logger.error(f"[Agent-Compose] Error loading user settings: {e}")
-        return jsonify({'error': 'Email settings error'}), 400
+        email_id = int(email_id)
+    except:
+        return jsonify({'error': 'email_id muss eine Zahl sein'}), 400
     
-    if not (host and user and pw):
-        return jsonify({'error': 'IMAP configuration incomplete'}), 400
+    user_email = current_user.get('user_email')
     try:
         # Compose-Cache Early-Return (TTL 300s) für schnelle Wiederholungen
         import time as _t
         now = _t.time()
-        cc = COMPOSE_CACHE.get(uid)
+        cc = COMPOSE_CACHE.get(str(email_id))
         if cc and now - cc.get('ts', 0) < 300 and not cc.get('timed_out'):
             if cc.get('has_body') or cc.get('has_preface'):
                 return jsonify({ 'html': cc['html'], 'to': cc['to'], 'subject': cc['subject'] })
             else:
                 try:
-                    del COMPOSE_CACHE[uid]
+                    del COMPOSE_CACHE[str(email_id)]
                 except Exception:
                     pass
-        M = imaplib.IMAP4_SSL(host, port)
-        M.login(user, pw)
-        M.select(mailbox)
-        typ, msgdata = M.uid('fetch', uid, '(RFC822)')
-        if typ != 'OK' or not msgdata or not msgdata[0]:
-            raise RuntimeError('Fetch fehlgeschlagen')
-        raw = msgdata[0][1] if isinstance(msgdata[0], tuple) else msgdata[0]
-        msg = email.message_from_bytes(raw)
-        # Helper zum Decodieren
-        def _decode(s):
-            parts = []
-            for p, enc in decode_header(s or ''):
-                try:
-                    parts.append(p.decode(enc or 'utf-8') if isinstance(p, (bytes, bytearray)) else str(p))
-                except Exception:
-                    parts.append(p.decode('utf-8', errors='ignore') if isinstance(p, (bytes, bytearray)) else str(p))
-            return ''.join(parts)
-        subject = _decode(msg.get('Subject') or '')
-        from_addr = msg.get('From', '')
-        to_addr = msg.get('To', '')
-        # Body extrahieren (bevorzugt Text)
-        plaintext = None
-        html_body = None
-        if msg.is_multipart():
-            for part in msg.walk():
-                ctype = part.get_content_type()
-                disp = part.get('Content-Disposition', '')
-                if 'attachment' in (disp or '').lower():
-                    continue
-                payload = part.get_payload(decode=True)
-                if ctype == 'text/plain' and payload is not None and plaintext is None:
-                    try:
-                        plaintext = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
-                    except Exception:
-                        plaintext = payload.decode('utf-8', errors='ignore')
-                elif ctype == 'text/html' and payload is not None and html_body is None:
-                    try:
-                        html_body = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
-                    except Exception:
-                        html_body = payload.decode('utf-8', errors='ignore')
-        else:
-            payload = msg.get_payload(decode=True)
-            if payload is not None:
-                try:
-                    if (msg.get_content_type() or '') == 'text/html':
-                        html_body = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
-                    else:
-                        plaintext = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
-                except Exception:
-                    plaintext = payload.decode('utf-8', errors='ignore')
+        
+        # Load email from database
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT e.id, e.subject, e.from_address, e.to_address, e.body_text, e.body_html, 
+                   e.contact_id, c.name as contact_name, c.contact_email, 
+                   c.profile_summary, c.email_count
+            FROM emails e
+            LEFT JOIN contacts c ON e.contact_id = c.id
+            WHERE e.id = %s AND e.user_email = %s
+            """,
+            (email_id, user_email)
+        )
+        email_row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not email_row:
+            return jsonify({'error': 'E-Mail nicht gefunden'}), 404
+        
+        subject = email_row['subject'] or ''
+        from_addr = email_row['from_address'] or ''
+        to_addr = email_row['to_address'] or ''
+        plaintext = email_row['body_text']
+        html_body = email_row['body_html']
+        
         # Quelle für den Agenten: bevorzugt Plaintext; wenn nur HTML vorhanden ist, in Text umwandeln
         def _html_to_text(s: str) -> str:
             import re, html as _html
@@ -643,7 +596,7 @@ def api_emails_agent_compose(current_user):
                 LEFT JOIN contacts c ON e.contact_id = c.id 
                 WHERE e.id = %s AND e.user_email = %s
                 """,
-                (uid, user_email)
+                (email_id, user_email)
             )
             row = cursor_profile.fetchone()
             cursor_profile.close()
@@ -683,8 +636,6 @@ def api_emails_agent_compose(current_user):
         else:
             # Wenn der LLM-Body leer ist (auch ohne Timeout), liefern wir 504 statt eines leeren Drafts mit nur "Hallo,"
             if not _has_meaningful_body:
-                M.close()
-                M.logout()
                 return jsonify({'error': 'compose_empty'}), 504
             body_html = _plaintext_to_html_email(antwort_body)
             antwort_html = greeting_html + body_html
@@ -734,13 +685,11 @@ def api_emails_agent_compose(current_user):
         # Vorschlagsempfänger/Betreff
         reply_to = from_addr
         reply_subject = ("Re: " + subject) if subject and not subject.lower().startswith("re:") else (subject or "Antwort")
-        M.close()
-        M.logout()
         # Bei Timeout ohne verwertbaren Body und ohne Preface -> 504 (zusätzlich oben schon für leere Bodies behandelt)
         if (timed_out and not visible_preface_html and not (antwort_body and antwort_body.strip())):
             return jsonify({'error': 'compose_timeout'}), 504
         # In Compose-Cache legen (Timeout-Drafts nicht für Early-Return verwenden)
-        COMPOSE_CACHE[uid] = {
+        COMPOSE_CACHE[str(email_id)] = {
             'html': draft_html,
             'to': reply_to,
             'subject': reply_subject,
