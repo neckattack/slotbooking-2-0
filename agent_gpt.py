@@ -19,13 +19,14 @@ def load_knowledge():
     except Exception:
         return ""
 
-def agent_respond(user_message, channel="chat", user_email=None, agent_settings=None):
+def agent_respond(user_message, channel="chat", user_email=None, agent_settings=None, contact_profile=None):
     """
     Liefert eine GPT-Antwort mit neckattack-Kontext und DB-Infos.
     - user_message: Die Frage/Bitte des Nutzers (Mailtext, Chat, ...)
     - channel: "chat", "email" etc.
     - user_email: falls bekannt, für Kontext (z.B. bei E-Mail)
     - agent_settings: dict mit role, instructions, faq_text, document_links (optional)
+    - contact_profile: dict mit Kundenprofil (name, email, summary, email_count)
 
     # WICHTIG: E-Mails IMMER klar gegliedert mit Absätzen, Listen und Themenblöcken formatieren – keine Fließtexte! (Regel: email_formatting)
     """
@@ -90,11 +91,12 @@ def agent_respond(user_message, channel="chat", user_email=None, agent_settings=
         except Exception:
             return "general"
 
-    # Build system prompt with user-specific agent settings
+    # Build system prompt with user-specific agent settings and contact profile
     agent_role = ""
     agent_instructions = ""
     agent_faq = ""
     agent_docs = ""
+    contact_context = ""
     
     if agent_settings:
         if agent_settings.get('role'):
@@ -106,12 +108,31 @@ def agent_respond(user_message, channel="chat", user_email=None, agent_settings=
         if agent_settings.get('document_links'):
             agent_docs = f"\n\n🔗 VERFÜGBARE DOKUMENTE:\n{agent_settings['document_links']}\n\nDu kannst auf diese Dokumente verweisen, wenn sie zur Frage passen.\n"
     
+    # Add contact profile context if available
+    if contact_profile:
+        contact_name = contact_profile.get('name', 'Unbekannt')
+        contact_email = contact_profile.get('email', '')
+        contact_summary = contact_profile.get('summary', '')
+        email_count = contact_profile.get('email_count', 0)
+        
+        if contact_summary:
+            contact_context = f"\n\n👤 KUNDENPROFIL - {contact_name} ({contact_email}):\n"
+            contact_context += f"Anzahl E-Mails: {email_count}\n\n"
+            contact_context += f"{contact_summary}\n\n"
+            contact_context += "⚠️ WICHTIG: Nutze dieses Kundenprofil, um deine Antwort perfekt auf diesen Kunden abzustimmen!\n"
+            contact_context += "Berücksichtige:\n"
+            contact_context += "- Den Kommunikationsstil des Kunden\n"
+            contact_context += "- Frühere Anliegen und Themen\n"
+            contact_context += "- Die Kundenhistorie und Besonderheiten\n"
+            contact_context += "- Empfehlungen aus dem Profil\n"
+    
     system_prompt = (
         f"Du bist ein KI-Assistent für die Slotbuchung bei neckattack. Das heutige Datum ist {today_str}.\n"
         f"{agent_role}"
         f"{agent_instructions}"
         f"{agent_faq}"
         f"{agent_docs}"
+        f"{contact_context}"
         "Antworte so: Prüfe zuerst, ob die Knowledgebase (FAQ) relevant ist und nutze sie bevorzugt.\n"
         "Wenn die Frage klar nach Datenbankinhalten verlangt (Termine, Slots, Kunden, Reservierungen, gebucht/frei, Einsätze), darfst du SQL generieren.\n"
         "Wenn weder FAQ noch Datenbank passend sind, antworte mit deinem allgemeinen Wissen.\n"

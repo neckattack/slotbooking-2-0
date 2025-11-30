@@ -47,13 +47,13 @@ def _cache_set(store: dict, key: str, value: dict):
     return value
 
 # Agent-Aufruf mit Timeout, damit UI nicht hängt
-def _agent_respond_with_timeout(text: str, *, channel: str, user_email: str, timeout_s: int = 8, agent_settings: dict = None):
+def _agent_respond_with_timeout(text: str, *, channel: str, user_email: str, timeout_s: int = 8, agent_settings: dict = None, contact_profile: dict = None):
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as _TO
     import time as _time
     from flask import current_app as _cap
     def _call():
         try:
-            return agent_respond(text, channel=channel, user_email=user_email, agent_settings=agent_settings)
+            return agent_respond(text, channel=channel, user_email=user_email, agent_settings=agent_settings, contact_profile=contact_profile)
         except Exception as e:
             try:
                 _cap.logger.error(f"[agent_respond] exception: {e}")
@@ -631,8 +631,36 @@ def api_emails_agent_compose(current_user):
         except Exception as e:
             app.logger.warning(f"[Agent-Compose] Could not load agent settings: {e}")
         
+        # Load contact profile if available (from DB using uid as email_id)
+        contact_profile = None
+        try:
+            conn_profile = get_settings_db_connection()
+            cursor_profile = conn_profile.cursor(dictionary=True)
+            cursor_profile.execute(
+                """
+                SELECT e.contact_id, c.name, c.contact_email, c.profile_summary, c.email_count 
+                FROM emails e 
+                LEFT JOIN contacts c ON e.contact_id = c.id 
+                WHERE e.id = %s AND e.user_email = %s
+                """,
+                (uid, user_email)
+            )
+            row = cursor_profile.fetchone()
+            cursor_profile.close()
+            conn_profile.close()
+            if row and row.get('profile_summary'):
+                contact_profile = {
+                    'name': row.get('name'),
+                    'email': row.get('contact_email'),
+                    'summary': row.get('profile_summary'),
+                    'email_count': row.get('email_count')
+                }
+                app.logger.info(f"[Agent-Compose] Loaded contact profile for {row.get('name')}")
+        except Exception as e:
+            app.logger.warning(f"[Agent-Compose] Could not load contact profile: {e}")
+        
         # Agent-Antwort mit Timeout (UI soll nicht >8s warten)
-        antwort_body, timed_out = _agent_respond_with_timeout(source_text, channel="email", user_email=from_addr, timeout_s=timeout_s, agent_settings=agent_settings)
+        antwort_body, timed_out = _agent_respond_with_timeout(source_text, channel="email", user_email=from_addr, timeout_s=timeout_s, agent_settings=agent_settings, contact_profile=contact_profile)
         # Doppelte Grußformeln entfernen, falls LLM bereits mit "Hallo ..." startet
         def _strip_greeting_html(html: str) -> str:
             import re
