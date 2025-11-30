@@ -452,7 +452,7 @@ def api_emails_agent_compose(current_user):
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT e.id, e.subject, e.from_address, e.to_address, e.body_text, e.body_html, 
+            SELECT e.id, e.subject, e.from_addr, e.from_name, e.to_addrs, e.body_text, e.body_html, 
                    e.contact_id, c.name as contact_name, c.contact_email, 
                    c.profile_summary, c.email_count
             FROM emails e
@@ -469,8 +469,9 @@ def api_emails_agent_compose(current_user):
             return jsonify({'error': 'E-Mail nicht gefunden'}), 404
         
         subject = email_row['subject'] or ''
-        from_addr = email_row['from_address'] or ''
-        to_addr = email_row['to_address'] or ''
+        from_addr = email_row['from_addr'] or ''
+        from_name = email_row['from_name'] or ''
+        to_addr = email_row['to_addrs'] or ''
         plaintext = email_row['body_text']
         html_body = email_row['body_html']
         
