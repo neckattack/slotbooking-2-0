@@ -869,24 +869,24 @@
               ${kpis.salutation || kpis.sentiment || kpis.email_length_preference || kpis.communication_frequency ? `
                 <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
                   ${kpis.salutation ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:500;">
-                    👋 ${kpis.salutation}
+                    👋 Anrede: ${kpis.salutation}
                   </span>` : ''}
                   ${kpis.sentiment ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:${
                     kpis.sentiment === 'positive' ? '#d1fae5;color:#065f46' : 
                     kpis.sentiment === 'negative' ? '#fee2e2;color:#991b1b' : 
                     '#f3f4f6;color:#374151'
                   }; border-radius:4px; font-size:11px; font-weight:500;">
-                    ${kpis.sentiment === 'positive' ? '😊' : kpis.sentiment === 'negative' ? '😟' : '😐'} ${
+                    ${kpis.sentiment === 'positive' ? '😊' : kpis.sentiment === 'negative' ? '😟' : '😐'} Stimmung: ${
                       kpis.sentiment === 'positive' ? 'Positiv' : 
                       kpis.sentiment === 'negative' ? 'Negativ' : 
                       'Neutral'
                     }
                   </span>` : ''}
                   ${kpis.email_length_preference ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#fef3c7; color:#92400e; border-radius:4px; font-size:11px; font-weight:500;">
-                    📏 ${kpis.email_length_preference === 'short' ? 'Kurz' : kpis.email_length_preference === 'medium' ? 'Mittel' : 'Lang'}
+                    📏 E-Mail-Länge: ${kpis.email_length_preference === 'short' ? 'Kurz' : kpis.email_length_preference === 'medium' ? 'Mittel' : 'Lang'}
                   </span>` : ''}
                   ${kpis.communication_frequency ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#e0e7ff; color:#3730a3; border-radius:4px; font-size:11px; font-weight:500;">
-                    📊 ${kpis.communication_frequency === 'daily' ? 'Täglich' : kpis.communication_frequency === 'weekly' ? 'Wöchentlich' : kpis.communication_frequency === 'monthly' ? 'Monatlich' : 'Selten'}
+                    📊 Kontakt: ${kpis.communication_frequency === 'daily' ? 'Täglich' : kpis.communication_frequency === 'weekly' ? 'Wöchentlich' : kpis.communication_frequency === 'monthly' ? 'Monatlich' : 'Selten'}
                   </span>` : ''}
                 </div>
               ` : ''}
