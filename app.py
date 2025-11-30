@@ -1430,7 +1430,8 @@ def api_emails_get(current_user, email_id):
         cursor.execute(
             """
             SELECT e.*, c.name as contact_name, c.contact_email, c.email_count as contact_email_count,
-                   c.profile_summary
+                   c.profile_summary, c.salutation, c.sentiment, c.email_length_preference, 
+                   c.communication_frequency
             FROM emails e
             LEFT JOIN contacts c ON e.contact_id = c.id
             WHERE e.id = %s AND e.user_email = %s
@@ -1458,7 +1459,13 @@ def api_emails_get(current_user, email_id):
             'contact_email': email_row['contact_email'],
             'contact_email_count': email_row['contact_email_count'] or 1,
             'contact_id': email_row.get('contact_id'),
-            'profile_summary': email_row.get('profile_summary', '')
+            'profile_summary': email_row.get('profile_summary', ''),
+            'kpis': {
+                'salutation': email_row.get('salutation'),
+                'sentiment': email_row.get('sentiment'),
+                'email_length_preference': email_row.get('email_length_preference'),
+                'communication_frequency': email_row.get('communication_frequency')
+            }
         }), 200
         
     except Exception as e:
@@ -1612,13 +1619,13 @@ def api_contacts_generate_profile(current_user, contact_id):
             conn.close()
             return jsonify({'error': 'Contact not found'}), 404
         
-        # Get all emails from this contact
+        # Get all emails from this contact (including from/to info for KPI calculation)
         cursor.execute(
             """
-            SELECT subject, body_text, received_at 
+            SELECT subject, body_text, body_html, received_at, from_addr, to_addrs
             FROM emails 
             WHERE contact_id = %s AND user_email = %s 
-            ORDER BY received_at
+            ORDER BY received_at DESC
             LIMIT 50
             """,
             (contact_id, user_email)
@@ -1673,15 +1680,111 @@ Sei präzise, geschäftlich und hilfreich. Max 200 Wörter."""
         
         summary = response.choices[0].message.content
         
-        # Save to database
+        # Calculate KPIs
+        def calculate_kpis(emails_list, contact_email, user_email_addr):
+            """Calculate various KPIs from email history"""
+            import re
+            from datetime import datetime
+            
+            kpis = {
+                'salutation': None,
+                'sentiment': None,
+                'email_length_preference': None,
+                'avg_response_time_hours': None,
+                'communication_frequency': None
+            }
+            
+            # 1. Salutation (Sie/Du) - analyze emails TO the contact
+            du_count = 0
+            sie_count = 0
+            for em in emails_list:
+                # Check if this is FROM user (sent to contact)
+                is_from_user = user_email_addr in (em.get('from_addr') or '')
+                if is_from_user:
+                    text = ((em.get('body_text') or '') + (em.get('body_html') or '')).lower()
+                    du_count += len(re.findall(r'\b(du|dir|dein|deine)\b', text))
+                    sie_count += len(re.findall(r'\b(sie|ihnen|ihr|ihre)\b', text))
+            
+            if du_count > sie_count:
+                kpis['salutation'] = 'Du'
+            elif sie_count > du_count:
+                kpis['salutation'] = 'Sie'
+            else:
+                kpis['salutation'] = 'Neutral'
+            
+            # 2. Sentiment - analyze recent emails FROM contact
+            positive_words = ['danke', 'super', 'perfekt', 'toll', 'freue', 'gerne', 'prima', 'exzellent', 'großartig']
+            negative_words = ['problem', 'fehler', 'nicht', 'leider', 'ärger', 'schlecht', 'unzufrieden', 'beschwerde']
+            
+            positive_score = 0
+            negative_score = 0
+            for em in emails_list[:10]:  # Last 10 emails
+                is_from_contact = contact_email in (em.get('from_addr') or '')
+                if is_from_contact:
+                    text = ((em.get('body_text') or '') + (em.get('body_html') or '')).lower()
+                    positive_score += sum(1 for word in positive_words if word in text)
+                    negative_score += sum(1 for word in negative_words if word in text)
+            
+            if positive_score > negative_score * 1.5:
+                kpis['sentiment'] = 'positive'
+            elif negative_score > positive_score * 1.5:
+                kpis['sentiment'] = 'negative'
+            else:
+                kpis['sentiment'] = 'neutral'
+            
+            # 3. Email length preference - average length
+            lengths = []
+            for em in emails_list[:20]:
+                text = em.get('body_text') or ''
+                if text:
+                    lengths.append(len(text))
+            
+            if lengths:
+                avg_len = sum(lengths) / len(lengths)
+                if avg_len < 300:
+                    kpis['email_length_preference'] = 'short'
+                elif avg_len < 800:
+                    kpis['email_length_preference'] = 'medium'
+                else:
+                    kpis['email_length_preference'] = 'long'
+            
+            # 4. Communication frequency
+            if len(emails_list) > 1:
+                first_date = emails_list[-1].get('received_at')
+                last_date = emails_list[0].get('received_at')
+                if first_date and last_date:
+                    days_diff = (last_date - first_date).days
+                    if days_diff > 0:
+                        emails_per_day = len(emails_list) / days_diff
+                        if emails_per_day > 0.5:
+                            kpis['communication_frequency'] = 'daily'
+                        elif emails_per_day > 0.14:
+                            kpis['communication_frequency'] = 'weekly'
+                        elif emails_per_day > 0.03:
+                            kpis['communication_frequency'] = 'monthly'
+                        else:
+                            kpis['communication_frequency'] = 'rare'
+            
+            return kpis
+        
+        # Calculate KPIs
+        kpis = calculate_kpis(emails, contact['contact_email'], user_email)
+        
+        # Save to database with KPIs
         cursor.execute(
             """
             UPDATE contacts 
             SET profile_summary = %s, 
-                profile_updated_at = NOW() 
+                profile_updated_at = NOW(),
+                salutation = %s,
+                sentiment = %s,
+                email_length_preference = %s,
+                communication_frequency = %s,
+                kpis_updated_at = NOW()
             WHERE id = %s
             """,
-            (summary, contact_id)
+            (summary, kpis['salutation'], kpis['sentiment'], 
+             kpis['email_length_preference'], kpis['communication_frequency'], contact_id)
         )
         conn.commit()
         cursor.close()
@@ -1690,7 +1793,8 @@ Sei präzise, geschäftlich und hilfreich. Max 200 Wörter."""
         return jsonify({
             'ok': True,
             'summary': summary,
-            'email_count': len(emails)
+            'email_count': len(emails),
+            'kpis': kpis
         }), 200
         
     except Exception as e:

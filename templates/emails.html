@@ -802,6 +802,7 @@
         const contactEmail = t.contact_email || t.from_addr || '–';
         const emailCount = t.contact_email_count || 1;
         const profileSummary = t.profile_summary || '';
+        const kpis = t.kpis || {};
         
         // Helper: Extract real name from email or profile
         function extractRealName(name, email, profile) {
@@ -862,11 +863,35 @@
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <div style="font-weight:600;">🤖 KI-Kundenprofil</div>
                 <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" style="background:#7c3aed; color:#fff; border:0; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px;">
-                  Profil erstellen
+                  ${profileSummary ? '🔄 Neu generieren' : 'Profil erstellen'}
                 </button>
               </div>
-              <div id="prof_summary" class="sub" style="padding:10px; background:#f9fafb; border-radius:6px; line-height:1.5;">
-                Noch kein Profil vorhanden. Klicken Sie oben, um ein KI-Profil zu erstellen.
+              ${kpis.salutation || kpis.sentiment || kpis.email_length_preference || kpis.communication_frequency ? `
+                <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
+                  ${kpis.salutation ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:500;">
+                    👋 ${kpis.salutation}
+                  </span>` : ''}
+                  ${kpis.sentiment ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:${
+                    kpis.sentiment === 'positive' ? '#d1fae5;color:#065f46' : 
+                    kpis.sentiment === 'negative' ? '#fee2e2;color:#991b1b' : 
+                    '#f3f4f6;color:#374151'
+                  }; border-radius:4px; font-size:11px; font-weight:500;">
+                    ${kpis.sentiment === 'positive' ? '😊' : kpis.sentiment === 'negative' ? '😟' : '😐'} ${
+                      kpis.sentiment === 'positive' ? 'Positiv' : 
+                      kpis.sentiment === 'negative' ? 'Negativ' : 
+                      'Neutral'
+                    }
+                  </span>` : ''}
+                  ${kpis.email_length_preference ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#fef3c7; color:#92400e; border-radius:4px; font-size:11px; font-weight:500;">
+                    📏 ${kpis.email_length_preference === 'short' ? 'Kurz' : kpis.email_length_preference === 'medium' ? 'Mittel' : 'Lang'}
+                  </span>` : ''}
+                  ${kpis.communication_frequency ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#e0e7ff; color:#3730a3; border-radius:4px; font-size:11px; font-weight:500;">
+                    📊 ${kpis.communication_frequency === 'daily' ? 'Täglich' : kpis.communication_frequency === 'weekly' ? 'Wöchentlich' : kpis.communication_frequency === 'monthly' ? 'Monatlich' : 'Selten'}
+                  </span>` : ''}
+                </div>
+              ` : ''}
+              <div id="prof_summary" class="sub" style="padding:10px; background:${profileSummary ? '#f0fdf4' : '#f9fafb'}; border-radius:6px; line-height:1.5;">
+                ${profileSummary ? formatCustomerProfile(profileSummary) : 'Noch kein Profil vorhanden. Klicken Sie oben, um ein KI-Profil zu erstellen.'}
               </div>
             </div>
           </div>
