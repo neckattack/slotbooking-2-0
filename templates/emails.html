@@ -429,10 +429,10 @@
               const remaining = onServer - totalInDB;
               if(remaining > 0){
                 loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${remaining} auf Server)`;
-                status.textContent = `${data.emails.length} von ${totalInDB} geladen · ${onServer} auf Server verfügbar`;
+                status.textContent = `${currentEmailLimit} von ${totalInDB} in DB geladen · ${onServer} auf Server verfügbar`;
               } else {
                 loadMoreBtn.textContent = `✅ Alle E-Mails geladen`;
-                status.textContent = `${data.emails.length} E-Mails geladen · Alles synchronisiert`;
+                status.textContent = `${currentEmailLimit} E-Mails geladen · Alles synchronisiert (${onServer} auf Server)`;
               }
             }
           })
@@ -443,11 +443,11 @@
         } else if(data.has_more){
           // More emails in DB
           loadMoreBtn.style.display = 'inline-block';
-          loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${totalInDB - data.emails.length} in DB)`;
-          status.textContent = `${data.emails.length} von ${totalInDB} E-Mails geladen`;
+          loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${totalInDB - currentEmailLimit} in DB)`;
+          status.textContent = `${currentEmailLimit} von ${totalInDB} E-Mails in DB geladen`;
         } else {
           loadMoreBtn.style.display = 'none';
-          status.textContent = `${data.emails.length} E-Mails geladen`;
+          status.textContent = `${currentEmailLimit} E-Mails geladen`;
         }
       }catch(e){
         list.innerHTML = `<div class="sub" style="padding:20px;">Fehler: ${e}</div>`;
@@ -467,11 +467,14 @@
         dialog.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; padding:30px; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.3); z-index:10000; max-width:400px;';
         dialog.innerHTML = `
           <h3 style="margin:0 0 16px;">Wie viele E-Mails laden?</h3>
-          <div style="display:flex; flex-direction:column; gap:12px;">
-            <button class="load-choice" data-count="20" style="background:#059669; color:#fff; border:0; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">📥 Weitere 20 E-Mails</button>
-            <button class="load-choice" data-count="50" style="background:#0284c7; color:#fff; border:0; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">📥 Weitere 50 E-Mails</button>
-            <button class="load-choice" data-count="100" style="background:#7c3aed; color:#fff; border:0; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">📥 Weitere 100 E-Mails</button>
-            <button class="load-choice" data-count="0" style="background:#6b7280; color:#fff; border:0; padding:12px; border-radius:8px; cursor:pointer; font-size:15px;">Abbrechen</button>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <button class="load-choice" data-count="20" style="background:#059669; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">📥 Weitere 20 E-Mails</button>
+            <button class="load-choice" data-count="50" style="background:#0284c7; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">📥 Weitere 50 E-Mails</button>
+            <button class="load-choice" data-count="100" style="background:#7c3aed; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">📥 Weitere 100 E-Mails</button>
+            <button class="load-choice" data-count="500" style="background:#d97706; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">📥 Weitere 500 E-Mails</button>
+            <button class="load-choice" data-count="1000" style="background:#dc2626; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">⚡ Weitere 1.000 E-Mails</button>
+            <button class="load-choice" data-count="5000" style="background:#991b1b; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">⚠️ Weitere 5.000 E-Mails (langsam!)</button>
+            <button class="load-choice" data-count="0" style="background:#6b7280; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px;">Abbrechen</button>
           </div>
         `;
         document.body.appendChild(dialog);
@@ -548,19 +551,25 @@
             <div style="font-size:18px; font-weight:600; margin-bottom:12px;">Postfach noch nicht synchronisiert</div>
             <div class="sub" style="margin-bottom:24px;">Es wurden <strong>${total} E-Mails</strong> auf dem Server gefunden.<br>Wie viele möchten Sie laden?</div>
             
-            <div style="display:flex; flex-direction:column; gap:12px; max-width:400px; margin:0 auto;">
-              <button class="sync-btn" data-limit="20" style="background:#059669; color:#fff; border:0; padding:14px 20px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">
+            <div style="display:flex; flex-direction:column; gap:10px; max-width:400px; margin:0 auto;">
+              <button class="sync-btn" data-limit="20" style="background:#059669; color:#fff; border:0; padding:12px 20px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">
                 📥 Erste 20 E-Mails
               </button>
-              <button class="sync-btn" data-limit="50" style="background:#0284c7; color:#fff; border:0; padding:14px 20px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">
+              <button class="sync-btn" data-limit="50" style="background:#0284c7; color:#fff; border:0; padding:12px 20px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">
                 📥 Erste 50 E-Mails
               </button>
-              <button class="sync-btn" data-limit="100" style="background:#7c3aed; color:#fff; border:0; padding:14px 20px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">
+              <button class="sync-btn" data-limit="100" style="background:#7c3aed; color:#fff; border:0; padding:12px 20px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">
                 📥 Erste 100 E-Mails
               </button>
-              ${total > 100 ? `
-                <button class="sync-btn" data-limit="all" style="background:#dc2626; color:#fff; border:0; padding:14px 20px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">
-                  ⚠️ Alle ${total} E-Mails (Vorsicht!)
+              <button class="sync-btn" data-limit="500" style="background:#d97706; color:#fff; border:0; padding:12px 20px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">
+                📥 Erste 500 E-Mails
+              </button>
+              <button class="sync-btn" data-limit="1000" style="background:#dc2626; color:#fff; border:0; padding:12px 20px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">
+                ⚡ Erste 1.000 E-Mails
+              </button>
+              ${total > 1000 ? `
+                <button class="sync-btn" data-limit="all" style="background:#991b1b; color:#fff; border:0; padding:12px 20px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">
+                  ⚠️ Alle ${total} E-Mails (sehr langsam!)
                 </button>
               ` : ''}
             </div>
