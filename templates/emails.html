@@ -63,6 +63,90 @@
     .sidebar-menu li a { display:flex; align-items:center; gap:12px; padding:16px 20px; text-decoration:none; color:var(--fg); font-size:15px; transition:background 0.2s; }
     .sidebar-menu li a:hover { background:var(--hover); }
     .sidebar-menu li a .icon { font-size:20px; width:24px; }
+    
+    /* Responsive Design for Mobile */
+    @media (max-width: 768px) {
+      /* Header wraps on mobile */
+      header { flex-wrap:wrap; gap:8px; padding:10px; }
+      h1 { font-size:16px; flex:1; min-width:0; }
+      .toolbar { flex-wrap:wrap; width:100%; justify-content:flex-end; gap:6px; }
+      .toolbar button { padding:6px 10px; font-size:13px; }
+      #status { order:-1; width:100%; margin:0 0 4px 0 !important; text-align:center; }
+      
+      /* Stack layout vertically on mobile */
+      .container { 
+        display:flex; 
+        flex-direction:column; 
+        height:auto; 
+        min-height:calc(100vh - 100px); 
+      }
+      
+      /* List takes full width, scroll horizontally disabled */
+      .list { 
+        border-right:none; 
+        border-bottom:1px solid var(--border); 
+        max-height:40vh; 
+        width:100%; 
+        overflow-x:hidden;
+      }
+      
+      /* Detail takes full width */
+      .detail { 
+        width:100%; 
+        min-height:300px;
+        padding:12px;
+        overflow-x:hidden;
+      }
+      
+      /* Compose section on mobile */
+      .compose { 
+        border-left:none; 
+        border-top:1px solid var(--border); 
+        width:100%;
+        padding:12px;
+        overflow-x:hidden;
+      }
+      
+      /* Make modals responsive */
+      .modal .box { 
+        width:90vw !important; 
+        max-width:400px !important;
+        max-height:85vh;
+        overflow:auto;
+      }
+      
+      /* Profile grid single column on mobile */
+      .profile .grid { 
+        grid-template-columns:1fr; 
+      }
+      
+      /* Compose editor smaller on mobile */
+      .compose .editor { 
+        min-height:150px; 
+        font-size:14px;
+      }
+      
+      /* Actions wrap on mobile */
+      .compose .actions { 
+        flex-wrap:wrap; 
+      }
+      
+      /* Detail content padding */
+      .detail .content { 
+        padding:12px; 
+      }
+    }
+    
+    /* Extra small devices */
+    @media (max-width: 480px) {
+      header { padding:8px; }
+      h1 { font-size:14px; }
+      .toolbar button { padding:5px 8px; font-size:12px; }
+      .detail { padding:8px; }
+      .compose { padding:8px; }
+      .item { padding:8px 10px; }
+      .profile { padding:10px; }
+    }
   </style>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
@@ -354,6 +438,39 @@
       // Versuche JSON, sonst Fehlertext kapseln
       try { return { __ok: res.ok, __status: res.status, ...(JSON.parse(txt)||{}) }; } catch(_){ return { __ok: res.ok, __status: res.status, error: txt || 'Leere Antwort vom Server' }; }
     }
+    
+    // Format customer profile with HTML structure
+    function formatCustomerProfile(text){
+      if(!text) return text;
+      
+      // Split by numbered sections (1., 2., 3., etc.) or double asterisks
+      let html = text;
+      
+      // Format bold sections: **Text:** -> <strong>Text:</strong>
+      html = html.replace(/\*\*([^*]+):\*\*/g, '<strong style="color:#7c3aed;font-size:1.05em;">$1:</strong>');
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      
+      // Format numbered sections: 1. **Title** -> <h4>Title</h4>
+      html = html.replace(/(\d+)\.\s+\*\*([^*]+)\*\*/g, '<h4 style="margin:12px 0 6px 0;color:#7c3aed;font-size:1.1em;">$1. $2</h4>');
+      
+      // Format bullet points: • or - at line start
+      html = html.replace(/^[•\-]\s+(.+)$/gm, '<div style="margin-left:16px;margin-bottom:4px;">• $1</div>');
+      
+      // Format paragraphs: double line breaks
+      html = html.split('\n\n').map(para => {
+        para = para.trim();
+        if(!para) return '';
+        // Don't wrap if already has HTML tags
+        if(para.includes('<h4') || para.includes('<div')) return para;
+        return `<p style="margin:8px 0;line-height:1.6;">${para}</p>`;
+      }).join('');
+      
+      // Single line breaks to <br>
+      html = html.replace(/\n/g, '<br>');
+      
+      return html;
+    }
+    
     async function loadInbox(){
       const status = document.getElementById('status');
       const list = document.getElementById('list');
@@ -743,7 +860,7 @@
               const data = await parseJsonSafe(res);
               
               if(data.__ok && data.summary){
-                summaryDiv.textContent = data.summary;
+                summaryDiv.innerHTML = formatCustomerProfile(data.summary);
                 summaryDiv.style.background = '#f0fdf4';
                 generateBtn.textContent = '🔄 Neu generieren';
                 generateBtn.disabled = false;

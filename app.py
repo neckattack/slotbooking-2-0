@@ -1459,12 +1459,17 @@ Kunde: {contact['name']} ({contact['contact_email']})
 E-Mail-Historie:
 {email_context}
 
-Erstelle ein Profil mit:
-1. Wer ist dieser Kunde? (Bedürfnisse, Kontext, Hintergrund)
-2. Hauptanliegen & wiederkehrende Themen
-3. Kommunikationsstil & Verhalten
-4. Besonderheiten & Muster
-5. Empfehlungen für zukünftige Kommunikation
+WICHTIG: Formatiere die Antwort mit klarer Struktur:
+- Nutze **Fettschrift** für Überschriften (z.B. **Wer ist dieser Kunde:**)
+- Nutze Absätze (Doppelte Zeilenumbrüche)
+- Nutze • oder - für Listen
+- Gliedere in diese 5 Bereiche:
+
+1. **Wer ist dieser Kunde?** (Bedürfnisse, Kontext, Hintergrund)
+2. **Hauptanliegen & wiederkehrende Themen:**
+3. **Kommunikationsstil & Verhalten:**
+4. **Besonderheiten & Muster:**
+5. **Empfehlungen für zukünftige Kommunikation:**
 
 Sei präzise, geschäftlich und hilfreich. Max 200 Wörter."""
         
