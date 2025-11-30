@@ -339,6 +339,7 @@
 
   <script>
     let currentUid = null;
+    let currentEmailLimit = 50;  // Track how many emails to load
     async function parseJsonSafe(res){
       const ct = res.headers.get('content-type') || '';
       const txt = await res.text();
@@ -357,8 +358,8 @@
       const list = document.getElementById('list');
       status.textContent = 'lädt …';
       try{
-        // Load emails from database
-        const res = await fetch('/api/emails/list?folder=inbox&limit=50', {
+        // Load emails from database with current limit
+        const res = await fetch(`/api/emails/list?folder=inbox&limit=${currentEmailLimit}`, {
           headers: getAuthHeaders()
         });
         const data = await parseJsonSafe(res);
@@ -503,7 +504,10 @@
           throw new Error(syncData.error || 'Sync fehlgeschlagen');
         }
         
-        // Reload inbox
+        // Increase limit to show newly synced emails
+        currentEmailLimit += choice;
+        
+        // Reload inbox with new limit
         await loadInbox();
         
       }catch(e){
@@ -609,6 +613,11 @@
         document.getElementById('sync-progress').textContent = 
           `✅ ${syncData.synced} E-Mails geladen, ${syncData.new_contacts} neue Kontakte gefunden!`;
         document.getElementById('sync-progress-bar').style.width = '100%';
+        
+        // Set limit to synced count (or keep current if higher)
+        if(limit){
+          currentEmailLimit = Math.max(currentEmailLimit, limit);
+        }
         
         // Reload inbox after 1 second
         setTimeout(() => {
