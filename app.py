@@ -493,9 +493,155 @@ def api_emails_agent_compose(current_user):
             s = re.sub(r'\n\s*\n\s*\n+', '\n\n', s)
             return s.strip()
         source_text = (plaintext or ( _html_to_text(html_body) if html_body else '' )).strip()
-        # Neutrale Begrüßung (kein Personenname)
+        
+        # Intelligente Begrüßung basierend auf User-Stil und Kontakt
         from email.utils import parseaddr as _parseaddr
-        greeting_html = "<p>Hallo,</p>"
+        
+        # Helper: Extract greeting style from sent emails
+        def _learn_user_greeting_style(user_email_addr, contact_email_addr):
+            """Analyzes user's sent emails to learn their greeting style"""
+            try:
+                conn_learn = get_settings_db_connection()
+                cursor_learn = conn_learn.cursor(dictionary=True)
+                
+                # Get last 10 sent emails from this user to this contact (or any contact)
+                cursor_learn.execute(
+                    """
+                    SELECT body_text, body_html 
+                    FROM emails 
+                    WHERE user_email = %s 
+                    AND from_addr LIKE %s
+                    ORDER BY received_at DESC 
+                    LIMIT 10
+                    """,
+                    (user_email, f"%{user_email_addr}%")
+                )
+                sent_emails = cursor_learn.fetchall()
+                cursor_learn.close()
+                conn_learn.close()
+                
+                if not sent_emails:
+                    return None
+                
+                # Extract greetings from email bodies
+                import re
+                greetings = []
+                for em in sent_emails:
+                    text = (em['body_text'] or em['body_html'] or '')[:300]
+                    # Match common German greetings at start of email
+                    patterns = [
+                        r'^(Hallo|Hi|Hey|Moin|Guten Tag|Sehr geehrte[rs]?|Liebe[rs]?)\s+([^,\n]+)',
+                        r'^(Servus|Grüß Gott|Grüezi)\s+([^,\n]+)',
+                    ]
+                    for pattern in patterns:
+                        match = re.search(pattern, text.strip(), re.IGNORECASE | re.MULTILINE)
+                        if match:
+                            greetings.append(match.group(1))
+                            break
+                
+                if greetings:
+                    # Return most common greeting
+                    from collections import Counter
+                    most_common = Counter(greetings).most_common(1)[0][0]
+                    return most_common
+                
+                return None
+            except Exception as e:
+                app.logger.warning(f"[Learn Greeting] Error: {e}")
+                return None
+        
+        # Helper: Determine formal vs informal address
+        def _determine_address_style(contact_name, contact_email_addr, user_email_addr):
+            """Determines if contact should be addressed formally (Sie) or informally (Du)"""
+            try:
+                conn_style = get_settings_db_connection()
+                cursor_style = conn_style.cursor(dictionary=True)
+                
+                # Check previous emails from user to contact for Sie/Du
+                cursor_style.execute(
+                    """
+                    SELECT body_text, body_html 
+                    FROM emails 
+                    WHERE user_email = %s 
+                    AND (to_addrs LIKE %s OR from_addr LIKE %s)
+                    ORDER BY received_at DESC 
+                    LIMIT 5
+                    """,
+                    (user_email, f"%{contact_email_addr}%", f"%{contact_email_addr}%")
+                )
+                emails_hist = cursor_style.fetchall()
+                cursor_style.close()
+                conn_style.close()
+                
+                du_count = 0
+                sie_count = 0
+                
+                for em in emails_hist:
+                    text = (em['body_text'] or em['body_html'] or '').lower()
+                    # Count Du/Dir/Dein vs Sie/Ihnen/Ihr
+                    du_count += len(re.findall(r'\b(du|dir|dein|deine)\b', text))
+                    sie_count += len(re.findall(r'\b(sie|ihnen|ihr|ihre)\b', text))
+                
+                # Determine formality
+                is_formal = sie_count > du_count
+                
+                # Determine if first name or last name
+                use_first_name = not is_formal or '@' not in (contact_name or '')
+                
+                name_to_use = contact_name or contact_email_addr.split('@')[0]
+                
+                # Try to extract first/last name
+                if ' ' in (contact_name or ''):
+                    parts = contact_name.split()
+                    first_name = parts[0]
+                    last_name = parts[-1] if len(parts) > 1 else parts[0]
+                    
+                    if use_first_name:
+                        name_to_use = first_name
+                    else:
+                        # Formal: Herr/Frau + last name (we can't determine gender, so skip title)
+                        name_to_use = last_name
+                else:
+                    name_to_use = contact_name or contact_email_addr.split('@')[0]
+                
+                return {
+                    'is_formal': is_formal,
+                    'use_first_name': use_first_name,
+                    'name': name_to_use,
+                    'full_name': contact_name
+                }
+                
+            except Exception as e:
+                app.logger.warning(f"[Address Style] Error: {e}")
+                return {
+                    'is_formal': False,
+                    'use_first_name': True,
+                    'name': contact_name or contact_email_addr.split('@')[0],
+                    'full_name': contact_name
+                }
+        
+        # Learn greeting style and address
+        contact_email_addr = email_row.get('contact_email') or from_addr
+        contact_name_str = email_row.get('contact_name') or from_name or ''
+        
+        user_greeting_style = _learn_user_greeting_style(user_email, contact_email_addr)
+        address_info = _determine_address_style(contact_name_str, contact_email_addr, user_email)
+        
+        # Build personalized greeting
+        greeting_word = user_greeting_style or "Hallo"
+        contact_display_name = address_info['name']
+        
+        if address_info['is_formal'] and not address_info['use_first_name']:
+            # Formal: "Sehr geehrter Herr Schmidt" or "Guten Tag Frau Müller"
+            if greeting_word.lower() in ['sehr geehrter', 'sehr geehrte']:
+                greeting_html = f"<p>{greeting_word} {contact_display_name},</p>"
+            else:
+                greeting_html = f"<p>{greeting_word} {contact_display_name},</p>"
+        else:
+            # Informal: "Hallo Max" or "Moin Anna"
+            greeting_html = f"<p>{greeting_word} {contact_display_name},</p>"
+        
+        app.logger.info(f"[Greeting] Style: {greeting_word}, Formal: {address_info['is_formal']}, Name: {contact_display_name}")
         # Preface: Jobs upcoming/past (nur bei EXPLIZITER Bitte nach Jobs/Terminen)
         visible_preface_html = ""
         _source_lc = (source_text or "").lower()
@@ -620,10 +766,15 @@ def api_emails_agent_compose(current_user):
             import re
             if not html:
                 return html
+            # Extended list of German greetings to remove
+            greetings_pattern = (
+                r'hallo|hi|hey|moin|servus|guten tag|guten morgen|guten abend|'
+                r'sehr geehrte[rs]?|liebe[rs]?|grüß gott|grüezi|hallöchen'
+            )
             # <p>...</p> Beginn mit gängigen Grußformeln entfernen (inkl. Name/E-Mail/Kommata)
-            html = re.sub(r'^\s*<p>\s*(hallo|hi|guten tag|guten morgen|guten abend)[^<]*</p>\s*', '', html, flags=re.IGNORECASE)
+            html = re.sub(rf'^\s*<p>\s*({greetings_pattern})[^<]*</p>\s*', '', html, flags=re.IGNORECASE)
             # Plaintext-Variante (ohne <p>) am Anfang
-            html = re.sub(r'^\s*(hallo|hi|guten tag|guten morgen|guten abend)[^\n<]*\n+', '', html, flags=re.IGNORECASE)
+            html = re.sub(rf'^\s*({greetings_pattern})[^\n<]*\n+', '', html, flags=re.IGNORECASE)
             return html
         antwort_body = _strip_greeting_html(antwort_body)
         # Body als "leer" behandeln, wenn nach HTML->Text kaum Inhalt vorhanden ist
