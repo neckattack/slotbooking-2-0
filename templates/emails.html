@@ -339,7 +339,8 @@
 
   <script>
     let currentUid = null;
-    let currentEmailLimit = 50;  // Track how many emails to load
+    // Load email limit from localStorage or default to 50
+    let currentEmailLimit = parseInt(localStorage.getItem('emailLimit')) || 50;
     async function parseJsonSafe(res){
       const ct = res.headers.get('content-type') || '';
       const txt = await res.text();
@@ -509,6 +510,7 @@
         
         // Increase limit to show newly synced emails
         currentEmailLimit += choice;
+        localStorage.setItem('emailLimit', currentEmailLimit);
         
         // Reload inbox with new limit
         await loadInbox();
@@ -626,6 +628,7 @@
         // Set limit to synced count (or keep current if higher)
         if(limit){
           currentEmailLimit = Math.max(currentEmailLimit, limit);
+          localStorage.setItem('emailLimit', currentEmailLimit);
         }
         
         // Reload inbox after 1 second

@@ -3,13 +3,16 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for
 import mysql.connector
 from dotenv import load_dotenv
 from datetime import datetime
-import openai
+from openai import OpenAI
 from agent_core import find_next_appointment_for_name
 from agent_gpt import agent_respond
 from encryption_utils import encrypt_password, decrypt_password
 from auth_utils import create_jwt_token, decode_jwt_token, verify_password, hash_password, require_auth, require_role
 
 load_dotenv()
+
+# Initialize OpenAI client
+openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Flask-App muss vor allen @app.route-Dekoratoren existieren
 app = Flask(__name__)
@@ -1487,7 +1490,7 @@ Erstelle ein Profil mit:
 
 Sei präzise, geschäftlich und hilfreich. Max 200 Wörter."""
         
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "Du bist ein CRM-Analyst, der Kundenprofile erstellt."},
