@@ -623,6 +623,41 @@ def api_emails_agent_compose(current_user):
         # Learn greeting style and address
         contact_email_addr = email_row.get('contact_email') or from_addr
         contact_name_str = email_row.get('contact_name') or from_name or ''
+        contact_profile_summary = email_row.get('profile_summary', '')
+        
+        # Helper: Extract name from profile or email address
+        def _extract_real_name(name_str, email_addr, profile_summary):
+            """Extract actual name from various sources"""
+            # If name is just an email address, extract local part
+            if '@' in (name_str or ''):
+                local_part = name_str.split('@')[0]
+                # Capitalize first letter
+                name_str = local_part.capitalize()
+            
+            # If name is still empty or looks like email, try profile
+            if not name_str or '@' in name_str:
+                if profile_summary:
+                    # Try to extract name from profile: "Johanna ist..." or "Name: Johanna"
+                    import re
+                    # Pattern 1: "Johanna ist..." at start
+                    match = re.search(r'^([A-ZÄÖÜ][a-zäöüß]+)\s+(ist|arbeitet|hat|sendet)', profile_summary)
+                    if match:
+                        name_str = match.group(1)
+                    else:
+                        # Pattern 2: Look for capitalized name after common phrases
+                        match = re.search(r'(?:Kunde|Person|Kontakt|Name):\s*([A-ZÄÖÜ][a-zäöüß]+)', profile_summary)
+                        if match:
+                            name_str = match.group(1)
+            
+            # Final fallback: extract from email
+            if not name_str or '@' in name_str:
+                local_part = email_addr.split('@')[0] if email_addr else 'Kunde'
+                name_str = local_part.capitalize()
+            
+            return name_str
+        
+        # Extract real name before processing
+        contact_name_str = _extract_real_name(contact_name_str, contact_email_addr, contact_profile_summary)
         
         user_greeting_style = _learn_user_greeting_style(user_email, contact_email_addr)
         address_info = _determine_address_style(contact_name_str, contact_email_addr, user_email)
@@ -1394,7 +1429,8 @@ def api_emails_get(current_user, email_id):
         
         cursor.execute(
             """
-            SELECT e.*, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
+            SELECT e.*, c.name as contact_name, c.contact_email, c.email_count as contact_email_count,
+                   c.profile_summary
             FROM emails e
             LEFT JOIN contacts c ON e.contact_id = c.id
             WHERE e.id = %s AND e.user_email = %s
@@ -1421,7 +1457,8 @@ def api_emails_get(current_user, email_id):
             'contact_name': email_row['contact_name'],
             'contact_email': email_row['contact_email'],
             'contact_email_count': email_row['contact_email_count'] or 1,
-            'contact_id': email_row.get('contact_id')
+            'contact_id': email_row.get('contact_id'),
+            'profile_summary': email_row.get('profile_summary', '')
         }), 200
         
     except Exception as e:

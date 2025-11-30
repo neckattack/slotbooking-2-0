@@ -798,9 +798,47 @@
         const html = t.body_html || (t.body_text ? `<pre>${escapeHtml(t.body_text)}</pre>` : '<div class="sub">Kein Inhalt</div>');
         
         // Extract contact info
-        const contactName = t.contact_name || t.from || '–';
+        let contactName = t.contact_name || t.from || '–';
         const contactEmail = t.contact_email || t.from_addr || '–';
         const emailCount = t.contact_email_count || 1;
+        const profileSummary = t.profile_summary || '';
+        
+        // Helper: Extract real name from email or profile
+        function extractRealName(name, email, profile) {
+          // If name is an email address, extract local part
+          if (name && name.includes('@')) {
+            const localPart = name.split('@')[0];
+            name = localPart.charAt(0).toUpperCase() + localPart.slice(1);
+          }
+          
+          // If name is still empty or looks like email, try profile
+          if (!name || name === '–' || name.includes('@')) {
+            if (profile) {
+              // Try to extract name from profile: "Johanna ist..." at start
+              const match1 = profile.match(/^([A-ZÄÖÜ][a-zäöüß]+)\s+(ist|arbeitet|hat|sendet)/);
+              if (match1) {
+                name = match1[1];
+              } else {
+                // Pattern 2: Look for capitalized name after common phrases
+                const match2 = profile.match(/(?:Kunde|Person|Kontakt|Name):\s*([A-ZÄÖÜ][a-zäöüß]+)/);
+                if (match2) {
+                  name = match2[1];
+                }
+              }
+            }
+          }
+          
+          // Final fallback: extract from email
+          if (!name || name === '–' || name.includes('@')) {
+            const localPart = email.split('@')[0];
+            name = localPart.charAt(0).toUpperCase() + localPart.slice(1);
+          }
+          
+          return name;
+        }
+        
+        // Extract real name
+        contactName = extractRealName(contactName, contactEmail, profileSummary);
         
         detail.innerHTML = `
           <h2>${escapeHtml(t.subject || '')}</h2>
