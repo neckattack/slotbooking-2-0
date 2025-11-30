@@ -1287,7 +1287,9 @@ def api_emails_get(current_user, email_id):
             'body_text': email_row['body_text'] or '',
             'has_attachments': email_row['has_attachments'],
             'contact_name': email_row['contact_name'],
-            'contact_email': email_row['contact_email']
+            'contact_email': email_row['contact_email'],
+            'contact_email_count': email_row['contact_email_count'] or 1,
+            'contact_id': email_row.get('contact_id')
         }), 200
         
     except Exception as e:
@@ -1416,6 +1418,109 @@ def api_contacts_emails(current_user, contact_id):
         
     except Exception as e:
         app.logger.error(f"[Contact Emails] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/contacts/<int:contact_id>/generate-profile', methods=['POST'])
+@require_auth
+def api_contacts_generate_profile(current_user, contact_id):
+    """Generate AI profile summary for a contact"""
+    user_email = current_user.get('user_email')
+    
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verify contact belongs to user
+        cursor.execute(
+            "SELECT id, name, contact_email FROM contacts WHERE id=%s AND user_email=%s",
+            (contact_id, user_email)
+        )
+        contact = cursor.fetchone()
+        
+        if not contact:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Contact not found'}), 404
+        
+        # Get all emails from this contact
+        cursor.execute(
+            """
+            SELECT subject, body_text, received_at 
+            FROM emails 
+            WHERE contact_id = %s AND user_email = %s 
+            ORDER BY received_at
+            LIMIT 50
+            """,
+            (contact_id, user_email)
+        )
+        emails = cursor.fetchall()
+        
+        if not emails:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'No emails found for this contact'}), 404
+        
+        # Build email context (limit to avoid token overflow)
+        email_texts = []
+        for e in emails:
+            date_str = e['received_at'].strftime('%d.%m.%Y') if e['received_at'] else ''
+            body = (e['body_text'] or '')[:500]  # Limit each email to 500 chars
+            email_texts.append(f"[{date_str}] Betreff: {e['subject']}\n{body}")
+        
+        email_context = "\n\n".join(email_texts)
+        
+        # Generate profile with GPT
+        prompt = f"""Analysiere diese {len(emails)} E-Mails eines Kunden und erstelle ein prägnantes Kundenprofil.
+
+Kunde: {contact['name']} ({contact['contact_email']})
+
+E-Mail-Historie:
+{email_context}
+
+Erstelle ein Profil mit:
+1. Wer ist dieser Kunde? (Bedürfnisse, Kontext, Hintergrund)
+2. Hauptanliegen & wiederkehrende Themen
+3. Kommunikationsstil & Verhalten
+4. Besonderheiten & Muster
+5. Empfehlungen für zukünftige Kommunikation
+
+Sei präzise, geschäftlich und hilfreich. Max 200 Wörter."""
+        
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Du bist ein CRM-Analyst, der Kundenprofile erstellt."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=400
+        )
+        
+        summary = response.choices[0].message.content
+        
+        # Save to database
+        cursor.execute(
+            """
+            UPDATE contacts 
+            SET profile_summary = %s, 
+                profile_updated_at = NOW() 
+            WHERE id = %s
+            """,
+            (summary, contact_id)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            'ok': True,
+            'summary': summary,
+            'email_count': len(emails)
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"[Generate Profile] Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 

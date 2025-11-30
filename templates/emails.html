@@ -686,7 +686,7 @@
           <h2>${escapeHtml(t.subject || '')}</h2>
           <div class="meta">Von: ${escapeHtml(t.from||'')} · An: ${escapeHtml(t.to||'')} · ${escapeHtml(t.date||'')}</div>
           <div class="content">${html}</div>
-          <div class="profile" id="profile_panel">
+          <div class="profile" id="profile_panel" data-contact-id="${t.contact_id || ''}">
             <h3>👤 KONTAKT-PROFIL</h3>
             <div class="grid">
               <div>
@@ -696,16 +696,66 @@
               </div>
             </div>
             <div style="margin-top:12px;">
-              <button id="view_all_contact_emails" style="background:#0284c7; color:#fff; border:0; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:13px; width:100%;">
+              <button id="view_all_contact_emails" data-contact-id="${t.contact_id || ''}" style="background:#0284c7; color:#fff; border:0; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:13px; width:100%;">
                 📧 Alle E-Mails von diesem Kontakt (${emailCount})
               </button>
             </div>
-            <div style="margin-top:12px; font-size:13px;">
-              <div class="sub" style="margin-bottom:6px;">Agent-Zusammenfassung</div>
-              <div id="prof_summary" class="sub">Noch nicht verfügbar. Wird in zukünftigen Updates automatisch generiert.</div>
+            <div style="margin-top:16px; font-size:13px; border-top:1px solid var(--border); padding-top:12px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div style="font-weight:600;">🤖 KI-Kundenprofil</div>
+                <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" style="background:#7c3aed; color:#fff; border:0; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px;">
+                  Profil erstellen
+                </button>
+              </div>
+              <div id="prof_summary" class="sub" style="padding:10px; background:#f9fafb; border-radius:6px; line-height:1.5;">
+                Noch kein Profil vorhanden. Klicken Sie oben, um ein KI-Profil zu erstellen.
+              </div>
             </div>
           </div>
         `;
+        // Event handler for "View all contact emails" button
+        const viewAllBtn = document.getElementById('view_all_contact_emails');
+        if(viewAllBtn && t.contact_id){
+          viewAllBtn.onclick = () => {
+            openContactDetailModal(t.contact_id, contactName, contactEmail);
+          };
+        }
+        
+        // Event handler for "Generate profile" button
+        const generateBtn = document.getElementById('generate_profile_btn');
+        const summaryDiv = document.getElementById('prof_summary');
+        if(generateBtn && t.contact_id){
+          generateBtn.onclick = async () => {
+            const originalText = generateBtn.textContent;
+            generateBtn.disabled = true;
+            generateBtn.textContent = '⏳ Generiere...';
+            summaryDiv.textContent = 'Analysiere E-Mails und erstelle Kundenprofil...';
+            summaryDiv.style.background = '#fef3c7';
+            
+            try{
+              const res = await fetch(`/api/contacts/${t.contact_id}/generate-profile`, {
+                method: 'POST',
+                headers: getAuthHeaders()
+              });
+              const data = await parseJsonSafe(res);
+              
+              if(data.__ok && data.summary){
+                summaryDiv.textContent = data.summary;
+                summaryDiv.style.background = '#f0fdf4';
+                generateBtn.textContent = '🔄 Neu generieren';
+                generateBtn.disabled = false;
+              } else {
+                throw new Error(data.error || 'Profil-Generierung fehlgeschlagen');
+              }
+            }catch(e){
+              summaryDiv.textContent = `❌ Fehler: ${e}`;
+              summaryDiv.style.background = '#fee2e2';
+              generateBtn.textContent = originalText;
+              generateBtn.disabled = false;
+            }
+          };
+        }
+        
         // Als gelesen markieren (opt-in: beim Öffnen)
         try{ await fetch('/api/emails/seen', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid, seen:true})}); }catch(_){ }
         rowEl.classList.remove('unseen');
