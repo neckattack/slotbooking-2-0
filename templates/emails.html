@@ -64,6 +64,18 @@
     .sidebar-menu li a:hover { background:var(--hover); }
     .sidebar-menu li a .icon { font-size:20px; width:24px; }
     
+    /* Detail layout: scrollable content + fixed profile (desktop) */
+    .detail {
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+    }
+    .detail-scroll {
+      flex:1;
+      overflow:auto;
+      padding-right:4px;
+    }
+
     /* Responsive Design for Mobile */
     @media (max-width: 768px) {
       /* Header wraps on mobile */
@@ -90,12 +102,17 @@
         overflow-x:hidden;
       }
       
-      /* Detail takes full width */
+      /* Detail takes full width (reset flex layout) */
       .detail { 
         width:100%; 
         min-height:300px;
         padding:12px;
         overflow-x:hidden;
+        display:block;
+      }
+      .detail-scroll {
+        padding-right:0;
+        overflow:visible;
       }
       
       /* Compose section on mobile */
@@ -916,9 +933,11 @@
         contactName = extractRealName(contactName, contactEmail, profileSummary);
         
         detail.innerHTML = `
-          <h2>${escapeHtml(t.subject || '')}</h2>
-          <div class="meta">Von: ${escapeHtml(t.from||'')} · An: ${escapeHtml(t.to||'')} · ${escapeHtml(t.date||'')}</div>
-          <div class="content">${html}</div>
+          <div class="detail-scroll">
+            <h2>${escapeHtml(t.subject || '')}</h2>
+            <div class="meta">Von: ${escapeHtml(t.from||'')} · An: ${escapeHtml(t.to||'')} · ${escapeHtml(t.date||'')}</div>
+            <div class="content">${html}</div>
+          </div>
           <div class="profile" id="profile_panel" data-contact-id="${t.contact_id || ''}">
             <h3>👤 KONTAKT-PROFIL</h3>
             <div class="grid">
