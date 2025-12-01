@@ -508,8 +508,8 @@
     function setupInboxFilterToggle(){
       const list = document.getElementById('list');
       if(!list) return;
-      const parent = list.parentElement;
-      if(!parent || document.getElementById('inbox_filter_toggle')) return;
+      // Toggle soll innerhalb der linken Listenspalte direkt über den Items sitzen
+      if(document.getElementById('inbox_filter_toggle')) return;
       const toggle = document.createElement('div');
       toggle.id = 'inbox_filter_toggle';
       toggle.style.cssText = 'display:flex; justify-content:flex-start; gap:8px; align-items:center; margin:4px 0 8px 0; font-size:12px;';
@@ -519,7 +519,8 @@
           <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Sonstige</button>
         </div>
       `;
-      parent.insertBefore(toggle, list);
+      // In die Listenspalte einfügen, direkt vor dem ersten Inhalt
+      list.insertBefore(toggle, list.firstChild);
       const btnRel = document.getElementById('filter_relevant');
       const btnOther = document.getElementById('filter_other');
       const updateButtons = () => {
