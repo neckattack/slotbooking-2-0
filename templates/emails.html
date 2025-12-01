@@ -549,7 +549,15 @@
       const list = document.getElementById('list');
       const status = document.getElementById('status');
       if(!list) return;
-      list.innerHTML = '';
+      const toggle = document.getElementById('inbox_filter_toggle');
+      // Nur die E-Mail-Items unterhalb des Toggles leeren
+      if(toggle){
+        while(list.lastChild && list.lastChild !== toggle){
+          list.removeChild(list.lastChild);
+        }
+      } else {
+        list.innerHTML = '';
+      }
       if(!inboxEmails || !inboxEmails.length){
         list.innerHTML = '<div class="sub" style="padding:20px; text-align:center;">Keine E-Mails im Posteingang.</div>';
         if(status) status.textContent = '';
