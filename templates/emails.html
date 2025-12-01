@@ -1063,24 +1063,6 @@
             }
           }
         } catch(_e) { /* still fine */ }
-        // Profil-Panel mit Platzhalterdaten befüllen
-        try {
-          const from = t.from || '';
-          const emailMatch = from.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-          const email = emailMatch ? emailMatch[0] : '';
-          const nameMatch = from.replace(email, '').replace(/[<>]/g,'').trim();
-          const name = nameMatch || (email ? email.split('@')[0] : '');
-          renderProfilePlaceholder({
-            name: name || '–',
-            email: email || '–',
-            phone: '–',
-            city: '–',
-            source: '—',
-            last: t.date || '–',
-            channels: 'E‑Mail',
-            summary: 'Noch keine Zusammenfassung vorhanden.'
-          });
-        } catch(_) {}
       }catch(e){
         detail.innerHTML = `<div class="sub">Fehler: ${e}</div>`;
       }
@@ -1171,6 +1153,13 @@
         return null;
       }
     }
+
+    // Schließt alle offenen Modalfenster (gegen "schwarzen Screen" mit mehreren Overlays)
+    function closeAllModals(){
+      document.querySelectorAll('.modal').forEach(m => {
+        m.style.display = 'none';
+      });
+    }
     function updateMenuForUser(){
       const user = getCurrentUser();
       const sidebarUsersItem = document.getElementById('sidebar_users_item');
@@ -1220,6 +1209,7 @@
       }
     }
     function showLoginModal(){
+      closeAllModals();
       const modal = document.getElementById('login_modal');
       const email = document.getElementById('login_email');
       const pass = document.getElementById('login_pass');
@@ -1288,6 +1278,7 @@
       };
     }
     async function openEmailSettingsModal(){
+      closeAllModals();
       const modal = document.getElementById('email_settings_modal');
       const msg = document.getElementById('email_settings_msg');
       const userEmail = getUserEmail();
@@ -1478,6 +1469,7 @@
       modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
     }
     function openProfileModal(){
+      closeAllModals();
       const modal = document.getElementById('profile_modal');
       const msg = document.getElementById('profile_msg');
       const user = getCurrentUser();
@@ -1657,6 +1649,7 @@
     }
     
     function openKnowledgeModal(){
+      closeAllModals();
       const modal = document.getElementById('knowledge_modal');
       const msg = document.getElementById('knowledge_msg');
       const user = getCurrentUser();
@@ -1712,6 +1705,7 @@
     }
     
     function openContactsModal(){
+      closeAllModals();
       const modal = document.getElementById('contacts_modal');
       const list = document.getElementById('contacts_list');
       const searchInput = document.getElementById('contacts_search');
@@ -1781,6 +1775,7 @@
     }
     
     function openContactDetailModal(contactId, contactName, contactEmail){
+      closeAllModals();
       const modal = document.getElementById('contact_detail_modal');
       const nameEl = document.getElementById('contact_detail_name');
       const emailEl = document.getElementById('contact_detail_email');
@@ -1842,6 +1837,7 @@
     }
     
     function openUserManagementModal(){
+      closeAllModals();
       const modal = document.getElementById('user_management_modal');
       const list = document.getElementById('user_list');
       const msg = document.getElementById('user_management_msg');
@@ -1889,6 +1885,7 @@
       }
     }
     function openNewUserModal(){
+      closeAllModals();
       const modal = document.getElementById('new_user_modal');
       const msg = document.getElementById('new_user_msg');
       modal.style.display = 'flex';
