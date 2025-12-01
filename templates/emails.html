@@ -425,6 +425,9 @@
     let currentUid = null;
     // Load email limit from localStorage or default to 50
     let currentEmailLimit = parseInt(localStorage.getItem('emailLimit')) || 50;
+    // Inbox filtering: 'relevant' (default) vs 'other'
+    let inboxFilter = 'relevant';
+    let inboxEmails = [];
     async function parseJsonSafe(res){
       const ct = res.headers.get('content-type') || '';
       const txt = await res.text();
@@ -471,6 +474,90 @@
       return html;
     }
     
+    function isRelevantEmail(it){
+      const fromAddr = (it.from_addr || it.from || '').toLowerCase();
+      const subject = (it.subject || '').toLowerCase();
+      // Heuristik: Newsletter / No-Reply / Massenmails als "Sonstige" markieren
+      const newsletterLike = /(no-?reply|newsletter|news@|mailer@|noreply)/.test(fromAddr) ||
+                             subject.includes('newsletter') || subject.includes('angebote') || subject.includes('sale');
+      // Wenn Kontakt bereits mehrere E-Mails hat, eher wichtig
+      const count = it.contact_email_count || 0;
+      if (count >= 3) return true;
+      // Eigene Domain-Kontakte immer als relevant
+      if (fromAddr.includes('@neckattack.')) return true;
+      return !newsletterLike;
+    }
+
+    function setupInboxFilterToggle(){
+      const list = document.getElementById('list');
+      if(!list) return;
+      const parent = list.parentElement;
+      if(!parent || document.getElementById('inbox_filter_toggle')) return;
+      const toggle = document.createElement('div');
+      toggle.id = 'inbox_filter_toggle';
+      toggle.style.cssText = 'display:flex; justify-content:flex-start; gap:8px; align-items:center; margin:4px 0 8px 0; font-size:12px;';
+      toggle.innerHTML = `
+        <div style="display:inline-flex; background:#e5e7eb; border-radius:999px; padding:2px;">
+          <button id="filter_relevant" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#fff; color:#111827; font-weight:600;">Relevant</button>
+          <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Sonstige</button>
+        </div>
+      `;
+      parent.insertBefore(toggle, list);
+      const btnRel = document.getElementById('filter_relevant');
+      const btnOther = document.getElementById('filter_other');
+      const updateButtons = () => {
+        if(inboxFilter === 'relevant'){
+          btnRel.style.background = '#fff';
+          btnRel.style.color = '#111827';
+          btnRel.style.fontWeight = '600';
+          btnOther.style.background = 'transparent';
+          btnOther.style.color = '#4b5563';
+          btnOther.style.fontWeight = '400';
+        } else {
+          btnOther.style.background = '#fff';
+          btnOther.style.color = '#111827';
+          btnOther.style.fontWeight = '600';
+          btnRel.style.background = 'transparent';
+          btnRel.style.color = '#4b5563';
+          btnRel.style.fontWeight = '400';
+        }
+      };
+      btnRel.addEventListener('click', () => { inboxFilter = 'relevant'; updateButtons(); renderInboxList(); });
+      btnOther.addEventListener('click', () => { inboxFilter = 'other'; updateButtons(); renderInboxList(); });
+      updateButtons();
+    }
+
+    function renderInboxList(){
+      const list = document.getElementById('list');
+      const status = document.getElementById('status');
+      if(!list) return;
+      list.innerHTML = '';
+      if(!inboxEmails || !inboxEmails.length){
+        list.innerHTML = '<div class="sub" style="padding:20px; text-align:center;">Keine E-Mails im Posteingang.</div>';
+        if(status) status.textContent = '';
+        return;
+      }
+      const filtered = inboxEmails.filter(it => {
+        const rel = isRelevantEmail(it);
+        return inboxFilter === 'relevant' ? rel : !rel;
+      });
+      if(!filtered.length){
+        list.innerHTML = '<div class="sub" style="padding:20px; text-align:center;">Keine E-Mails in dieser Ansicht.</div>';
+        return;
+      }
+      for(const it of filtered){
+        const div = document.createElement('div');
+        div.className = 'item' + (!it.is_read ? ' unseen' : '');
+        div.dataset.uid = it.uid;
+        div.innerHTML = `
+          <div class="subject">${escapeHtml(it.subject || '(ohne Betreff)')}</div>
+          <div class="meta"><span>${escapeHtml(it.from || '')}</span><span>${escapeHtml(it.date || '')}</span></div>
+        `;
+        div.addEventListener('click', () => selectItem(it.uid, div));
+        list.appendChild(div);
+      }
+    }
+
     async function loadInbox(){
       const status = document.getElementById('status');
       const list = document.getElementById('list');
@@ -505,23 +592,10 @@
           return;
         }
         
-        list.innerHTML = '';
-        if(!data.emails || !data.emails.length){
-          list.innerHTML = '<div class="sub" style="padding:20px; text-align:center;">Keine E-Mails im Posteingang.</div>';
-          status.textContent = '';
-          return;
-        }
-        for(const it of data.emails){
-          const div = document.createElement('div');
-          div.className = 'item' + (!it.is_read ? ' unseen' : '');
-          div.dataset.uid = it.uid;
-          div.innerHTML = `
-            <div class="subject">${escapeHtml(it.subject || '(ohne Betreff)')}</div>
-            <div class="meta"><span>${escapeHtml(it.from || '')}</span><span>${escapeHtml(it.date || '')}</span></div>
-          `;
-          div.addEventListener('click', () => selectItem(it.uid, div));
-          list.appendChild(div);
-        }
+        // Store emails for filtering and render list
+        inboxEmails = data.emails || [];
+        setupInboxFilterToggle();
+        renderInboxList();
         
         // Show/hide "Load more" button and check server count
         const loadMoreBtn = document.getElementById('load_more_btn');

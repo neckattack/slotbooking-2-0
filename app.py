@@ -1735,7 +1735,14 @@ Sei präzise, geschäftlich und hilfreich. Max 200 Wörter."""
             # 3. Email length preference - average length
             lengths = []
             for em in emails_list[:20]:
+                # Prefer plain text; if empty, fallback to stripped HTML
                 text = em.get('body_text') or ''
+                if not text:
+                    html = em.get('body_html') or ''
+                    if html:
+                        # very lightweight HTML tag stripper
+                        import re
+                        text = re.sub(r'<[^>]+>', '', html)
                 if text:
                     lengths.append(len(text))
             
