@@ -1597,6 +1597,97 @@ def api_contacts_emails(current_user, contact_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/contacts/<int:contact_id>/notes', methods=['GET'])
+@require_auth
+def api_contacts_notes_list(current_user, contact_id):
+    """Get notes for a specific contact"""
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Verify contact belongs to user
+        cursor.execute(
+            "SELECT id FROM contacts WHERE id=%s AND user_email=%s",
+            (contact_id, user_email)
+        )
+        contact = cursor.fetchone()
+        if not contact:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Contact not found'}), 404
+
+        cursor.execute(
+            """
+            SELECT id, note_text, created_at
+            FROM contact_notes
+            WHERE contact_id = %s AND user_email = %s
+            ORDER BY created_at DESC
+            """,
+            (contact_id, user_email)
+        )
+        notes = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        formatted = [
+            {
+                'id': n['id'],
+                'text': n['note_text'],
+                'created_at': n['created_at'].strftime('%d.%m.%Y %H:%M') if n['created_at'] else ''
+            }
+            for n in notes
+        ]
+
+        return jsonify({'notes': formatted}), 200
+    except Exception as e:
+        app.logger.error(f"[Contact Notes List] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/contacts/<int:contact_id>/notes', methods=['POST'])
+@require_auth
+def api_contacts_notes_create(current_user, contact_id):
+    """Create a new note for a contact"""
+    user_email = current_user.get('user_email')
+    data = request.get_json(silent=True) or {}
+    text = (data.get('text') or '').strip()
+    if not text:
+        return jsonify({'error': 'Notiz darf nicht leer sein'}), 400
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Verify contact belongs to user
+        cursor.execute(
+            "SELECT id FROM contacts WHERE id=%s AND user_email=%s",
+            (contact_id, user_email)
+        )
+        contact = cursor.fetchone()
+        if not contact:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Contact not found'}), 404
+
+        cursor.execute(
+            """
+            INSERT INTO contact_notes (contact_id, user_email, note_text, created_at)
+            VALUES (%s, %s, %s, NOW())
+            """,
+            (contact_id, user_email, text)
+        )
+        conn.commit()
+        note_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+
+        return jsonify({'ok': True, 'id': note_id}), 201
+    except Exception as e:
+        app.logger.error(f"[Contact Notes Create] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/contacts/<int:contact_id>/generate-profile', methods=['POST'])
 @require_auth
 def api_contacts_generate_profile(current_user, contact_id):

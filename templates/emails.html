@@ -996,6 +996,17 @@
                 ${profileSummary ? formatCustomerProfile(profileSummary) : 'Noch kein Profil vorhanden. Klicken Sie oben, um ein KI-Profil zu erstellen.'}
               </div>
             </div>
+            <div style="margin-top:16px; font-size:13px; border-top:1px solid var(--border); padding-top:12px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <div style="font-weight:600;">📝 Notizen</div>
+              </div>
+              <div id="contact_notes_list" class="sub" style="max-height:120px; overflow:auto; padding:6px 0; border-radius:4px; background:#f9fafb;"></div>
+              <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
+                <textarea id="contact_note_input" rows="2" placeholder="Kurze Notiz zum Kontakt (z.B. 'Angestellter von neckattack', 'Diesen Kontakt ignorieren', ...)" style="width:100%; font-size:12px; padding:6px 8px; border-radius:4px; border:1px solid var(--border); resize:vertical;"></textarea>
+                <button id="contact_note_save" style="align-self:flex-end; background:#059669; color:#fff; border:0; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px;">Notiz speichern</button>
+                <div id="contact_note_status" class="sub"></div>
+              </div>
+            </div>
           </div>
         `;
         // Event handler for "View all contact emails" button
@@ -1005,6 +1016,68 @@
             openContactDetailModal(t.contact_id, contactName, contactEmail);
           };
         }
+
+        // Kontakt-Notizen laden und speichern
+        try {
+          const notesList = document.getElementById('contact_notes_list');
+          const noteInput = document.getElementById('contact_note_input');
+          const noteSave = document.getElementById('contact_note_save');
+          const noteStatus = document.getElementById('contact_note_status');
+          const contactId = t.contact_id;
+
+          async function loadNotes(){
+            if(!notesList || !contactId) return;
+            notesList.textContent = 'Lade Notizen...';
+            try {
+              const res = await fetch(`/api/contacts/${contactId}/notes`, { headers: getAuthHeaders() });
+              const data = await parseJsonSafe(res);
+              if(!data.__ok){ throw new Error(data.error || 'Fehler'); }
+              const notes = data.notes || [];
+              if(!notes.length){
+                notesList.innerHTML = '<div class="sub" style="padding:4px 6px;">Noch keine Notizen vorhanden.</div>';
+              } else {
+                notesList.innerHTML = notes.map(n => `
+                  <div style="padding:4px 6px; border-bottom:1px solid #e5e7eb;">
+                    <div style="font-size:12px;">${escapeHtml(n.text)}</div>
+                    <div class="sub" style="font-size:11px;">${escapeHtml(n.created_at)}</div>
+                  </div>
+                `).join('');
+              }
+            } catch(e) {
+              notesList.innerHTML = `<div class="sub" style="padding:4px 6px; color:#dc2626;">Fehler beim Laden der Notizen: ${e}</div>`;
+            }
+          }
+
+          if(noteSave && noteInput && contactId){
+            noteSave.onclick = async () => {
+              const txt = (noteInput.value || '').trim();
+              if(!txt){
+                noteStatus.textContent = 'Notiz darf nicht leer sein.';
+                return;
+              }
+              noteSave.disabled = true;
+              noteStatus.textContent = 'Speichere Notiz...';
+              try {
+                const res = await fetch(`/api/contacts/${contactId}/notes`, {
+                  method: 'POST',
+                  headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ text: txt })
+                });
+                const data = await parseJsonSafe(res);
+                if(!data.__ok){ throw new Error(data.error || 'Fehler'); }
+                noteInput.value = '';
+                noteStatus.textContent = 'Notiz gespeichert.';
+                await loadNotes();
+              } catch(e) {
+                noteStatus.textContent = `Fehler: ${e}`;
+              } finally {
+                noteSave.disabled = false;
+              }
+            };
+          }
+
+          loadNotes();
+        } catch(_) {}
         
         // Event handler for "Generate profile" button
         const generateBtn = document.getElementById('generate_profile_btn');
