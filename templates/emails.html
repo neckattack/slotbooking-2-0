@@ -1250,6 +1250,42 @@
       }
     }
 
+    // E-Mail-Accounts laden und Dropdown initialisieren (Inbox + "Senden als")
+    async function ensureEmailAccountsLoaded(){
+      try{
+        const res = await fetch('/api/email-accounts/list', { headers: getAuthHeaders() });
+        const data = await parseJsonSafe(res);
+        if(!data.__ok){ return; }
+        const accounts = data.accounts || [];
+        if(!accounts.length){ return; }
+        // Standard: ersten Account wählen, falls keiner gesetzt
+        if(!currentAccountId){
+          currentAccountId = accounts[0].id;
+        }
+        // Dropdown im Header ergänzen (nur wenn noch nicht vorhanden)
+        const toolbar = document.querySelector('.toolbar');
+        if(toolbar && !document.getElementById('account_select')){
+          const select = document.createElement('select');
+          select.id = 'account_select';
+          select.style.cssText = 'margin-right:8px; padding:4px 8px; border-radius:6px; border:1px solid var(--border); font-size:12px;';
+          for(const acc of accounts){
+            const opt = document.createElement('option');
+            opt.value = acc.id;
+            opt.textContent = acc.label || acc.account_email;
+            if(acc.id === currentAccountId){ opt.selected = true; }
+            select.appendChild(opt);
+          }
+          select.addEventListener('change', () => {
+            currentAccountId = parseInt(select.value, 10);
+            loadInbox();
+          });
+          toolbar.insertBefore(select, document.getElementById('status'));
+        }
+      }catch(e){
+        // Wenn das Laden scheitert, arbeitet die Inbox einfach ohne Dropdown weiter
+      }
+    }
+
     // Schließt alle offenen Modalfenster (gegen "schwarzen Screen" mit mehreren Overlays)
     function closeAllModals(){
       document.querySelectorAll('.modal').forEach(m => {
