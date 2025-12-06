@@ -227,6 +227,18 @@
   <div id="email_settings_modal" class="modal">
     <div class="box" style="width:480px; max-height:90vh; overflow:auto;">
       <h3 style="margin:0 0 12px;">E‑Mail Einstellungen</h3>
+      <div style="margin-bottom:12px; padding:10px; background:#f9fafb; border:1px solid var(--border); border-radius:8px; display:flex; flex-direction:column; gap:8px;">
+        <div class="row" style="margin:0; align-items:center;">
+          <label style="width:100px;">Account</label>
+          <select id="email_account_select" style="flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px;">
+            <option value="">Neuer Account …</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+          <button id="email_account_new" style="background:#059669;">➕ Neuer Account</button>
+          <button id="email_account_delete" style="background:#dc2626;">🗑 Account löschen</button>
+        </div>
+      </div>
       <div style="margin-bottom:16px;">
         <h4 style="margin:0 0 8px; font-size:14px;">IMAP (Empfang)</h4>
         <div class="row"><label style="width:100px;">Host</label><input id="imap_host" placeholder="imap.example.com"></div>
@@ -455,6 +467,9 @@
     let currentEmailLimit = parseInt(localStorage.getItem('emailLimit')) || 50;
     // Aktueller E-Mail-Account (Multi-Account-Unterstützung)
     let currentAccountId = null;
+    // E-Mail-Accounts für Einstellungen (Verwaltung im Modal)
+    let emailAccounts = [];
+    let currentSettingsAccountId = null;
     // Inbox filtering: 'relevant' (default) vs 'other'
     let inboxFilter = 'relevant';
     let inboxEmails = [];
@@ -1409,43 +1424,90 @@
         }
       };
     }
+
+    function fillEmailSettingsFormDefaults(userEmail){
+      document.getElementById('imap_host').value = '';
+      document.getElementById('imap_port').value = 993;
+      document.getElementById('imap_user').value = userEmail || '';
+      document.getElementById('imap_pass').value = '';
+      document.getElementById('imap_security').value = 'ssl';
+      document.getElementById('smtp_host').value = '';
+      document.getElementById('smtp_port').value = 465;
+      document.getElementById('smtp_user').value = userEmail || '';
+      document.getElementById('smtp_pass').value = '';
+      document.getElementById('smtp_security').value = 'ssl';
+    }
+
+    async function loadEmailAccountIntoForm(accountId, msgEl, userEmail){
+      if(!accountId){
+        fillEmailSettingsFormDefaults(userEmail);
+        if(msgEl) msgEl.textContent = 'Neue Konfiguration';
+        return;
+      }
+      try{
+        if(msgEl) msgEl.textContent = 'Lade Account...';
+        const res = await fetch(`/api/email-accounts/${encodeURIComponent(accountId)}`, {
+          headers: getAuthHeaders(),
+        });
+        const data = await parseJsonSafe(res);
+        const acc = data.account;
+        if(!data.__ok || !acc){
+          fillEmailSettingsFormDefaults(userEmail);
+          if(msgEl) msgEl.textContent = data.error || 'Account nicht gefunden';
+          return;
+        }
+        document.getElementById('imap_host').value = acc.imap_host || '';
+        document.getElementById('imap_port').value = acc.imap_port || 993;
+        document.getElementById('imap_user').value = acc.imap_user || (userEmail || '');
+        document.getElementById('imap_pass').value = '';
+        document.getElementById('imap_security').value = acc.imap_security || 'ssl';
+        document.getElementById('smtp_host').value = acc.smtp_host || '';
+        document.getElementById('smtp_port').value = acc.smtp_port || 465;
+        document.getElementById('smtp_user').value = acc.smtp_user || (acc.account_email || userEmail || '');
+        document.getElementById('smtp_pass').value = '';
+        document.getElementById('smtp_security').value = acc.smtp_security || 'ssl';
+        if(msgEl) msgEl.textContent = 'Account geladen';
+      }catch(e){
+        fillEmailSettingsFormDefaults(userEmail);
+        if(msgEl) msgEl.textContent = 'Fehler beim Laden des Accounts: ' + e;
+      }
+    }
     async function openEmailSettingsModal(){
       closeAllModals();
       const modal = document.getElementById('email_settings_modal');
       const msg = document.getElementById('email_settings_msg');
       const userEmail = getUserEmail();
       if(!userEmail){ alert('E‑Mail-Adresse erforderlich'); return; }
-      msg.textContent = 'Lade Einstellungen...';
+      msg.textContent = 'Lade Accounts...';
       modal.style.display = 'flex';
       try{
-        const res = await fetch(`/api/user/email-settings?user_email=${encodeURIComponent(userEmail)}`, {
-          headers: getAuthHeaders()
-        });
-        const data = await parseJsonSafe(res);
-        if(data.exists){
-          document.getElementById('imap_host').value = data.imap_host || '';
-          document.getElementById('imap_port').value = data.imap_port || 993;
-          document.getElementById('imap_user').value = data.imap_user || '';
-          document.getElementById('imap_pass').value = ''; // don't prefill password
-          document.getElementById('imap_security').value = data.imap_security || 'ssl';
-          document.getElementById('smtp_host').value = data.smtp_host || '';
-          document.getElementById('smtp_port').value = data.smtp_port || 465;
-          document.getElementById('smtp_user').value = data.smtp_user || '';
-          document.getElementById('smtp_pass').value = ''; // don't prefill password
-          document.getElementById('smtp_security').value = data.smtp_security || 'ssl';
-          msg.textContent = 'Geladen';
+        // Accounts laden
+        const listRes = await fetch('/api/email-accounts/list', { headers: getAuthHeaders() });
+        const listData = await parseJsonSafe(listRes);
+        const select = document.getElementById('email_account_select');
+        emailAccounts = (listData.accounts || []);
+        // Dropdown neu befüllen
+        select.innerHTML = '<option value="">Neuer Account …</option>';
+        for(const acc of emailAccounts){
+          const opt = document.createElement('option');
+          opt.value = acc.id;
+          opt.textContent = acc.label || acc.account_email;
+          select.appendChild(opt);
+        }
+        // Falls es schon einen global ausgewählten Account gibt, nutzen
+        if(currentAccountId && emailAccounts.some(a => a.id === currentAccountId)){
+          currentSettingsAccountId = currentAccountId;
+        } else if(emailAccounts.length){
+          currentSettingsAccountId = emailAccounts[0].id;
         } else {
-          // New user, prefill defaults
-          document.getElementById('imap_host').value = '';
-          document.getElementById('imap_port').value = 993;
-          document.getElementById('imap_user').value = userEmail;
-          document.getElementById('imap_pass').value = '';
-          document.getElementById('imap_security').value = 'ssl';
-          document.getElementById('smtp_host').value = '';
-          document.getElementById('smtp_port').value = 465;
-          document.getElementById('smtp_user').value = userEmail;
-          document.getElementById('smtp_pass').value = '';
-          document.getElementById('smtp_security').value = 'ssl';
+          currentSettingsAccountId = null;
+        }
+        if(currentSettingsAccountId){
+          select.value = String(currentSettingsAccountId);
+          await loadEmailAccountIntoForm(currentSettingsAccountId, msg, userEmail);
+        } else {
+          // Kein Account vorhanden -> Formular mit Defaults füllen
+          fillEmailSettingsFormDefaults(userEmail);
           msg.textContent = 'Neue Konfiguration';
         }
       }catch(e){

@@ -2204,6 +2204,163 @@ def api_email_accounts_list(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/email-accounts/<int:account_id>', methods=['GET'])
+@require_auth
+def api_email_account_get(current_user, account_id: int):
+    """Liefert die Details eines E-Mail-Accounts des aktuellen Users (ohne Passwörter)."""
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT id, user_email, account_email, label,
+                   imap_host, imap_port, imap_user, imap_security,
+                   smtp_host, smtp_port, smtp_user, smtp_security,
+                   imap_pass_encrypted IS NOT NULL AS has_imap_password,
+                   smtp_pass_encrypted IS NOT NULL AS has_smtp_password,
+                   is_active
+            FROM email_accounts
+            WHERE user_email=%s AND id=%s
+            """,
+            (user_email, account_id),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if not row:
+            return jsonify({'error': 'Account nicht gefunden'}), 404
+        return jsonify({'account': row}), 200
+    except Exception as e:
+        app.logger.error(f"[Email-Account-Get] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/email-accounts/save', methods=['POST'])
+@require_auth
+def api_email_account_save(current_user):
+    """Erstellt oder aktualisiert einen E-Mail-Account des aktuellen Users.
+    Body: { id?, account_email, label, imap_*, smtp_*, imap_pass?, smtp_pass?, is_active? }
+    Passwörter werden nur überschrieben, wenn sie im Body gesetzt sind.
+    """
+    data = request.get_json(silent=True) or {}
+    user_email = current_user.get('user_email')
+    account_id = data.get('id')
+    account_email = (data.get('account_email') or '').strip()
+    label = (data.get('label') or '').strip() or account_email
+    imap_host = (data.get('imap_host') or '').strip()
+    imap_port = int(data.get('imap_port') or 993)
+    imap_user = (data.get('imap_user') or '').strip()
+    imap_pass = data.get('imap_pass') or ''
+    imap_security = (data.get('imap_security') or 'ssl').lower()
+    smtp_host = (data.get('smtp_host') or '').strip()
+    smtp_port = int(data.get('smtp_port') or 465)
+    smtp_user = (data.get('smtp_user') or '').strip()
+    smtp_pass = data.get('smtp_pass') or ''
+    smtp_security = (data.get('smtp_security') or 'ssl').lower()
+    is_active = 1 if data.get('is_active', True) else 0
+
+    if not (account_email and imap_host and imap_user and smtp_host and smtp_user):
+        return jsonify({'error': 'account_email, imap_host, imap_user, smtp_host und smtp_user sind erforderlich'}), 400
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Update vs. Insert
+        if account_id:
+            # Vorhandenen Datensatz laden, um Passwörter ggf. zu behalten
+            cursor.execute(
+                "SELECT imap_pass_encrypted, smtp_pass_encrypted FROM email_accounts WHERE id=%s AND user_email=%s",
+                (account_id, user_email),
+            )
+            existing = cursor.fetchone()
+            if not existing:
+                cursor.close()
+                conn.close()
+                return jsonify({'error': 'Account nicht gefunden'}), 404
+
+            imap_pass_enc = encrypt_password(imap_pass) if imap_pass else existing['imap_pass_encrypted']
+            smtp_pass_enc = encrypt_password(smtp_pass) if smtp_pass else existing['smtp_pass_encrypted']
+
+            cursor.execute(
+                """
+                UPDATE email_accounts
+                SET account_email=%s, label=%s,
+                    imap_host=%s, imap_port=%s, imap_user=%s, imap_pass_encrypted=%s, imap_security=%s,
+                    smtp_host=%s, smtp_port=%s, smtp_user=%s, smtp_pass_encrypted=%s, smtp_security=%s,
+                    is_active=%s
+                WHERE id=%s AND user_email=%s
+                """,
+                (
+                    account_email, label,
+                    imap_host, imap_port, imap_user, imap_pass_enc, imap_security,
+                    smtp_host, smtp_port, smtp_user, smtp_pass_enc, smtp_security,
+                    is_active,
+                    account_id, user_email,
+                ),
+            )
+        else:
+            # Neuer Account: Passwörter sind Pflicht
+            if not imap_pass or not smtp_pass:
+                cursor.close()
+                conn.close()
+                return jsonify({'error': 'Für einen neuen Account sind IMAP- und SMTP-Passwort erforderlich'}), 400
+
+            imap_pass_enc = encrypt_password(imap_pass)
+            smtp_pass_enc = encrypt_password(smtp_pass)
+
+            cursor.execute(
+                """
+                INSERT INTO email_accounts
+                    (user_email, account_email, label,
+                     imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security,
+                     smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_security,
+                     is_active)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    user_email, account_email, label,
+                    imap_host, imap_port, imap_user, imap_pass_enc, imap_security,
+                    smtp_host, smtp_port, smtp_user, smtp_pass_enc, smtp_security,
+                    is_active,
+                ),
+            )
+            account_id = cursor.lastrowid
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'ok': True, 'id': int(account_id)}), 200
+    except Exception as e:
+        app.logger.error(f"[Email-Account-Save] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/email-accounts/<int:account_id>/delete', methods=['POST'])
+@require_auth
+def api_email_account_delete(current_user, account_id: int):
+    """Deaktiviert einen E-Mail-Account des aktuellen Users (Soft-Delete via is_active=0)."""
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE email_accounts SET is_active=0 WHERE id=%s AND user_email=%s",
+            (account_id, user_email),
+        )
+        affected = cursor.rowcount
+        conn.commit()
+        cursor.close()
+        conn.close()
+        if affected == 0:
+            return jsonify({'error': 'Account nicht gefunden'}), 404
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        app.logger.error(f"[Email-Account-Delete] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/user/email-settings', methods=['GET'])
 def api_user_email_settings_get():
     """Get email settings for a user. Query param: user_email"""
