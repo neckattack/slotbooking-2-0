@@ -7,10 +7,18 @@ from cryptography.fernet import Fernet
 
 
 def get_cipher():
-    """Get Fernet cipher from EMAIL_ENCRYPTION_KEY env var."""
+    """Get Fernet cipher from EMAIL_ENCRYPTION_KEY env var.
+
+    Akzeptiert sowohl str als auch bytes als Key, um Laufzeitfehler wie
+    "'bytes' object has no attribute 'encode'" zu vermeiden.
+    """
     key = os.environ.get('EMAIL_ENCRYPTION_KEY')
     if not key:
         raise RuntimeError("EMAIL_ENCRYPTION_KEY not set in environment")
+    # Falls der Key bereits als bytes vorliegt, direkt verwenden
+    if isinstance(key, (bytes, bytearray)):
+        return Fernet(bytes(key))
+    # Normalfall: String aus Env-Variable
     return Fernet(key.encode())
 
 
