@@ -894,26 +894,29 @@ def api_emails_agent_compose(current_user):
 @app.route('/api/emails/send', methods=['POST'])
 @require_auth
 def api_emails_send(current_user):
-    """Versendet eine Mail (HTML). Request: { to, subject, html } """
+    """Versendet eine Mail (HTML). Request: { to, subject, html, account_id } """
     import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
+    from email.mime_text import MIMEText
+    from email.mime_multipart import MIMEMultipart
     data = request.get_json(silent=True) or {}
     to_addr = data.get('to')
     subject = data.get('subject') or ''
     html = data.get('html') or ''
+    account_id = data.get('account_id')
     if not to_addr or not html:
         return jsonify({'error': 'to und html sind erforderlich'}), 400
     
-    # Get user-specific email settings
+    # Get user-specific email account (multi-account support)
     user_email = current_user.get('user_email')
+    if not account_id:
+        return jsonify({'error': 'account_id erforderlich'}), 400
     try:
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_security "
-            "FROM user_email_settings WHERE user_email=%s",
-            (user_email,)
+            "SELECT id, account_email, smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_security "
+            "FROM email_accounts WHERE user_email=%s AND id=%s AND is_active=1",
+            (user_email, account_id)
         )
         settings = cursor.fetchone()
         cursor.close()
@@ -926,10 +929,11 @@ def api_emails_send(current_user):
             smtp_user = settings['smtp_user']
             smtp_pass = decrypt_password(settings['smtp_pass_encrypted']) if settings['smtp_pass_encrypted'] else ''
             smtp_security = (settings.get('smtp_security') or 'auto').lower()
+            from_addr = settings.get('account_email') or smtp_user
         else:
             return jsonify({'error': 'Please configure email settings first'}), 400
     except Exception as e:
-        app.logger.error(f"[Send] Error loading user settings: {e}")
+        app.logger.error(f"[Send] Error loading email account: {e}")
         return jsonify({'error': 'Email settings error'}), 400
     
     if not (smtp_host and smtp_user and smtp_pass):
@@ -940,7 +944,7 @@ def api_emails_send(current_user):
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
-        msg['From'] = smtp_user
+        msg['From'] = from_addr
         msg['To'] = to_addr
         part = MIMEText(html, 'html', 'utf-8')
         msg.attach(part)
@@ -1106,7 +1110,7 @@ def api_emails_smtp_test(current_user):
 @app.route('/api/emails/sync', methods=['POST'])
 @require_auth
 def api_emails_sync(current_user):
-    """Sync emails from IMAP to database. Body: { limit: 20, count_only: false }"""
+    """Sync emails from IMAP to database. Body: { limit: 20, count_only: false, account_id }"""
     import imaplib, email
     from email.header import decode_header
     import re
@@ -1114,17 +1118,20 @@ def api_emails_sync(current_user):
     data = request.get_json(silent=True) or {}
     limit = data.get('limit')  # None = all new, 20/50/100 = specific count
     count_only = data.get('count_only', False)  # Just count emails on server
+    account_id = data.get('account_id')
     
     user_email = current_user.get('user_email')
+    if not account_id:
+        return jsonify({'error': 'account_id erforderlich'}), 400
     
     try:
-        # Get user IMAP settings
+        # Get IMAP settings from selected email account
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security "
-            "FROM user_email_settings WHERE user_email=%s",
-            (user_email,)
+            "SELECT id, imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security "
+            "FROM email_accounts WHERE user_email=%s AND id=%s AND is_active=1",
+            (user_email, account_id)
         )
         settings = cursor.fetchone()
         cursor.close()
@@ -1164,8 +1171,8 @@ def api_emails_sync(current_user):
         conn_db = get_settings_db_connection()
         cursor_db = conn_db.cursor()
         cursor_db.execute(
-            "SELECT message_id FROM emails WHERE user_email=%s",
-            (user_email,)
+            "SELECT message_id FROM emails WHERE user_email=%s AND account_id=%s",
+            (user_email, account_id)
         )
         synced_ids = set(row[0] for row in cursor_db.fetchall() if row[0])
         
@@ -1296,10 +1303,10 @@ def api_emails_sync(current_user):
                 
                 # Insert email
                 cursor_db.execute(
-                    "INSERT INTO emails (message_id, user_email, contact_id, from_addr, from_name, "
+                    "INSERT INTO emails (message_id, user_email, account_id, contact_id, from_addr, from_name, "
                     "to_addrs, subject, body_text, body_html, received_at, folder, has_attachments) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'inbox', %s)",
-                    (message_id, user_email, contact_id, from_email, from_name, to_addrs, 
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'inbox', %s)",
+                    (message_id, user_email, account_id, contact_id, from_email, from_name, to_addrs, 
                      subject, body_text[:50000] if body_text else '', body_html[:100000] if body_html else '',
                      received_at, has_attachments)
                 )
@@ -1335,11 +1342,14 @@ def api_emails_sync(current_user):
 @app.route('/api/emails/list', methods=['GET'])
 @require_auth
 def api_emails_list(current_user):
-    """Get emails from database. Query params: folder (default: inbox), limit, offset"""
+    """Get emails from database. Query params: folder (default: inbox), limit, offset, account_id"""
     user_email = current_user.get('user_email')
     folder = request.args.get('folder', 'inbox')
     limit = int(request.args.get('limit', 50))
     offset = int(request.args.get('offset', 0))
+    account_id = request.args.get('account_id', type=int)
+    if not account_id:
+        return jsonify({'error': 'account_id erforderlich'}), 400
     
     try:
         conn = get_settings_db_connection()
@@ -1353,32 +1363,32 @@ def api_emails_list(current_user):
                    e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
             FROM emails e
             LEFT JOIN contacts c ON e.contact_id = c.id
-            WHERE e.user_email = %s AND e.folder = %s
+            WHERE e.user_email = %s AND e.account_id = %s AND e.folder = %s
             ORDER BY e.received_at DESC
             LIMIT %s OFFSET %s
             """,
-            (user_email, folder, limit, offset)
+            (user_email, account_id, folder, limit, offset)
         )
         emails = cursor.fetchall()
         
         # Get total count
         cursor.execute(
-            "SELECT COUNT(*) as total FROM emails WHERE user_email=%s AND folder=%s",
-            (user_email, folder)
+            "SELECT COUNT(*) as total FROM emails WHERE user_email=%s AND account_id=%s AND folder=%s",
+            (user_email, account_id, folder)
         )
         total = cursor.fetchone()['total']
         
         # Check if any emails exist at all (to know if sync is needed)
         cursor.execute(
-            "SELECT COUNT(*) as total FROM emails WHERE user_email=%s",
-            (user_email,)
+            "SELECT COUNT(*) as total FROM emails WHERE user_email=%s AND account_id=%s",
+            (user_email, account_id)
         )
         total_all_folders = cursor.fetchone()['total']
         
         # Check if user has email settings (to know if we can sync more)
         cursor.execute(
-            "SELECT imap_host FROM user_email_settings WHERE user_email=%s",
-            (user_email,)
+            "SELECT id FROM email_accounts WHERE user_email=%s AND id=%s AND is_active=1 AND imap_host IS NOT NULL",
+            (user_email, account_id)
         )
         has_imap_settings = cursor.fetchone() is not None
         
@@ -2163,6 +2173,35 @@ def get_settings_db_connection():
     if not (host and user and pw and db):
         raise RuntimeError("SETTINGS_DB (or DB) configuration incomplete")
     return mysql.connector.connect(host=host, port=port, user=user, password=pw, database=db)
+
+
+@app.route('/api/email-accounts/list', methods=['GET'])
+@require_auth
+def api_email_accounts_list(current_user):
+    """Liste aktiver E-Mail-Accounts für den aktuellen User (Multi-Account-Unterstützung)."""
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, account_email, label FROM email_accounts WHERE user_email=%s AND is_active=1 ORDER BY id ASC",
+            (user_email,)
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        accounts = [
+            {
+                'id': r['id'],
+                'account_email': r['account_email'],
+                'label': r.get('label') or r['account_email'],
+            }
+            for r in rows
+        ]
+        return jsonify({'accounts': accounts}), 200
+    except Exception as e:
+        app.logger.error(f"[Email-Accounts-List] error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/user/email-settings', methods=['GET'])

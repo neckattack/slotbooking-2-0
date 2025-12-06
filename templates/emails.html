@@ -21,11 +21,11 @@
     .item .subject { font-size:14px; }
     .item.unseen .subject { font-weight:700; }
     .item .meta { color: var(--sub); font-size:12px; margin-top:3px; display:flex; justify-content:space-between; gap:8px; }
-    .detail { overflow:auto; padding:16px 24px; background:#f9fafb; }
+    .detail { overflow:hidden; padding:16px 24px; background:#f9fafb; }
     .detail h2 { margin:0 0 8px; font-size:18px; }
     .detail .meta { color: var(--sub); font-size:12px; margin-bottom:14px; }
     .detail .content { background:#fff; border:1px solid var(--border); border-radius:8px; padding:16px; }
-    .profile { margin-top:16px; background:#fff; border:1px solid var(--border); border-radius:8px; padding:12px; }
+    .profile { margin-top:8px; background:#fff; border:1px solid var(--border); border-radius:8px; padding:12px; }
     .profile h3 { margin:0 0 10px; font-size:16px; }
     .profile .grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
     .profile .kv { font-size:13px; }
@@ -64,16 +64,22 @@
     .sidebar-menu li a:hover { background:var(--hover); }
     .sidebar-menu li a .icon { font-size:20px; width:24px; }
     
-    /* Detail layout: scrollable content + fixed profile (desktop) */
+    /* Detail layout: scrollable content (70%) + scrollbares Profil (30%) im gleichen Panel (Desktop) */
     .detail {
       display:flex;
       flex-direction:column;
       overflow:hidden;
     }
     .detail-scroll {
-      flex:1;
+      flex:0 0 70%;
+      min-height:0;
       overflow:auto;
       padding-right:4px;
+    }
+    .detail > .profile {
+      flex:0 0 30%;
+      min-height:0;
+      overflow:auto;
     }
 
     /* Responsive Design for Mobile */
@@ -112,6 +118,11 @@
       }
       .detail-scroll {
         padding-right:0;
+        overflow:visible;
+      }
+      .detail > .profile {
+        flex:none;
+        max-height:none;
         overflow:visible;
       }
       
@@ -153,7 +164,7 @@
         padding:12px; 
       }
     }
-    
+
     /* Extra small devices */
     @media (max-width: 480px) {
       header { padding:8px; }
@@ -442,6 +453,8 @@
     let currentUid = null;
     // Load email limit from localStorage or default to 50
     let currentEmailLimit = parseInt(localStorage.getItem('emailLimit')) || 50;
+    // Aktueller E-Mail-Account (Multi-Account-Unterstützung)
+    let currentAccountId = null;
     // Inbox filtering: 'relevant' (default) vs 'other'
     let inboxFilter = 'relevant';
     let inboxEmails = [];
@@ -589,8 +602,17 @@
       const list = document.getElementById('list');
       status.textContent = 'lädt …';
       try{
+        if(!currentAccountId){
+          // Ohne Account keine Anfragen; versuche Accounts zu laden
+          await ensureEmailAccountsLoaded();
+          if(!currentAccountId){
+            list.innerHTML = '<div class="sub" style="padding:20px; text-align:center;">Kein E-Mail-Account konfiguriert.</div>';
+            status.textContent = '';
+            return;
+          }
+        }
         // Load emails from database with current limit
-        const res = await fetch(`/api/emails/list?folder=inbox&limit=${currentEmailLimit}`, {
+        const res = await fetch(`/api/emails/list?folder=inbox&limit=${currentEmailLimit}&account_id=${encodeURIComponent(currentAccountId)}`, {
           headers: getAuthHeaders()
         });
         const data = await parseJsonSafe(res);
@@ -637,7 +659,7 @@
           fetch('/api/emails/sync', {
             method: 'POST',
             headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-            body: JSON.stringify({ count_only: true })
+            body: JSON.stringify({ count_only: true, account_id: currentAccountId })
           })
           .then(res => res.json())
           .then(countData => {
@@ -717,7 +739,7 @@
         const syncRes = await fetch('/api/emails/sync', {
           method: 'POST',
           headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-          body: JSON.stringify({ limit: choice })
+          body: JSON.stringify({ limit: choice, account_id: currentAccountId })
         });
         const syncData = await parseJsonSafe(syncRes);
         
@@ -750,7 +772,7 @@
         const countRes = await fetch('/api/emails/sync', {
           method: 'POST',
           headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-          body: JSON.stringify({ count_only: true })
+          body: JSON.stringify({ count_only: true, account_id: currentAccountId })
         });
         const countData = await parseJsonSafe(countRes);
         
@@ -830,7 +852,7 @@
         const syncRes = await fetch('/api/emails/sync', {
           method: 'POST',
           headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-          body: JSON.stringify({ limit: limit })
+          body: JSON.stringify({ limit: limit, account_id: currentAccountId })
         });
         const syncData = await parseJsonSafe(syncRes);
         
@@ -1176,9 +1198,10 @@
       const subjInput = document.getElementById('compose_subject');
       const editor = document.getElementById('compose_editor');
       if(!toInput.value){ status.textContent = 'Empfänger fehlt.'; return; }
+      if(!currentAccountId){ status.textContent = 'Kein E-Mail-Account ausgewählt.'; return; }
       status.textContent = 'Sende …';
       try{
-        const res = await fetch('/api/emails/send', { method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body: JSON.stringify({to: toInput.value, subject: subjInput.value, html: editor.innerHTML}) });
+        const res = await fetch('/api/emails/send', { method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body: JSON.stringify({to: toInput.value, subject: subjInput.value, html: editor.innerHTML, account_id: currentAccountId}) });
         const data = await parseJsonSafe(res);
         if(!data.__ok && data.error){ throw new Error(data.error); }
         status.textContent = 'Gesendet';
