@@ -234,10 +234,6 @@
             <option value="">Neuer Account …</option>
           </select>
         </div>
-        <div class="row" style="margin:0; align-items:center;">
-          <label style="width:100px;">Name</label>
-          <input id="email_account_label" placeholder="z.B. Support, Sales ..." style="flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px;" />
-        </div>
       </div>
       <div style="margin-bottom:16px;">
         <h4 style="margin:0 0 8px; font-size:14px;">IMAP (Empfang)</h4>
@@ -1431,12 +1427,12 @@
     function fillEmailSettingsFormDefaults(userEmail){
       document.getElementById('imap_host').value = '';
       document.getElementById('imap_port').value = 993;
-      document.getElementById('imap_user').value = userEmail || '';
+      document.getElementById('imap_user').value = '';
       document.getElementById('imap_pass').value = '';
       document.getElementById('imap_security').value = 'ssl';
       document.getElementById('smtp_host').value = '';
       document.getElementById('smtp_port').value = 465;
-      document.getElementById('smtp_user').value = userEmail || '';
+      document.getElementById('smtp_user').value = '';
       document.getElementById('smtp_pass').value = '';
       document.getElementById('smtp_security').value = 'ssl';
     }
@@ -1489,14 +1485,19 @@
         const listData = await parseJsonSafe(listRes);
         const select = document.getElementById('email_account_select');
         emailAccounts = (listData.accounts || []);
-        // Dropdown neu befüllen
-        select.innerHTML = '<option value="">Neuer Account …</option>';
+        // Dropdown neu befüllen: zuerst Accounts, dann "Neuer Account …"
+        select.innerHTML = '';
         for(const acc of emailAccounts){
           const opt = document.createElement('option');
           opt.value = acc.id;
           opt.textContent = acc.label || acc.account_email;
           select.appendChild(opt);
         }
+        const newOpt = document.createElement('option');
+        newOpt.value = '';
+        newOpt.textContent = 'Neuer Account …';
+        select.appendChild(newOpt);
+
         // Falls es schon einen global ausgewählten Account gibt, nutzen
         if(currentAccountId && emailAccounts.some(a => a.id === currentAccountId)){
           currentSettingsAccountId = currentAccountId;
@@ -1505,14 +1506,29 @@
         } else {
           currentSettingsAccountId = null;
         }
+
         if(currentSettingsAccountId){
           select.value = String(currentSettingsAccountId);
           await loadEmailAccountIntoForm(currentSettingsAccountId, msg, userEmail);
         } else {
           // Kein Account vorhanden -> Formular mit Defaults füllen
           fillEmailSettingsFormDefaults(userEmail);
+          select.value = '';
           msg.textContent = 'Neue Konfiguration';
         }
+
+        // Wechsel zwischen bestehendem Account und "Neuer Account"
+        select.onchange = async () => {
+          const val = select.value;
+          if(!val){
+            currentSettingsAccountId = null;
+            fillEmailSettingsFormDefaults(userEmail);
+            msg.textContent = 'Neue Konfiguration';
+          } else {
+            currentSettingsAccountId = parseInt(val, 10);
+            await loadEmailAccountIntoForm(currentSettingsAccountId, msg, userEmail);
+          }
+        };
       }catch(e){
         msg.textContent = 'Fehler beim Laden: ' + e;
       }
@@ -1583,31 +1599,52 @@
       document.getElementById('email_settings_cancel').onclick = cleanup;
       document.getElementById('email_settings_save').onclick = async () => {
         msg.textContent = 'Speichere...';
+        const imapHost = document.getElementById('imap_host').value.trim();
+        const imapPort = parseInt(document.getElementById('imap_port').value.trim()) || 993;
+        const imapUser = document.getElementById('imap_user').value.trim();
+        const imapPass = document.getElementById('imap_pass').value;
+        const imapSecurity = document.getElementById('imap_security').value;
+        const smtpHost = document.getElementById('smtp_host').value.trim();
+        const smtpPort = parseInt(document.getElementById('smtp_port').value.trim()) || 465;
+        const smtpUser = document.getElementById('smtp_user').value.trim();
+        const smtpPass = document.getElementById('smtp_pass').value;
+        const smtpSecurity = document.getElementById('smtp_security').value;
+
+        // Account-E-Mail/Label aus SMTP- oder IMAP-Benutzername ableiten
+        const accountEmail = smtpUser || imapUser || userEmail;
+
         const data = {
-          user_email: userEmail,
-          imap_host: document.getElementById('imap_host').value.trim(),
-          imap_port: parseInt(document.getElementById('imap_port').value.trim()) || 993,
-          imap_user: document.getElementById('imap_user').value.trim(),
-          imap_pass: document.getElementById('imap_pass').value,
-          imap_security: document.getElementById('imap_security').value,
-          smtp_host: document.getElementById('smtp_host').value.trim(),
-          smtp_port: parseInt(document.getElementById('smtp_port').value.trim()) || 465,
-          smtp_user: document.getElementById('smtp_user').value.trim(),
-          smtp_pass: document.getElementById('smtp_pass').value,
-          smtp_security: document.getElementById('smtp_security').value,
+          id: currentSettingsAccountId || undefined,
+          account_email: accountEmail,
+          label: accountEmail,
+          imap_host: imapHost,
+          imap_port: imapPort,
+          imap_user: imapUser,
+          imap_pass: imapPass,
+          imap_security: imapSecurity,
+          smtp_host: smtpHost,
+          smtp_port: smtpPort,
+          smtp_user: smtpUser,
+          smtp_pass: smtpPass,
+          smtp_security: smtpSecurity,
+          is_active: true,
         };
+
         try{
-          const res = await fetch('/api/user/email-settings', {
+          const res = await fetch('/api/email-accounts/save', {
             method: 'POST',
             headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
             body: JSON.stringify(data)
           });
           const result = await parseJsonSafe(res);
           if(result.__ok){
-            msg.textContent = '✅ Gespeichert! E-Mails werden geladen...';
+            currentSettingsAccountId = result.id;
+            msg.textContent = '✅ Account gespeichert! E-Mails werden geladen...';
             setTimeout(() => {
               cleanup();
-              loadInbox(); // Automatisch E-Mails laden
+              // Globalen Account ggf. auf den eben gespeicherten setzen
+              currentAccountId = currentSettingsAccountId;
+              loadInbox();
             }, 1500);
           } else {
             msg.textContent = 'Fehler: ' + (result.error || 'Unbekannt');
