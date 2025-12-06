@@ -234,9 +234,9 @@
             <option value="">Neuer Account …</option>
           </select>
         </div>
-        <div style="display:flex; gap:8px; justify-content:flex-end;">
-          <button id="email_account_new" style="background:#059669;">➕ Neuer Account</button>
-          <button id="email_account_delete" style="background:#dc2626;">🗑 Account löschen</button>
+        <div class="row" style="margin:0; align-items:center;">
+          <label style="width:100px;">Name</label>
+          <input id="email_account_label" placeholder="z.B. Support, Sales ..." style="flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px;" />
         </div>
       </div>
       <div style="margin-bottom:16px;">
@@ -276,9 +276,12 @@
         <button id="smtp_test_btn" style="background:#0284c7; color:#fff; width:100%;">🔧 SMTP-Verbindung testen</button>
         <div id="smtp_test_result" class="sub" style="margin-top:8px;"></div>
       </div>
-      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
-        <button id="email_settings_cancel" style="background:#6b7280;">Abbrechen</button>
-        <button id="email_settings_save">Speichern</button>
+      <div style="display:flex; gap:8px; justify-content:space-between; align-items:center; margin-top:12px;">
+        <button id="email_account_delete" title="Account löschen" style="background:transparent; color:#dc2626; border:0; padding:0 4px; font-size:18px;">🗑</button>
+        <div style="display:flex; gap:8px;">
+          <button id="email_settings_cancel" style="background:#6b7280;">Abbrechen</button>
+          <button id="email_settings_save">Speichern</button>
+        </div>
       </div>
       <div id="email_settings_msg" class="sub" style="margin-top:8px;"></div>
     </div>
