@@ -1187,7 +1187,6 @@
                 span.addEventListener('click', () => {
                   if(!topicDetailsBox) return;
                   const parts = [];
-                  parts.push(`<strong>${escapeHtml(tp.label || '')}</strong>`);
                   if(tp.status){
                     let statusLabel = tp.status;
                     if(tp.status === 'open') statusLabel = 'offen';
@@ -1198,7 +1197,9 @@
                   if(tp.last_mentioned_at){
                     parts.push(`zuletzt erwähnt am ${escapeHtml(tp.last_mentioned_at)}`);
                   }
-                  topicDetailsBox.innerHTML = parts.join(' · ');
+                  const metaText = parts.join(' · ');
+                  const labelText = escapeHtml(tp.label || '');
+                  topicDetailsBox.innerHTML = `${metaText ? metaText + ' – ' : ''}${labelText}`;
                   topicDetailsBox.style.display = 'block';
                 });
                 kpiChips.appendChild(span);
