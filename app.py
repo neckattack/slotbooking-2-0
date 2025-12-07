@@ -406,6 +406,44 @@ def api_emails_inbox(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/contacts/<int:contact_id>/topics', methods=['GET'])
+@require_auth
+def api_contacts_topics_list(current_user, contact_id):
+    """Gibt gespeicherte Themen (contact_topics) für einen Kontakt zurück."""
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT id, topic_label, topic_type, status, last_mentioned_at
+            FROM contact_topics
+            WHERE user_email=%s AND contact_id=%s
+            ORDER BY COALESCE(last_mentioned_at, created_at) DESC, id DESC
+            """,
+            (user_email, contact_id),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        topics = []
+        for r in rows:
+            topics.append(
+                {
+                    "id": r["id"],
+                    "label": r["topic_label"],
+                    "topic_type": r.get("topic_type"),
+                    "status": r.get("status"),
+                    "last_mentioned_at": r.get("last_mentioned_at").strftime("%d.%m.%Y") if r.get("last_mentioned_at") else None,
+                }
+            )
+        return jsonify({"topics": topics}), 200
+    except Exception as e:
+        app.logger.error(f"[Contact Topics List] Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/emails/agent-compose', methods=['POST'])
 @require_auth
 def api_emails_agent_compose(current_user):
@@ -1847,7 +1885,90 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
         )
         
         summary = response.choices[0].message.content
-        
+
+        # Zweiter KI-Call: konkrete Themen als JSON für contact_topics extrahieren
+        import json
+        topics_payload = {
+            "notes": notes_context,
+            "emails": email_context,
+        }
+        topics_prompt = (
+            "Analysiere die folgenden Notizen und E-Mails zu einem Kontakt. "
+            "Extrahiere daraus eine kleine Liste konkreter Themen/Projekte als kompaktes JSON. "
+            "Verwende möglichst die Original-Bezeichnungen aus Betreff oder Notizen (z.B. 'Termin Apotheke Berlin Stresemannstraße').\n\n"
+            "Gib das Ergebnis STRICT als JSON im folgenden Format zurück, ohne zusätzliche Erklärungen:\n\n"
+            "{\n"
+            "  \"topics\": [\n"
+            "    {\n"
+            "      \"label\": \"...\",\n"
+            "      \"topic_type\": \"project|problem|general\",\n"
+            "      \"status\": \"open|in_progress|done\",\n"
+            "      \"last_mentioned_at\": \"YYYY-MM-DD\"\n"
+            "    }\n"
+            "  ]\n"
+            "}\n\n"
+            "Wenn du keine sinnvollen Themen findest, gib {\"topics\": []} zurück."
+        )
+
+        topics_response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Du extrahierst strukturierte Themenlisten als JSON für ein CRM."},
+                {"role": "user", "content": topics_prompt + "\n\nDaten:\n" + json.dumps(topics_payload)[:6000]},
+            ],
+            temperature=0.2,
+            max_tokens=400,
+        )
+
+        raw_topics = topics_response.choices[0].message.content or "{}"
+        topics = []
+        try:
+            parsed = json.loads(raw_topics)
+            topics = parsed.get("topics") or []
+        except Exception as _:
+            topics = []
+
+        # Bestehende Topics für diesen Kontakt löschen und neue speichern
+        try:
+            cursor.execute(
+                "DELETE FROM contact_topics WHERE user_email=%s AND contact_id=%s",
+                (user_email, contact_id),
+            )
+            for t in topics:
+                label = (t.get("label") or "").strip()
+                if not label:
+                    continue
+                topic_type = (t.get("topic_type") or None)
+                status = (t.get("status") or None)
+                last_date_str = (t.get("last_mentioned_at") or "").strip()
+                last_dt = None
+                if last_date_str:
+                    from datetime import datetime as _dt
+                    try:
+                        last_dt = _dt.strptime(last_date_str, "%Y-%m-%d")
+                    except Exception:
+                        last_dt = None
+                cursor.execute(
+                    """
+                    INSERT INTO contact_topics
+                        (user_email, contact_id, topic_label, topic_type, status, first_mentioned_at, last_mentioned_at, raw_source)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        user_email,
+                        contact_id,
+                        label,
+                        topic_type,
+                        status,
+                        last_dt,
+                        last_dt,
+                        raw_topics[:1000],
+                    ),
+                )
+            conn.commit()
+        except Exception as e_topics:
+            app.logger.error(f"[Contact Topics] Error while saving topics: {e_topics}")
+
         # Calculate KPIs
         def calculate_kpis(emails_list, contact_email, user_email_addr):
             """Calculate various KPIs from email history"""
