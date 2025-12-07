@@ -1726,6 +1726,26 @@ def api_contacts_generate_profile(current_user, contact_id):
             conn.close()
             return jsonify({'error': 'Contact not found'}), 404
         
+        # Manuelle Kontakt-Notizen laden (wichtigste Quelle für das Profil)
+        cursor.execute(
+            """
+            SELECT note_text, created_at
+            FROM contact_notes
+            WHERE contact_id = %s AND user_email = %s
+            ORDER BY created_at DESC
+            LIMIT 20
+            """,
+            (contact_id, user_email),
+        )
+        notes_rows = cursor.fetchall()
+
+        notes_lines = []
+        if notes_rows:
+            for n in notes_rows:
+                ts = n['created_at'].strftime('%d.%m.%Y %H:%M') if n['created_at'] else ''
+                notes_lines.append(f"- ({ts}) {n['note_text']}")
+        notes_context = "\n".join(notes_lines) if notes_lines else "(Keine Notizen hinterlegt)"
+        
         # Get all emails from this contact (including from/to info for KPI calculation)
         cursor.execute(
             """
@@ -1753,17 +1773,24 @@ def api_contacts_generate_profile(current_user, contact_id):
         
         email_context = "\n\n".join(email_texts)
         
-        # Generate profile with GPT
-        prompt = f"""Analysiere diese {len(emails)} E-Mails eines Kunden und erstelle ein prägnantes Kundenprofil.
+        # Generate profile with GPT. WICHTIG: Manuelle Notizen haben Priorität.
+        prompt = f"""Analysiere die folgenden Informationen zu einem Kunden und erstelle ein prägnantes Kundenprofil.
 
 Kunde: {contact['name']} ({contact['contact_email']})
 
-E-Mail-Historie:
+1) Manuell gepflegte Kontakt-Notizen (vom Nutzer, HÖCHSTE Priorität):
+{notes_context}
+
+2) E-Mail-Historie (zusätzlicher Kontext aus {len(emails)} E-Mails):
 {email_context}
 
-WICHTIG: Formatiere die Antwort mit klarer Struktur:
+WICHTIG:
+- Wenn Aussagen in den Notizen und in den E-Mails widersprüchlich sind, VERTRAUE den Notizen.
+- Nutze die Notizen als wichtigste Quelle für das Profil und ergänze sie mit Details aus den E-Mails.
+
+Formatiere die Antwort mit klarer Struktur:
 - Nutze **Fettschrift** für Überschriften (z.B. **Wer ist dieser Kunde:**)
-- Nutze Absätze (Doppelte Zeilenumbrüche)
+- Nutze Absätze (doppelte Zeilenumbrüche)
 - Nutze • oder - für Listen
 - Gliedere in diese 5 Bereiche:
 
