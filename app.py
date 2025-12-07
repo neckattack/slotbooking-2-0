@@ -1704,6 +1704,37 @@ def api_contacts_notes_create(current_user, contact_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/contacts/<int:contact_id>/notes/<int:note_id>', methods=['DELETE'])
+@require_auth
+def api_contacts_notes_delete(current_user, contact_id, note_id):
+    """Delete a note for a contact (soft permission check by user_email + contact)."""
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        # Verify note belongs to this user + contact
+        cursor.execute(
+            "SELECT id FROM contact_notes WHERE id=%s AND contact_id=%s AND user_email=%s",
+            (note_id, contact_id, user_email),
+        )
+        note = cursor.fetchone()
+        if not note:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Note not found'}), 404
+        cursor.execute(
+            "DELETE FROM contact_notes WHERE id=%s AND contact_id=%s AND user_email=%s",
+            (note_id, contact_id, user_email),
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        app.logger.error(f"[Contact Notes Delete] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/contacts/<int:contact_id>/generate-profile', methods=['POST'])
 @require_auth
 def api_contacts_generate_profile(current_user, contact_id):

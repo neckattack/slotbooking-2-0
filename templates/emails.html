@@ -1073,11 +1073,39 @@
                 notesList.innerHTML = '<div class="sub" style="padding:4px 6px;">Noch keine Notizen vorhanden.</div>';
               } else {
                 notesList.innerHTML = notes.map(n => `
-                  <div style="padding:4px 6px; border-bottom:1px solid #e5e7eb;">
-                    <div style="font-size:12px;">${escapeHtml(n.text)}</div>
-                    <div class="sub" style="font-size:11px;">${escapeHtml(n.created_at)}</div>
+                  <div class="contact-note-item" data-note-id="${n.id}" style="padding:4px 6px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:flex-start; gap:6px;">
+                    <div>
+                      <div style="font-size:12px;">${escapeHtml(n.text)}</div>
+                      <div class="sub" style="font-size:11px;">${escapeHtml(n.created_at)}</div>
+                    </div>
+                    <button class="contact_note_delete" title="Notiz löschen" style="border:0; background:transparent; color:#9ca3af; cursor:pointer; font-size:12px; line-height:1; padding:0 2px;">×</button>
                   </div>
                 `).join('');
+                // Delete-Handler für Notizen (X-Icon)
+                const deleteButtons = notesList.querySelectorAll('.contact_note_delete');
+                deleteButtons.forEach(btn => {
+                  btn.onclick = async (ev) => {
+                    ev.stopPropagation();
+                    const item = btn.closest('.contact-note-item');
+                    const noteId = item ? item.getAttribute('data-note-id') : null;
+                    if(!noteId) return;
+                    noteStatus.textContent = 'Lösche Notiz...';
+                    try {
+                      const res = await fetch(`/api/contacts/${contactId}/notes/${noteId}`, {
+                        method: 'DELETE',
+                        headers: getAuthHeaders(),
+                      });
+                      const delData = await parseJsonSafe(res);
+                      if(!delData.__ok){
+                        throw new Error(delData.error || 'Fehler beim Löschen');
+                      }
+                      noteStatus.textContent = 'Notiz gelöscht.';
+                      await loadNotes();
+                    } catch(e) {
+                      noteStatus.textContent = `Fehler beim Löschen: ${e}`;
+                    }
+                  };
+                });
               }
             } catch(e) {
               notesList.innerHTML = `<div class="sub" style="padding:4px 6px; color:#dc2626;">Fehler beim Laden der Notizen: ${e}</div>`;
