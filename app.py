@@ -1805,7 +1805,7 @@ def api_contacts_generate_profile(current_user, contact_id):
         email_context = "\n\n".join(email_texts)
         
         # Generate profile with GPT. WICHTIG: Manuelle Notizen haben Priorität.
-        prompt = f"""Analysiere die folgenden Informationen zu einem Kunden und erstelle ein prägnantes Kundenprofil.
+        prompt = f"""Analysiere die folgenden Informationen zu einem Kunden und erstelle ein prägnantes, praxisnahes Kundenprofil.
 
 Kunde: {contact['name']} ({contact['contact_email']})
 
@@ -1817,21 +1817,24 @@ Kunde: {contact['name']} ({contact['contact_email']})
 
 WICHTIG:
 - Wenn Aussagen in den Notizen und in den E-Mails widersprüchlich sind, VERTRAUE den Notizen.
-- Nutze die Notizen als wichtigste Quelle für das Profil und ergänze sie mit Details aus den E-Mails.
+- Nutze die Notizen als wichtigste Quelle für das Profil und ergänze sie nur mit Details aus den E-Mails.
+- Identifiziere explizit die aktuellsten Themen/Projekte (basierend auf den letzten E-Mails und Notizen) und erkenne offene Punkte oder noch nicht abgeschlossene Themen.
 
 Formatiere die Antwort mit klarer Struktur:
 - Nutze **Fettschrift** für Überschriften (z.B. **Wer ist dieser Kunde:**)
 - Nutze Absätze (doppelte Zeilenumbrüche)
 - Nutze • oder - für Listen
-- Gliedere in diese 5 Bereiche:
+- Gliedere in diese 7 Bereiche:
 
 1. **Wer ist dieser Kunde?** (Bedürfnisse, Kontext, Hintergrund)
-2. **Hauptanliegen & wiederkehrende Themen:**
-3. **Kommunikationsstil & Verhalten:**
-4. **Besonderheiten & Muster:**
-5. **Empfehlungen für zukünftige Kommunikation:**
+2. **Hauptanliegen & wiederkehrende Themen:** (Welche Themen, Probleme oder Projekte tauchen immer wieder auf?)
+3. **Aktuellstes Thema / Projekt:** (Worum geht es im Moment konkret? Kurze Zusammenfassung des letzten relevanten Themas.)
+4. **Offene Punkte & ungelöste Probleme:** (Was wirkt noch nicht abgeschlossen? Welche Fragen oder To-Dos sind noch offen?)
+5. **Kommunikationsstil & Verhalten:**
+6. **Besonderheiten & Muster:**
+7. **Empfehlungen für zukünftige Kommunikation:** (Wie sollte man diesen Kontakt am besten ansprechen und was sollte man im nächsten Schritt tun?)
 
-Sei präzise, geschäftlich und hilfreich. Max 200 Wörter."""
+Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
         
         response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
