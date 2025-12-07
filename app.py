@@ -1015,49 +1015,55 @@ def api_emails_send(current_user):
 @app.route('/api/emails/smtp-test', methods=['POST'])
 @require_auth
 def api_emails_smtp_test(current_user):
-    """Test SMTP connection with user settings."""
+    """Test SMTP connection for a specific email account (multi-account)."""
     import smtplib
+    from encryption_utils import decrypt_password
+
     user_email = current_user.get('user_email')
-    
+    data = request.get_json(silent=True) or {}
+    account_id = data.get('account_id')
+    if not account_id:
+        return jsonify({'ok': False, 'error': 'account_id erforderlich'}), 400
+
     try:
+        # SMTP-Settings aus email_accounts laden
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             "SELECT smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_security "
-            "FROM user_email_settings WHERE user_email=%s",
-            (user_email,)
+            "FROM email_accounts WHERE user_email=%s AND id=%s AND is_active=1",
+            (user_email, account_id)
         )
         settings = cursor.fetchone()
         cursor.close()
         conn.close()
-        
+
         if not settings or not settings.get('smtp_host'):
-            return jsonify({'ok': False, 'error': 'Keine SMTP-Einstellungen gefunden'}), 400
-        
-        from encryption_utils import decrypt_password
+            return jsonify({'ok': False, 'error': 'Keine SMTP-Einstellungen für diesen Account gefunden'}), 400
+
         smtp_host = settings['smtp_host']
         smtp_port = int(settings.get('smtp_port', 465))
         smtp_user = settings['smtp_user']
         smtp_pass = decrypt_password(settings['smtp_pass_encrypted']) if settings['smtp_pass_encrypted'] else ''
         smtp_security = (settings.get('smtp_security') or 'auto').lower()
-        
+
         if not (smtp_host and smtp_user and smtp_pass):
             return jsonify({'ok': False, 'error': 'SMTP-Konfiguration unvollständig'}), 400
-        
+
         # Test connection
         test_result = {
             'host': smtp_host,
             'port': smtp_port,
-            'user': smtp_user[:3] + '***' if len(smtp_user) > 3 else smtp_user,
+            'user': smtp_user[:3] + '***' if smtp_user and len(smtp_user) > 3 else (smtp_user or ''),
             'security': smtp_security,
             'tests': []
         }
-        
+
         def test_ssl():
             with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
                 server.login(smtp_user, smtp_pass)
             return True
-        
+
         def test_starttls():
             port_tls = smtp_port if smtp_security == 'starttls' else 587
             with smtplib.SMTP(smtp_host, port_tls, timeout=10) as server:
@@ -1065,7 +1071,7 @@ def api_emails_smtp_test(current_user):
                 server.starttls()
                 server.login(smtp_user, smtp_pass)
             return True
-        
+
         # Run tests based on security mode
         if smtp_security == 'ssl':
             try:
@@ -1090,7 +1096,7 @@ def api_emails_smtp_test(current_user):
                 ssl_success = True
             except Exception as e:
                 test_result['tests'].append({'method': 'SSL', 'success': False, 'message': str(e)})
-            
+
             # Try STARTTLS
             if not ssl_success:
                 try:
@@ -1099,9 +1105,9 @@ def api_emails_smtp_test(current_user):
                 except Exception as e:
                     test_result['tests'].append({'method': 'STARTTLS', 'success': False, 'message': str(e)})
                     return jsonify({'ok': False, **test_result}), 500
-        
+
         return jsonify({'ok': True, **test_result}), 200
-        
+
     except Exception as e:
         import traceback
         return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()}), 500

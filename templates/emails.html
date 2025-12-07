@@ -1664,7 +1664,8 @@
         try {
           const res = await fetch('/api/emails/smtp-test', {
             method: 'POST',
-            headers: getAuthHeaders()
+            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account_id: currentSettingsAccountId || currentAccountId })
           });
           const data = await parseJsonSafe(res);
           
