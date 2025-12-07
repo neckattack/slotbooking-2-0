@@ -31,10 +31,18 @@ def encrypt_password(plaintext: str) -> str:
     return encrypted.decode()
 
 
-def decrypt_password(ciphertext: str) -> str:
-    """Decrypt a base64-encoded ciphertext and return plaintext password."""
+def decrypt_password(ciphertext) -> str:
+    """Decrypt a base64-encoded ciphertext and return plaintext password.
+
+    Akzeptiert sowohl str als auch bytes, um Fehler wie
+    "'bytes' object has no attribute 'encode'" zu vermeiden.
+    """
     if not ciphertext:
         return ""
     cipher = get_cipher()
-    decrypted = cipher.decrypt(ciphertext.encode())
+    # Falls der Ciphertext bereits bytes ist, direkt verwenden
+    if isinstance(ciphertext, (bytes, bytearray)):
+        decrypted = cipher.decrypt(bytes(ciphertext))
+    else:
+        decrypted = cipher.decrypt(str(ciphertext).encode())
     return decrypted.decode()
