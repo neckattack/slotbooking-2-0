@@ -1894,8 +1894,11 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
         }
         topics_prompt = (
             "Analysiere die folgenden Notizen und E-Mails zu einem Kontakt. "
-            "Extrahiere daraus eine kleine Liste konkreter Themen/Projekte als kompaktes JSON. "
-            "Verwende möglichst die Original-Bezeichnungen aus Betreff oder Notizen (z.B. 'Termin Apotheke Berlin Stresemannstraße').\n\n"
+            "Extrahiere daraus eine kleine Liste sehr KONKRETER Themen/Projekte als kompaktes JSON. "
+            "Verwende nach Möglichkeit die ORIGINAL-Bezeichnungen aus Betreff oder Notizen und erweitere sie um Kontext wie Kunde/Marke, Ort und Datum. "
+            "Allgemeine Labels wie 'Anfrage', 'Auftragsbestätigung' oder 'Rechnung' sind zu ungenau. Formuliere stattdessen z.B. 'Auftragsbestätigung Coca Cola Job am 11.12.2025 in Berlin'. "
+            "Wenn im Betreff/Notizen Orte, Daten oder Kundennamen vorkommen, gehören diese IMMER in das Label. Nutze pro Thema maximal einen kompakten, aber aussagekräftigen Satz. "
+            "Erzeuge höchstens 8 Themen und fasse sehr ähnliche E-Mails zu einem gemeinsamen Thema zusammen.\n\n"
             "Gib das Ergebnis STRICT als JSON im folgenden Format zurück, ohne zusätzliche Erklärungen:\n\n"
             "{\n"
             "  \"topics\": [\n"

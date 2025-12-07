@@ -1005,7 +1005,7 @@
                 </button>
               </div>
               ${kpis.salutation || kpis.sentiment || kpis.email_length_preference || kpis.communication_frequency ? `
-                <div id="contact_kpi_chips" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
+                <div id="contact_kpi_chips" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;">
                   ${kpis.salutation ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:500;">
                     👋 Anrede: ${kpis.salutation}
                   </span>` : ''}
@@ -1028,6 +1028,7 @@
                   </span>` : ''}
                 </div>
               ` : ''}
+              <div id="contact_topic_details" class="sub" style="font-size:11px; margin-bottom:8px; display:none; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px dashed #e5e7eb;"></div>
               <div id="prof_summary" class="sub" style="padding:10px; background:${profileSummary ? '#f0fdf4' : '#f9fafb'}; border-radius:6px; line-height:1.5;">
                 ${profileSummary ? formatCustomerProfile(profileSummary) : 'Noch kein Profil vorhanden. Klicken Sie oben, um ein KI-Profil zu erstellen.'}
               </div>
@@ -1146,6 +1147,7 @@
         // Kontakt-Themen (Topics) laden und als Badges im KI-Kundenprofil anzeigen
         try {
           const kpiChips = document.getElementById('contact_kpi_chips');
+          const topicDetailsBox = document.getElementById('contact_topic_details');
           if(kpiChips && t.contact_id){
             const res = await fetch(`/api/contacts/${t.contact_id}/topics`, { headers: getAuthHeaders() });
             const data = await parseJsonSafe(res);
@@ -1179,6 +1181,26 @@
                 span.style.background = bg;
                 span.style.color = color;
                 span.textContent = `${icon} ${tp.label}`;
+                span.style.cursor = 'pointer';
+                span.title = 'Klicken, um Details zu diesem Thema anzuzeigen';
+
+                span.addEventListener('click', () => {
+                  if(!topicDetailsBox) return;
+                  const parts = [];
+                  parts.push(`<strong>${escapeHtml(tp.label || '')}</strong>`);
+                  if(tp.status){
+                    let statusLabel = tp.status;
+                    if(tp.status === 'open') statusLabel = 'offen';
+                    else if(tp.status === 'in_progress') statusLabel = 'in Bearbeitung';
+                    else if(tp.status === 'done') statusLabel = 'abgeschlossen';
+                    parts.push(`Status: ${escapeHtml(statusLabel)}`);
+                  }
+                  if(tp.last_mentioned_at){
+                    parts.push(`zuletzt erwähnt am ${escapeHtml(tp.last_mentioned_at)}`);
+                  }
+                  topicDetailsBox.innerHTML = parts.join(' · ');
+                  topicDetailsBox.style.display = 'block';
+                });
                 kpiChips.appendChild(span);
               });
             }
