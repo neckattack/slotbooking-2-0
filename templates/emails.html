@@ -1441,19 +1441,12 @@
           currentAccountId = accounts[0].id;
         }
 
-        // Header-Titel auf aktuellen Account setzen
+        // Account-Dropdown direkt im Header links anzeigen (anstelle des Textes)
         const titleEl = document.getElementById('account_title');
-        if(titleEl){
-          const currentAcc = accounts.find(a => a.id === currentAccountId) || accounts[0];
-          titleEl.textContent = currentAcc.label || currentAcc.account_email || 'Inbox';
-        }
-
-        // Dropdown im Header ergänzen (nur wenn noch nicht vorhanden)
-        const toolbar = document.querySelector('.toolbar');
-        if(toolbar && !document.getElementById('account_select')){
+        if(titleEl && !document.getElementById('account_select')){
           const select = document.createElement('select');
           select.id = 'account_select';
-          select.style.cssText = 'margin-right:8px; padding:4px 8px; border-radius:6px; border:1px solid var(--border); font-size:12px;';
+          select.style.cssText = 'padding:4px 8px; border-radius:6px; border:1px solid var(--border); font-size:14px;';
           for(const acc of accounts){
             const opt = document.createElement('option');
             opt.value = acc.id;
@@ -1463,15 +1456,12 @@
           }
           select.addEventListener('change', () => {
             currentAccountId = parseInt(select.value, 10);
-            // Titel auf gewählten Account setzen
-            const acc = accounts.find(a => a.id === currentAccountId);
-            if(titleEl && acc){
-              titleEl.textContent = acc.label || acc.account_email || 'Inbox';
-            }
             currentFolder = 'inbox';
             loadInbox();
           });
-          toolbar.insertBefore(select, document.getElementById('status'));
+          // Inhalt des Headers leeren und Dropdown einfügen
+          titleEl.textContent = '';
+          titleEl.appendChild(select);
         }
       }catch(e){
         // Wenn das Laden scheitert, arbeitet die Inbox einfach ohne Dropdown weiter
