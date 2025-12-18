@@ -934,8 +934,8 @@ def api_emails_agent_compose(current_user):
 def api_emails_send(current_user):
     """Versendet eine Mail (HTML). Request: { to, subject, html, account_id } """
     import smtplib
-    from email.mime_text import MIMEText
-    from email.mime_multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
     data = request.get_json(silent=True) or {}
     to_addr = data.get('to')
     subject = data.get('subject') or ''
