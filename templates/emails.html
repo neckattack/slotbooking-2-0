@@ -697,17 +697,17 @@
           .then(res => res.json())
           .then(countData => {
             loadMoreBtn.disabled = false;
+            // Server-Gesamtzahl wird nicht mehr im Status angezeigt, nur noch DB-Anzahl
             if(countData.total_on_server){
               const onServer = countData.total_on_server;
               const remaining = onServer - totalInDB;
               if(remaining > 0){
                 loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${remaining} auf Server)`;
-                status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB · ${onServer} auf Server verfügbar`;
               } else {
                 loadMoreBtn.textContent = `✅ Alle E-Mails geladen`;
-                status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB · Alles synchronisiert (${onServer} auf Server)`;
               }
             }
+            status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB`;
           })
           .catch(() => {
             loadMoreBtn.disabled = false;
