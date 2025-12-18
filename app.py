@@ -1154,7 +1154,14 @@ def api_emails_smtp_test(current_user):
 @app.route('/api/emails/sync', methods=['POST'])
 @require_auth
 def api_emails_sync(current_user):
-    """Sync emails from IMAP to database. Body: { limit: 20, count_only: false, account_id }"""
+    """Sync emails from IMAP to database.
+
+    Body: { limit: 20, count_only: false, account_id, folder? }
+    - limit: Anzahl der neu zu ladenden E-Mails (neueste zuerst)
+    - count_only: wenn true, wird nur total_on_server gezählt
+    - account_id: E-Mail-Account in email_accounts
+    - folder: optionaler IMAP-Ordner (Default 'INBOX')
+    """
     import imaplib, email
     from email.header import decode_header
     import re
@@ -1163,6 +1170,7 @@ def api_emails_sync(current_user):
     limit = data.get('limit')  # None = all new, 20/50/100 = specific count
     count_only = data.get('count_only', False)  # Just count emails on server
     account_id = data.get('account_id')
+    folder = (data.get('folder') or 'INBOX').strip() or 'INBOX'
     
     user_email = current_user.get('user_email')
     if not account_id:
@@ -1193,7 +1201,12 @@ def api_emails_sync(current_user):
         # Connect to IMAP
         M = imaplib.IMAP4_SSL(host, port, timeout=15)
         M.login(user, pw)
-        M.select('INBOX')
+        # Ordner auswählen (Standard: INBOX)
+        sel_typ, _ = M.select(folder)
+        if sel_typ != 'OK':
+            M.close()
+            M.logout()
+            return jsonify({'error': f"IMAP select failed for folder {folder}"}), 500
         
         # Search all emails
         typ, data = M.search(None, 'ALL')

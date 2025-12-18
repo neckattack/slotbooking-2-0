@@ -702,10 +702,10 @@
               const remaining = onServer - totalInDB;
               if(remaining > 0){
                 loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${remaining} auf Server)`;
-                status.textContent = `${currentEmailLimit} von ${totalInDB} in DB geladen · ${onServer} auf Server verfügbar`;
+                status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB · ${onServer} auf Server verfügbar`;
               } else {
                 loadMoreBtn.textContent = `✅ Alle E-Mails geladen`;
-                status.textContent = `${currentEmailLimit} E-Mails geladen · Alles synchronisiert (${onServer} auf Server)`;
+                status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB · Alles synchronisiert (${onServer} auf Server)`;
               }
             }
           })
@@ -716,11 +716,11 @@
         } else if(data.has_more){
           // More emails in DB
           loadMoreBtn.style.display = 'inline-block';
-          loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${totalInDB - currentEmailLimit} in DB)`;
-          status.textContent = `${currentEmailLimit} von ${totalInDB} E-Mails in DB geladen`;
+          loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${totalInDB - currentEmailLimit} weitere in DB)`;
+          status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB`;
         } else {
           loadMoreBtn.style.display = 'none';
-          status.textContent = `${currentEmailLimit} E-Mails geladen`;
+          status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB`;
         }
       }catch(e){
         list.innerHTML = `<div class="sub" style="padding:20px;">Fehler: ${e}</div>`;
