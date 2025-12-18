@@ -1170,6 +1170,7 @@ def api_emails_sync(current_user):
     limit = data.get('limit')  # None = all new, 20/50/100 = specific count
     count_only = data.get('count_only', False)  # Just count emails on server
     account_id = data.get('account_id')
+    # IMAP-Folder (Großschreibung wie vom Server, z.B. INBOX, Sent, Archive)
     folder = (data.get('folder') or 'INBOX').strip() or 'INBOX'
     
     user_email = current_user.get('user_email')
@@ -1358,14 +1359,15 @@ def api_emails_sync(current_user):
                     contact_id = cursor_db.lastrowid
                     new_contacts_count += 1
                 
-                # Insert email
+                # Insert email, Folder-Namen normalisiert in Kleinbuchstaben speichern
+                folder_db = (folder or 'INBOX').lower()
                 cursor_db.execute(
                     "INSERT INTO emails (message_id, user_email, account_id, contact_id, from_addr, from_name, "
                     "to_addrs, subject, body_text, body_html, received_at, folder, has_attachments) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'inbox', %s)",
-                    (message_id, user_email, account_id, contact_id, from_email, from_name, to_addrs, 
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (message_id, user_email, account_id, contact_id, from_email, from_name, to_addrs,
                      subject, body_text[:50000] if body_text else '', body_html[:100000] if body_html else '',
-                     received_at, has_attachments)
+                     received_at, folder_db, has_attachments)
                 )
                 
                 synced_count += 1
@@ -1399,7 +1401,13 @@ def api_emails_sync(current_user):
 @app.route('/api/emails/list', methods=['GET'])
 @require_auth
 def api_emails_list(current_user):
-    """Get emails from database. Query params: folder (default: inbox), limit, offset, account_id"""
+    """Get emails from database.
+
+    Query params:
+    - folder: Ordner in der emails-Tabelle (z.B. 'inbox', 'sent', 'archive') oder 'all' für alle Ordner
+    - limit, offset
+    - account_id
+    """
     user_email = current_user.get('user_email')
     folder = request.args.get('folder', 'inbox')
     limit = int(request.args.get('limit', 50))
@@ -1413,26 +1421,47 @@ def api_emails_list(current_user):
         cursor = conn.cursor(dictionary=True)
         
         # Get emails with contact info
-        cursor.execute(
-            """
-            SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
-                   e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.starred,
-                   e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
-            FROM emails e
-            LEFT JOIN contacts c ON e.contact_id = c.id
-            WHERE e.user_email = %s AND e.account_id = %s AND e.folder = %s
-            ORDER BY e.received_at DESC
-            LIMIT %s OFFSET %s
-            """,
-            (user_email, account_id, folder, limit, offset)
-        )
+        if folder == 'all':
+            cursor.execute(
+                """
+                SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
+                       e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.starred,
+                       e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
+                FROM emails e
+                LEFT JOIN contacts c ON e.contact_id = c.id
+                WHERE e.user_email = %s AND e.account_id = %s
+                ORDER BY e.received_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (user_email, account_id, limit, offset)
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
+                       e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.starred,
+                       e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
+                FROM emails e
+                LEFT JOIN contacts c ON e.contact_id = c.id
+                WHERE e.user_email = %s AND e.account_id = %s AND e.folder = %s
+                ORDER BY e.received_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (user_email, account_id, folder, limit, offset)
+            )
         emails = cursor.fetchall()
         
-        # Get total count
-        cursor.execute(
-            "SELECT COUNT(*) as total FROM emails WHERE user_email=%s AND account_id=%s AND folder=%s",
-            (user_email, account_id, folder)
-        )
+        # Get total count (abhängig von folder/all)
+        if folder == 'all':
+            cursor.execute(
+                "SELECT COUNT(*) as total FROM emails WHERE user_email=%s AND account_id=%s",
+                (user_email, account_id)
+            )
+        else:
+            cursor.execute(
+                "SELECT COUNT(*) as total FROM emails WHERE user_email=%s AND account_id=%s AND folder=%s",
+                (user_email, account_id, folder)
+            )
         total = cursor.fetchone()['total']
         
         # Check if any emails exist at all (to know if sync is needed)

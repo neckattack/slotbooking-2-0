@@ -180,7 +180,7 @@
 </head>
 <body>
   <header>
-    <h1>📥 Inbox</h1>
+    <h1 id="account_title">📥 Inbox</h1>
     <div class="toolbar">
       <input id="inbox_search" type="text" placeholder="🔍 Absender suchen..." style="padding:6px 10px; border:1px solid var(--border); border-radius:999px; font-size:12px; min-width:180px;" />
       <button id="reload">Aktualisieren</button>
@@ -474,6 +474,8 @@
     let inboxFilter = 'relevant';
     let inboxEmails = [];
     let inboxSearchQuery = '';
+    // Aktueller Ordner: 'inbox' oder 'all'
+    let currentFolder = 'inbox';
     async function parseJsonSafe(res){
       const ct = res.headers.get('content-type') || '';
       const txt = await res.text();
@@ -541,17 +543,24 @@
       if(document.getElementById('inbox_filter_toggle')) return;
       const toggle = document.createElement('div');
       toggle.id = 'inbox_filter_toggle';
-      toggle.style.cssText = 'display:flex; justify-content:flex-start; gap:8px; align-items:center; margin:4px 0 8px 0; font-size:12px;';
+      toggle.style.cssText = 'display:flex; justify-content:space-between; gap:8px; align-items:center; margin:4px 0 8px 0; font-size:12px;';
       toggle.innerHTML = `
         <div style="display:inline-flex; background:#e5e7eb; border-radius:999px; padding:2px;">
           <button id="filter_relevant" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#fff; color:#111827; font-weight:600;">Relevant</button>
           <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Sonstige</button>
+        </div>
+        <div>
+          <select id="folder_select" style="padding:4px 8px; border-radius:6px; border:1px solid var(--border); font-size:12px;">
+            <option value="inbox">Posteingang</option>
+            <option value="all">Alle Ordner</option>
+          </select>
         </div>
       `;
       // In die Listenspalte einfügen, direkt vor dem ersten Inhalt
       list.insertBefore(toggle, list.firstChild);
       const btnRel = document.getElementById('filter_relevant');
       const btnOther = document.getElementById('filter_other');
+      const folderSelect = document.getElementById('folder_select');
       const updateButtons = () => {
         if(inboxFilter === 'relevant'){
           btnRel.style.background = '#fff';
@@ -571,6 +580,14 @@
       };
       btnRel.addEventListener('click', () => { inboxFilter = 'relevant'; updateButtons(); renderInboxList(); });
       btnOther.addEventListener('click', () => { inboxFilter = 'other'; updateButtons(); renderInboxList(); });
+      if(folderSelect){
+        folderSelect.value = currentFolder;
+        folderSelect.addEventListener('change', () => {
+          currentFolder = folderSelect.value || 'inbox';
+          // Beim Ordnerwechsel neu laden, damit DB/Server-Zahlen stimmen
+          loadInbox();
+        });
+      }
       updateButtons();
     }
 
@@ -645,7 +662,7 @@
           }
         }
         // Load emails from database with current limit
-        const res = await fetch(`/api/emails/list?folder=inbox&limit=${currentEmailLimit}&account_id=${encodeURIComponent(currentAccountId)}`, {
+        const res = await fetch(`/api/emails/list?folder=${encodeURIComponent(currentFolder)}&limit=${currentEmailLimit}&account_id=${encodeURIComponent(currentAccountId)}`, {
           headers: getAuthHeaders()
         });
         const data = await parseJsonSafe(res);
@@ -692,7 +709,7 @@
           fetch('/api/emails/sync', {
             method: 'POST',
             headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-            body: JSON.stringify({ count_only: true, account_id: currentAccountId })
+            body: JSON.stringify({ count_only: true, account_id: currentAccountId, folder: currentFolder.toUpperCase() === 'ALL' ? 'INBOX' : currentFolder.toUpperCase() })
           })
           .then(res => res.json())
           .then(countData => {
@@ -772,7 +789,7 @@
         const syncRes = await fetch('/api/emails/sync', {
           method: 'POST',
           headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-          body: JSON.stringify({ limit: choice, account_id: currentAccountId })
+          body: JSON.stringify({ limit: choice, account_id: currentAccountId, folder: currentFolder.toUpperCase() })
         });
         const syncData = await parseJsonSafe(syncRes);
         
@@ -890,7 +907,7 @@
         const syncRes = await fetch('/api/emails/sync', {
           method: 'POST',
           headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-          body: JSON.stringify({ limit: limit, account_id: currentAccountId })
+          body: JSON.stringify({ limit: limit, account_id: currentAccountId, folder: currentFolder.toUpperCase() })
         });
         const syncData = await parseJsonSafe(syncRes);
         
@@ -1395,6 +1412,14 @@
         if(!currentAccountId){
           currentAccountId = accounts[0].id;
         }
+
+        // Header-Titel auf aktuellen Account setzen
+        const titleEl = document.getElementById('account_title');
+        if(titleEl){
+          const currentAcc = accounts.find(a => a.id === currentAccountId) || accounts[0];
+          titleEl.textContent = currentAcc.label || currentAcc.account_email || 'Inbox';
+        }
+
         // Dropdown im Header ergänzen (nur wenn noch nicht vorhanden)
         const toolbar = document.querySelector('.toolbar');
         if(toolbar && !document.getElementById('account_select')){
@@ -1410,6 +1435,12 @@
           }
           select.addEventListener('change', () => {
             currentAccountId = parseInt(select.value, 10);
+            // Titel auf gewählten Account setzen
+            const acc = accounts.find(a => a.id === currentAccountId);
+            if(titleEl && acc){
+              titleEl.textContent = acc.label || acc.account_email || 'Inbox';
+            }
+            currentFolder = 'inbox';
             loadInbox();
           });
           toolbar.insertBefore(select, document.getElementById('status'));
