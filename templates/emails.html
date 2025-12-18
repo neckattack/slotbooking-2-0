@@ -474,8 +474,11 @@
     let inboxFilter = 'relevant';
     let inboxEmails = [];
     let inboxSearchQuery = '';
-    // Aktueller Ordner: 'inbox' oder 'all'
+    // Aktueller Ordner (DB-Key, z.B. 'inbox', 'archive', 'all')
     let currentFolder = 'inbox';
+    // Verfügbare Ordner für den aktuellen Account
+    let availableFolders = [];
+    const accountFolderCache = {};
     async function parseJsonSafe(res){
       const ct = res.headers.get('content-type') || '';
       const txt = await res.text();
@@ -550,10 +553,7 @@
           <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Sonstige</button>
         </div>
         <div>
-          <select id="folder_select" style="padding:4px 8px; border-radius:6px; border:1px solid var(--border); font-size:12px;">
-            <option value="inbox">Posteingang</option>
-            <option value="all">Alle Ordner</option>
-          </select>
+          <select id="folder_select" style="padding:4px 8px; border-radius:6px; border:1px solid var(--border); font-size:12px;"></select>
         </div>
       `;
       // In die Listenspalte einfügen, direkt vor dem ersten Inhalt
@@ -580,8 +580,10 @@
       };
       btnRel.addEventListener('click', () => { inboxFilter = 'relevant'; updateButtons(); renderInboxList(); });
       btnOther.addEventListener('click', () => { inboxFilter = 'other'; updateButtons(); renderInboxList(); });
+
+      // Folder-Select mit verfügbaren Ordnern füllen
       if(folderSelect){
-        folderSelect.value = currentFolder;
+        updateFolderSelectOptions();
         folderSelect.addEventListener('change', () => {
           currentFolder = folderSelect.value || 'inbox';
           // Beim Ordnerwechsel neu laden, damit DB/Server-Zahlen stimmen
@@ -589,6 +591,71 @@
         });
       }
       updateButtons();
+    }
+
+    function updateFolderSelectOptions(){
+      const folderSelect = document.getElementById('folder_select');
+      if(!folderSelect) return;
+      folderSelect.innerHTML = '';
+      // Wenn noch keine Folders geladen wurden, Standard-Einträge setzen
+      let folders = availableFolders && availableFolders.length ? [...availableFolders] : [
+        { db_key: 'inbox', label: 'Posteingang' }
+      ];
+      // "Alle Ordner" immer als letzten Eintrag anhängen
+      folders.push({ db_key: 'all', label: 'Alle Ordner' });
+      for(const f of folders){
+        const opt = document.createElement('option');
+        opt.value = f.db_key;
+        opt.textContent = f.label;
+        if(f.db_key === currentFolder){ opt.selected = true; }
+        folderSelect.appendChild(opt);
+      }
+    }
+
+    async function loadFoldersForCurrentAccount(){
+      if(!currentAccountId){ return; }
+      const cacheKey = String(currentAccountId);
+      if(accountFolderCache[cacheKey]){
+        availableFolders = accountFolderCache[cacheKey];
+        updateFolderSelectOptions();
+        return;
+      }
+      try{
+        const res = await fetch(`/api/emails/folders?account_id=${encodeURIComponent(currentAccountId)}`, {
+          headers: getAuthHeaders()
+        });
+        const data = await parseJsonSafe(res);
+        if(!data.__ok || !Array.isArray(data.folders)){
+          return;
+        }
+        availableFolders = (data.folders || []).map(f => ({
+          db_key: f.db_key || (f.imap_name || '').toLowerCase() || 'inbox',
+          label: f.label || f.imap_name || 'Ordner',
+          imap_name: f.imap_name || 'INBOX'
+        }));
+        accountFolderCache[cacheKey] = availableFolders;
+        // Standard-Folder, falls currentFolder noch nicht gesetzt ist
+        if(!currentFolder || currentFolder === 'inbox'){
+          const inboxFolder = availableFolders.find(f => f.db_key === 'inbox') || availableFolders[0];
+          if(inboxFolder){ currentFolder = inboxFolder.db_key; }
+        }
+        updateFolderSelectOptions();
+      }catch(_){
+        // Wenn Ordnerliste nicht geladen werden kann, bleiben wir bei Default
+      }
+    }
+
+    function getImapFolderForSync(){
+      // Wenn "Alle Ordner" gewählt ist, synchronisieren wir aktuell nur INBOX
+      if(currentFolder === 'all'){
+        return 'INBOX';
+      }
+      const f = (availableFolders || []).find(x => x.db_key === currentFolder);
+      if(f && f.imap_name){
+        return f.imap_name;
+      }
+      // Fallback: currentFolder als IMAP-Name verwenden
+      return (currentFolder || 'INBOX').toUpperCase();
     }
 
     function renderInboxList(){
@@ -709,7 +776,7 @@
           fetch('/api/emails/sync', {
             method: 'POST',
             headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-            body: JSON.stringify({ count_only: true, account_id: currentAccountId, folder: currentFolder.toUpperCase() === 'ALL' ? 'INBOX' : currentFolder.toUpperCase() })
+            body: JSON.stringify({ count_only: true, account_id: currentAccountId, folder: getImapFolderForSync() })
           })
           .then(res => res.json())
           .then(countData => {
@@ -760,11 +827,11 @@
           }
         }
         // Ziehe bis zu 200 neueste E-Mails für den aktuellen Ordner vom Server
-        const syncRes = await fetch('/api/emails/sync', {
-          method: 'POST',
-          headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-          body: JSON.stringify({ limit: 200, account_id: currentAccountId, folder: currentFolder.toUpperCase() })
-        });
+          const syncRes = await fetch('/api/emails/sync', {
+            method: 'POST',
+            headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+            body: JSON.stringify({ limit: 500, account_id: currentAccountId, folder: getImapFolderForSync() })
+          });
         await parseJsonSafe(syncRes); // Fehler werden unten generisch behandelt
       }catch(e){
         // Still, wir zeigen den Fehler beim eigentlichen Reload an
@@ -777,47 +844,15 @@
       const loadMoreBtn = document.getElementById('load_more_btn');
       const originalText = loadMoreBtn.textContent;
       loadMoreBtn.disabled = true;
-      loadMoreBtn.textContent = '⏳ Lädt...';
-      
-      // Show dialog to choose how many
-      const choice = await new Promise((resolve) => {
-        const dialog = document.createElement('div');
-        dialog.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; padding:30px; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.3); z-index:10000; max-width:400px;';
-        dialog.innerHTML = `
-          <h3 style="margin:0 0 16px;">Wie viele E-Mails laden?</h3>
-          <div style="display:flex; flex-direction:column; gap:10px;">
-            <button class="load-choice" data-count="20" style="background:#059669; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">📥 Weitere 20 E-Mails</button>
-            <button class="load-choice" data-count="50" style="background:#0284c7; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">📥 Weitere 50 E-Mails</button>
-            <button class="load-choice" data-count="100" style="background:#7c3aed; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">📥 Weitere 100 E-Mails</button>
-            <button class="load-choice" data-count="500" style="background:#d97706; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">📥 Weitere 500 E-Mails</button>
-            <button class="load-choice" data-count="1000" style="background:#dc2626; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">⚡ Weitere 1.000 E-Mails</button>
-            <button class="load-choice" data-count="5000" style="background:#991b1b; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">⚠️ Weitere 5.000 E-Mails (langsam!)</button>
-            <button class="load-choice" data-count="0" style="background:#6b7280; color:#fff; border:0; padding:11px; border-radius:8px; cursor:pointer; font-size:14px;">Abbrechen</button>
-          </div>
-        `;
-        document.body.appendChild(dialog);
-        
-        dialog.querySelectorAll('.load-choice').forEach(btn => {
-          btn.addEventListener('click', () => {
-            const count = parseInt(btn.dataset.count);
-            document.body.removeChild(dialog);
-            resolve(count);
-          });
-        });
-      });
-      
-      if(choice === 0){
-        loadMoreBtn.disabled = false;
-        loadMoreBtn.textContent = originalText;
-        return;
-      }
+      loadMoreBtn.textContent = '⏳ Lade weitere E-Mails...';
+      const choice = 500; // Fester 500er-Block für Nachladen
       
       try{
         // Sync more emails
         const syncRes = await fetch('/api/emails/sync', {
           method: 'POST',
           headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-          body: JSON.stringify({ limit: choice, account_id: currentAccountId, folder: currentFolder.toUpperCase() })
+          body: JSON.stringify({ limit: choice, account_id: currentAccountId, folder: getImapFolderForSync() })
         });
         const syncData = await parseJsonSafe(syncRes);
         
@@ -935,7 +970,7 @@
         const syncRes = await fetch('/api/emails/sync', {
           method: 'POST',
           headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-          body: JSON.stringify({ limit: limit, account_id: currentAccountId, folder: currentFolder.toUpperCase() })
+          body: JSON.stringify({ limit: limit, account_id: currentAccountId, folder: getImapFolderForSync() })
         });
         const syncData = await parseJsonSafe(syncRes);
         
@@ -1441,6 +1476,9 @@
           currentAccountId = accounts[0].id;
         }
 
+        // Ordner für aktuellen Account laden
+        await loadFoldersForCurrentAccount();
+
         // Account-Dropdown direkt im Header links anzeigen (anstelle des Textes)
         const titleEl = document.getElementById('account_title');
         if(titleEl && !document.getElementById('account_select')){
@@ -1454,10 +1492,11 @@
             if(acc.id === currentAccountId){ opt.selected = true; }
             select.appendChild(opt);
           }
-          select.addEventListener('change', () => {
+          select.addEventListener('change', async () => {
             currentAccountId = parseInt(select.value, 10);
             currentFolder = 'inbox';
-            loadInbox();
+            await loadFoldersForCurrentAccount();
+            await loadInbox();
           });
           // Inhalt des Headers leeren und Dropdown einfügen
           titleEl.textContent = '';

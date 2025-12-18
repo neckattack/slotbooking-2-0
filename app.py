@@ -1398,6 +1398,121 @@ def api_emails_sync(current_user):
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
 
 
+@app.route('/api/emails/folders', methods=['GET'])
+@require_auth
+def api_emails_folders(current_user):
+    """Liest die IMAP-Ordnerstruktur für einen Account aus und gibt sie zurück.
+
+    Query:
+    - account_id (required)
+
+    Response: {
+      "folders": [
+        {"imap_name": "INBOX", "db_key": "inbox", "label": "Posteingang"},
+        ...
+      ]
+    }
+    """
+    import imaplib
+    from encryption_utils import decrypt_password
+
+    user_email = current_user.get('user_email')
+    account_id = request.args.get('account_id', type=int)
+    if not account_id:
+        return jsonify({'error': 'account_id erforderlich'}), 400
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security "
+            "FROM email_accounts WHERE user_email=%s AND id=%s AND is_active=1",
+            (user_email, account_id),
+        )
+        settings = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not settings or not settings.get('imap_host'):
+            return jsonify({'error': 'IMAP settings not configured'}), 400
+
+        host = settings['imap_host']
+        port = int(settings.get('imap_port', 993))
+        user = settings['imap_user']
+        pw = decrypt_password(settings['imap_pass_encrypted']) if settings['imap_pass_encrypted'] else ''
+
+        M = imaplib.IMAP4_SSL(host, port, timeout=15)
+        M.login(user, pw)
+        typ, data = M.list()
+        if typ != 'OK':
+            M.logout()
+            return jsonify({'error': 'IMAP LIST failed'}), 500
+
+        folders = []
+        for raw in data:
+            if not raw:
+                continue
+            # raw ist z.B. b'(\HasNoChildren) "/" "INBOX"'
+            try:
+                line = raw.decode('utf-8', errors='ignore')
+            except Exception:
+                continue
+            # Name steht typischerweise in den letzten Anführungszeichen
+            parts = line.split(' "')
+            if len(parts) < 2:
+                continue
+            name = parts[-1].rstrip('"')
+            if not name:
+                continue
+
+            imap_name = name
+            db_key = (imap_name or 'INBOX').lower()
+
+            # Label heuristisch bestimmen
+            lower_name = imap_name.lower()
+            # Nur den letzten Pfadteil betrachten (INBOX/Sent -> Sent)
+            last_part = lower_name.split('/')[-1].split('.')[-1]
+            if last_part in ('inbox',):
+                label = 'Posteingang'
+            elif last_part in ('sent', 'sent items', 'gesendet'):
+                label = 'Gesendet'
+            elif 'draft' in last_part:
+                label = 'Entwürfe'
+            elif 'spam' in last_part or 'junk' in last_part:
+                label = 'Spam'
+            elif 'trash' in last_part or 'deleted' in last_part or 'papierkorb' in last_part:
+                label = 'Papierkorb'
+            elif 'archive' in last_part or 'archiv' in last_part:
+                label = 'Archiv'
+            else:
+                # Originalnamen verwenden
+                label = imap_name
+
+            folders.append({
+                'imap_name': imap_name,
+                'db_key': db_key,
+                'label': label,
+            })
+
+        M.logout()
+
+        # Optional: nach gängigen Ordnern sortieren (Inbox, Sent, Archiv, Rest alphabetisch)
+        priority = {'posteingang': 0, 'inbox': 0, 'gesendet': 1, 'sent': 1, 'archive': 2, 'archiv': 2}
+
+        def sort_key(f):
+            lp = f['label'].lower()
+            return (priority.get(lp, 10), lp)
+
+        folders_sorted = sorted(folders, key=sort_key)
+
+        return jsonify({'folders': folders_sorted}), 200
+
+    except Exception as e:
+        app.logger.error(f"[IMAP Folders] Error: {e}")
+        import traceback
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
 @app.route('/api/emails/list', methods=['GET'])
 @require_auth
 def api_emails_list(current_user):
