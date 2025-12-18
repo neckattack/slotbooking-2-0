@@ -842,8 +842,8 @@
                 ⚡ Erste 1.000 E-Mails
               </button>
               ${total > 1000 ? `
-                <button class="sync-btn" data-limit="all" style="background:#991b1b; color:#fff; border:0; padding:12px 20px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">
-                  ⚠️ Alle ${total} E-Mails (sehr langsam!)
+                <button class="sync-btn" data-limit="full" style="background:#991b1b; color:#fff; border:0; padding:12px 20px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;">
+                  🔄 Kompletten Ordner laden (in 500er-Paketen)
                 </button>
               ` : ''}
             </div>
@@ -855,8 +855,13 @@
         // Add click handlers
         document.querySelectorAll('.sync-btn').forEach(btn => {
           btn.addEventListener('click', async () => {
-            const limit = btn.dataset.limit === 'all' ? null : parseInt(btn.dataset.limit);
-            await performSync(limit);
+            const mode = btn.dataset.limit;
+            if(mode === 'full'){
+              await performFullSync(total);
+            } else {
+              const limit = parseInt(mode);
+              await performSync(limit);
+            }
           });
         });
         
