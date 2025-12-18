@@ -744,6 +744,34 @@
         status.textContent = '';
       }
     }
+
+    // Aktualisieren: kurze Serversynchronisation für den aktuellen Ordner + Reload
+    async function refreshInbox(){
+      const status = document.getElementById('status');
+      const list = document.getElementById('list');
+      if(status) status.textContent = 'Suche nach neuen E-Mails...';
+      try{
+        if(!currentAccountId){
+          await ensureEmailAccountsLoaded();
+          if(!currentAccountId){
+            if(list) list.innerHTML = '<div class="sub" style="padding:20px; text-align:center;">Kein E-Mail-Account konfiguriert.</div>';
+            if(status) status.textContent = '';
+            return;
+          }
+        }
+        // Ziehe bis zu 200 neueste E-Mails für den aktuellen Ordner vom Server
+        const syncRes = await fetch('/api/emails/sync', {
+          method: 'POST',
+          headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+          body: JSON.stringify({ limit: 200, account_id: currentAccountId, folder: currentFolder.toUpperCase() })
+        });
+        await parseJsonSafe(syncRes); // Fehler werden unten generisch behandelt
+      }catch(e){
+        // Still, wir zeigen den Fehler beim eigentlichen Reload an
+      }
+      // Immer Inbox neu laden, um ggf. neue DB-Einträge zu zeigen
+      await loadInbox();
+    }
     
     async function loadMoreEmails(){
       const loadMoreBtn = document.getElementById('load_more_btn');
@@ -1373,7 +1401,7 @@
       set('prof_channels', p.channels);
       const sum = document.getElementById('prof_summary'); if(sum) sum.textContent = p.summary || '–';
     }
-    document.getElementById('reload').addEventListener('click', loadInbox);
+    document.getElementById('reload').addEventListener('click', refreshInbox);
     document.getElementById('load_more_btn').addEventListener('click', loadMoreEmails);
     document.getElementById('btn_propose').addEventListener('click', proposeDraft);
     document.getElementById('btn_send').addEventListener('click', sendDraft);
