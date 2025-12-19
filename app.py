@@ -1495,15 +1495,26 @@ def api_emails_folders(current_user):
                 continue
 
             imap_name = name
-            db_key = (imap_name or 'INBOX').lower()
 
-            # Label heuristisch bestimmen
-            lower_name = imap_name.lower()
+            # Label und db_key heuristisch bestimmen
+            lower_name = (imap_name or 'INBOX').lower()
             # Nur den letzten Pfadteil betrachten (INBOX/Sent -> Sent)
             last_part = lower_name.split('/')[-1].split('.')[-1]
-            if last_part in ('inbox',):
+
+            # db_key: stabiler Ordner-Key, passend zu unserer DB-Speicherung
+            if 'inbox' in last_part:
+                db_key = 'inbox'
+            elif 'sent' in last_part or 'gesendet' in last_part:
+                db_key = 'sent'
+            elif 'archive' in last_part or 'archiv' in last_part:
+                db_key = 'archive'
+            else:
+                db_key = last_part or lower_name
+
+            # Label für die UI bestimmen
+            if 'inbox' in last_part:
                 label = 'Posteingang'
-            elif last_part in ('sent', 'sent items', 'gesendet'):
+            elif 'sent' in last_part or 'gesendet' in last_part:
                 label = 'Gesendet'
             elif 'draft' in last_part:
                 label = 'Entwürfe'
