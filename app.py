@@ -1710,13 +1710,12 @@ def api_emails_list(current_user):
 
 
 @app.route('/api/emails/debug-folders', methods=['GET'])
-@require_auth
-def api_emails_debug_folders(current_user):
+def api_emails_debug_folders():
     """Gibt für einen Account die in der DB vorhandenen Folder-Werte samt Anzahl zurück.
 
     Hilft beim Debuggen, unter welchem Folder-Key z.B. gesendete Mails gespeichert sind.
     """
-    user_email = current_user.get('user_email')
+    user_email = request.args.get('user_email')
     account_id = request.args.get('account_id', type=int)
     if not account_id:
         return jsonify({'error': 'account_id erforderlich'}), 400
