@@ -1172,6 +1172,17 @@ def api_emails_sync(current_user):
     account_id = data.get('account_id')
     # IMAP-Folder (Großschreibung wie vom Server, z.B. INBOX, Sent, Archive)
     folder = (data.get('folder') or 'INBOX').strip() or 'INBOX'
+    # Zusätzliche Normalisierung: kaputte Werte wie '." INBOX.Sent' abfangen
+    if isinstance(folder, str):
+        raw_folder = folder
+        # Offensichtliche Präfixe entfernen
+        if raw_folder.startswith('."') or raw_folder.startswith('"'):
+            raw_folder = raw_folder.lstrip('.').lstrip('"').strip()
+        # Wenn irgendwo INBOX vorkommt, verwenden wir hart den Hauptordner
+        if 'INBOX' in raw_folder.upper():
+            folder = 'INBOX'
+        else:
+            folder = raw_folder
     
     user_email = current_user.get('user_email')
     if not account_id:
@@ -1210,14 +1221,22 @@ def api_emails_sync(current_user):
             folder_imap = 'INBOX'
         # Viele Server erwarten Foldernamen in Anführungszeichen, v.a. bei Leerzeichen
         try:
-            sel_typ, _ = M.select(f'"{folder_imap}"')
-        except imaplib.IMAP4.error:
-            # Fallback: ungequotete Variante versuchen
-            sel_typ, _ = M.select(folder_imap)
-        if sel_typ != 'OK':
+            try:
+                sel_typ, _ = M.select(f'"{folder_imap}"')
+            except imaplib.IMAP4.error as e1:
+                # Fallback: ungequotete Variante versuchen
+                app.logger.warning(f"[Sync] IMAP SELECT with quotes failed for folder={folder_imap!r}: {e1}")
+                sel_typ, _ = M.select(folder_imap)
+        except imaplib.IMAP4.error as e2:
+            app.logger.error(f"[Sync] IMAP SELECT failed for folder={folder_imap!r}: {e2}")
             M.close()
             M.logout()
-            return jsonify({'error': f"IMAP select failed for folder {folder}"}), 500
+            return jsonify({'error': f"IMAP SELECT failed for folder {folder_imap!r}: {e2}"}), 500
+        if sel_typ != 'OK':
+            app.logger.error(f"[Sync] IMAP SELECT returned {sel_typ} for folder={folder_imap!r}")
+            M.close()
+            M.logout()
+            return jsonify({'error': f"IMAP SELECT status {sel_typ} for folder {folder_imap!r}"}), 500
         
         # Search all emails
         typ, data = M.search(None, 'ALL')
