@@ -1203,12 +1203,17 @@ def api_emails_sync(current_user):
         M = imaplib.IMAP4_SSL(host, port, timeout=15)
         M.login(user, pw)
         # Ordner auswählen (Standard: INBOX)
+        # Folder-Namen vor dem SELECT hart normalisieren, damit niemals ein leerer
+        # oder invalider Name an den Server geht.
+        folder_imap = (folder or 'INBOX').strip()
+        if not folder_imap:
+            folder_imap = 'INBOX'
         # Viele Server erwarten Foldernamen in Anführungszeichen, v.a. bei Leerzeichen
         try:
-            sel_typ, _ = M.select(f'"{folder}"')
+            sel_typ, _ = M.select(f'"{folder_imap}"')
         except imaplib.IMAP4.error:
             # Fallback: ungequotete Variante versuchen
-            sel_typ, _ = M.select(folder)
+            sel_typ, _ = M.select(folder_imap)
         if sel_typ != 'OK':
             M.close()
             M.logout()
@@ -1365,7 +1370,7 @@ def api_emails_sync(current_user):
                     new_contacts_count += 1
                 
                 # Insert email, Folder-Namen normalisiert in Kleinbuchstaben speichern
-                folder_db = (folder or 'INBOX').lower()
+                folder_db = (folder_imap or 'INBOX').lower()
                 cursor_db.execute(
                     "INSERT INTO emails (message_id, user_email, account_id, contact_id, from_addr, from_name, "
                     "to_addrs, subject, body_text, body_html, received_at, folder, has_attachments) "
