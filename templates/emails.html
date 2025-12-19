@@ -654,8 +654,8 @@
       if(f && f.imap_name){
         return f.imap_name;
       }
-      // Fallback: currentFolder als IMAP-Name verwenden
-      return (currentFolder || 'INBOX').toUpperCase();
+      // Harte Fallback-Strategie: immer INBOX, wenn nichts Sinnvolles gefunden wird
+      return 'INBOX';
     }
 
     function renderInboxList(){
