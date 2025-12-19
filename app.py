@@ -1170,19 +1170,37 @@ def api_emails_sync(current_user):
     limit = data.get('limit')  # None = all new, 20/50/100 = specific count
     count_only = data.get('count_only', False)  # Just count emails on server
     account_id = data.get('account_id')
-    # IMAP-Folder (Großschreibung wie vom Server, z.B. INBOX, Sent, Archive)
-    folder = (data.get('folder') or 'INBOX').strip() or 'INBOX'
-    # Zusätzliche Normalisierung: kaputte Werte wie '." INBOX.Sent' abfangen
-    if isinstance(folder, str):
-        raw_folder = folder
-        # Offensichtliche Präfixe entfernen
-        if raw_folder.startswith('."') or raw_folder.startswith('"'):
-            raw_folder = raw_folder.lstrip('.').lstrip('"').strip()
-        # Wenn irgendwo INBOX vorkommt, verwenden wir hart den Hauptordner
-        if 'INBOX' in raw_folder.upper():
-            folder = 'INBOX'
+    # IMAP-Folder vom Client und logischen DB-Folder bestimmen
+    raw_folder = (data.get('folder') or 'INBOX').strip() or 'INBOX'
+    folder_imap = 'INBOX'
+    folder_db_key = 'inbox'
+    if isinstance(raw_folder, str):
+        f = raw_folder.strip()
+        # Kaputte Präfixe wie '." INBOX.Sent' säubern
+        if f.startswith('."') or f.startswith('"'):
+            f = f.lstrip('.').lstrip('"').strip()
+        fu = f.upper()
+        # Gesendet-Varianten
+        if 'SENT' in fu:
+            folder_imap = f or 'INBOX.Sent'
+            folder_db_key = 'sent'
+        # Archiv-Varianten
+        elif 'ARCHIVE' in fu or 'ARCHIV' in fu:
+            folder_imap = f or 'Archive'
+            folder_db_key = 'archive'
+        # Inbox-Varianten (auch wenn zusätzlich INBOX.* drinsteht)
+        elif 'INBOX' in fu:
+            folder_imap = 'INBOX'
+            folder_db_key = 'inbox'
         else:
-            folder = raw_folder
+            # Fallback: letzten Pfadteil als Key verwenden
+            lower = f.lower()
+            last_part = lower.split('/')[-1].split('.')[-1]
+            folder_imap = f or 'INBOX'
+            folder_db_key = last_part or lower or 'inbox'
+    else:
+        folder_imap = 'INBOX'
+        folder_db_key = 'inbox'
     
     user_email = current_user.get('user_email')
     if not account_id:
@@ -1214,11 +1232,7 @@ def api_emails_sync(current_user):
         M = imaplib.IMAP4_SSL(host, port, timeout=15)
         M.login(user, pw)
         # Ordner auswählen (Standard: INBOX)
-        # Folder-Namen vor dem SELECT hart normalisieren, damit niemals ein leerer
-        # oder invalider Name an den Server geht.
-        folder_imap = (folder or 'INBOX').strip()
-        if not folder_imap:
-            folder_imap = 'INBOX'
+        # Folder-Namen (folder_imap) wurde oben bereits normalisiert
         # Viele Server erwarten Foldernamen in Anführungszeichen, v.a. bei Leerzeichen
         try:
             try:
@@ -1254,14 +1268,16 @@ def api_emails_sync(current_user):
             M.logout()
             return jsonify({'total_on_server': total_on_server}), 200
         
-        # Get already synced message_ids from DB
+        # Bereits synchronisierte Kombinationen aus message_id und Ordner laden,
+        # damit dieselbe Nachricht in verschiedenen Ordnern (z.B. INBOX vs. Gesendet)
+        # separat gespeichert werden kann.
         conn_db = get_settings_db_connection()
         cursor_db = conn_db.cursor()
         cursor_db.execute(
-            "SELECT message_id FROM emails WHERE user_email=%s AND account_id=%s",
+            "SELECT message_id, folder FROM emails WHERE user_email=%s AND account_id=%s",
             (user_email, account_id)
         )
-        synced_ids = set(row[0] for row in cursor_db.fetchall() if row[0])
+        synced_ids = set((row[0], (row[1] or '').lower()) for row in cursor_db.fetchall() if row[0])
         
         # Determine which emails to fetch
         if limit:
@@ -1287,9 +1303,10 @@ def api_emails_sync(current_user):
                 message_id = msg.get('Message-ID', '').strip()
                 if not message_id:
                     message_id = f"no-id-{uid.decode()}"
-                
-                # Skip if already synced
-                if message_id in synced_ids:
+                # Skip, wenn diese Kombination aus message_id und Ziel-Ordner
+                # bereits in der DB vorhanden ist
+                key = (message_id, (folder_db_key or 'inbox').lower())
+                if key in synced_ids:
                     continue
                 
                 # Extract headers
@@ -1388,8 +1405,8 @@ def api_emails_sync(current_user):
                     contact_id = cursor_db.lastrowid
                     new_contacts_count += 1
                 
-                # Insert email, Folder-Namen normalisiert in Kleinbuchstaben speichern
-                folder_db = (folder_imap or 'INBOX').lower()
+                # Insert email, Folder-Namen als logischen DB-Key speichern
+                folder_db = (folder_db_key or 'inbox').lower()
                 cursor_db.execute(
                     "INSERT INTO emails (message_id, user_email, account_id, contact_id, from_addr, from_name, "
                     "to_addrs, subject, body_text, body_html, received_at, folder, has_attachments) "
@@ -1400,7 +1417,7 @@ def api_emails_sync(current_user):
                 )
                 
                 synced_count += 1
-                synced_ids.add(message_id)
+                synced_ids.add(key)
                 
             except Exception as e:
                 app.logger.error(f"[Sync] Error processing email {uid}: {e}")
@@ -1591,19 +1608,36 @@ def api_emails_list(current_user):
                 (user_email, account_id, limit, offset)
             )
         else:
-            cursor.execute(
-                """
-                SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
-                       e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.starred,
-                       e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
-                FROM emails e
-                LEFT JOIN contacts c ON e.contact_id = c.id
-                WHERE e.user_email = %s AND e.account_id = %s AND e.folder = %s
-                ORDER BY e.received_at DESC
-                LIMIT %s OFFSET %s
-                """,
-                (user_email, account_id, folder, limit, offset)
-            )
+            # Für bestimmte Folder (z.B. 'sent') auch historische Varianten mit berücksichtigen
+            if folder == 'sent':
+                folder_values = ('sent', 'inbox.sent', 'sent items')
+                cursor.execute(
+                    """
+                    SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
+                           e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.starred,
+                           e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
+                    FROM emails e
+                    LEFT JOIN contacts c ON e.contact_id = c.id
+                    WHERE e.user_email = %s AND e.account_id = %s AND e.folder IN (%s, %s, %s)
+                    ORDER BY e.received_at DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    (user_email, account_id, *folder_values, limit, offset)
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
+                           e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.starred,
+                           e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
+                    FROM emails e
+                    LEFT JOIN contacts c ON e.contact_id = c.id
+                    WHERE e.user_email = %s AND e.account_id = %s AND e.folder = %s
+                    ORDER BY e.received_at DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    (user_email, account_id, folder, limit, offset)
+                )
         emails = cursor.fetchall()
         
         # Get total count (abhängig von folder/all)
@@ -1613,10 +1647,17 @@ def api_emails_list(current_user):
                 (user_email, account_id)
             )
         else:
-            cursor.execute(
-                "SELECT COUNT(*) as total FROM emails WHERE user_email=%s AND account_id=%s AND folder=%s",
-                (user_email, account_id, folder)
-            )
+            if folder == 'sent':
+                folder_values = ('sent', 'inbox.sent', 'sent items')
+                cursor.execute(
+                    "SELECT COUNT(*) as total FROM emails WHERE user_email=%s AND account_id=%s AND folder IN (%s, %s, %s)",
+                    (user_email, account_id, *folder_values)
+                )
+            else:
+                cursor.execute(
+                    "SELECT COUNT(*) as total FROM emails WHERE user_email=%s AND account_id=%s AND folder=%s",
+                    (user_email, account_id, folder)
+                )
         total = cursor.fetchone()['total']
         
         # Check if any emails exist at all (to know if sync is needed)
@@ -1666,6 +1707,40 @@ def api_emails_list(current_user):
     except Exception as e:
         app.logger.error(f"[List Emails] Error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/emails/debug-folders', methods=['GET'])
+@require_auth
+def api_emails_debug_folders(current_user):
+    """Gibt für einen Account die in der DB vorhandenen Folder-Werte samt Anzahl zurück.
+
+    Hilft beim Debuggen, unter welchem Folder-Key z.B. gesendete Mails gespeichert sind.
+    """
+    user_email = current_user.get('user_email')
+    account_id = request.args.get('account_id', type=int)
+    if not account_id:
+        return jsonify({'error': 'account_id erforderlich'}), 400
+    
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT COALESCE(folder, '') AS folder, COUNT(*) AS cnt
+            FROM emails
+            WHERE user_email=%s AND account_id=%s
+            GROUP BY COALESCE(folder, '')
+            ORDER BY cnt DESC
+            """,
+            (user_email, account_id)
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify({'folders': rows})
+    except Exception as e:
+        app.logger.error(f"[Emails Debug Folders] Error: {e}")
+        return jsonify({'error': 'Error loading debug folders'}), 500
 
 
 @app.route('/api/emails/get/<int:email_id>', methods=['GET'])

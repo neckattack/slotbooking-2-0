@@ -762,7 +762,7 @@
         setupInboxFilterToggle();
         renderInboxList();
         
-        // Show/hide "Load more" button and check server count
+        // Show/hide "Load more" button und Fortschritt anzeigen
         const loadMoreBtn = document.getElementById('load_more_btn');
         const totalInDB = data.total || 0;
         
@@ -781,24 +781,26 @@
           .then(res => res.json())
           .then(countData => {
             loadMoreBtn.disabled = false;
-            // Server-Gesamtzahl wird nicht mehr im Status angezeigt, nur noch DB-Anzahl
             if(countData.total_on_server){
               const onServer = countData.total_on_server;
-              const remaining = onServer - totalInDB;
+              const remaining = Math.max(onServer - totalInDB, 0);
               if(remaining > 0){
                 loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${remaining} auf Server)`;
               } else {
                 loadMoreBtn.textContent = `✅ Alle E-Mails geladen`;
               }
+              const pct = onServer > 0 ? Math.round((totalInDB / onServer) * 100) : 0;
+              status.textContent = `${totalInDB.toLocaleString('de-DE')} / ${onServer.toLocaleString('de-DE')} E-Mails in diesem Ordner in DB (${pct}% synchronisiert)`;
+            } else {
+              status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB`;
             }
-            status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB`;
           })
           .catch(() => {
             loadMoreBtn.disabled = false;
             loadMoreBtn.textContent = `📥 Nach neuen E-Mails suchen`;
           });
         } else if(data.has_more){
-          // More emails in DB
+          // More emails in DB, aber keine Server-Info (z.B. ohne IMAP-Settings)
           loadMoreBtn.style.display = 'inline-block';
           loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${totalInDB - currentEmailLimit} weitere in DB)`;
           status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB`;
