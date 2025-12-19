@@ -1203,7 +1203,12 @@ def api_emails_sync(current_user):
         M = imaplib.IMAP4_SSL(host, port, timeout=15)
         M.login(user, pw)
         # Ordner auswählen (Standard: INBOX)
-        sel_typ, _ = M.select(folder)
+        # Viele Server erwarten Foldernamen in Anführungszeichen, v.a. bei Leerzeichen
+        try:
+            sel_typ, _ = M.select(f'"{folder}"')
+        except imaplib.IMAP4.error:
+            # Fallback: ungequotete Variante versuchen
+            sel_typ, _ = M.select(folder)
         if sel_typ != 'OK':
             M.close()
             M.logout()
