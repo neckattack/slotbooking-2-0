@@ -861,6 +861,17 @@
         if(!syncData.__ok){
           throw new Error(syncData.error || 'Sync fehlgeschlagen');
         }
+        // Kurze Rückmeldung, wie viele E-Mails in diesem Durchlauf synchronisiert wurden
+        const status = document.getElementById('status');
+        if(status && typeof syncData.synced === 'number'){
+          const totalOnServer = typeof syncData.total_on_server === 'number' ? syncData.total_on_server : null;
+          const syncedBatch = syncData.synced;
+          if(totalOnServer){
+            status.textContent = `+${syncedBatch} E-Mails synchronisiert (dieser Durchlauf) – insgesamt ${totalOnServer.toLocaleString('de-DE')} auf dem Server`;
+          } else {
+            status.textContent = `+${syncedBatch} E-Mails synchronisiert (dieser Durchlauf)`;
+          }
+        }
         
         // Increase limit to show newly synced emails
         currentEmailLimit += choice;
