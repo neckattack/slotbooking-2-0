@@ -1075,6 +1075,59 @@ def api_emails_send(current_user):
         return jsonify({'error': err_txt, 'code': code}), status
 
 
+@app.route('/api/user/signature-image', methods=['POST'])
+@require_auth
+def api_user_signature_image(current_user):
+    """Lädt ein Signaturbild für den aktuellen User hoch und gibt die URL zurück.
+
+    Request (multipart/form-data): Feld 'file'
+    Response: { ok: true, url: 'https://.../static/signatures/...' }
+    """
+    from werkzeug.utils import secure_filename
+
+    user_email = current_user.get('user_email') or ''
+    if 'file' not in request.files:
+        return jsonify({'error': 'file fehlt'}), 400
+    f = request.files['file']
+    if not f or f.filename == '':
+        return jsonify({'error': 'Leere Datei'}), 400
+
+    # Einfacher Typ-/Größencheck
+    allowed_mimes = {'image/png': '.png', 'image/jpeg': '.jpg', 'image/jpg': '.jpg', 'image/gif': '.gif'}
+    mime = (f.mimetype or '').lower()
+    ext = allowed_mimes.get(mime)
+    if not ext:
+        return jsonify({'error': 'Nur PNG/JPEG/GIF erlaubt'}), 400
+
+    # Größe begrenzen (~2 MB)
+    f.stream.seek(0, os.SEEK_END)
+    size = f.stream.tell()
+    f.stream.seek(0)
+    if size > 2 * 1024 * 1024:
+        return jsonify({'error': 'Datei zu groß (max. 2 MB)'}), 400
+
+    # Dateiname aus User-E-Mail ableiten
+    base = secure_filename(user_email or 'signature') or 'signature'
+    filename = f"{base}{ext}"
+    sig_dir = os.path.join(app.root_path, 'static', 'signatures')
+    try:
+        os.makedirs(sig_dir, exist_ok=True)
+        full_path = os.path.join(sig_dir, filename)
+        f.save(full_path)
+    except Exception as e:
+        app.logger.error(f"[Signature-Upload] Fehler beim Speichern: {e}")
+        return jsonify({'error': 'Fehler beim Speichern der Datei'}), 500
+
+    # URL bauen (extern, inkl. Domain) – kann direkt in <img src> genutzt werden
+    try:
+        from flask import url_for as _url_for
+        url = _url_for('static', filename=f'signatures/{filename}', _external=True)
+    except Exception:
+        url = f"/static/signatures/{filename}"
+
+    return jsonify({'ok': True, 'url': url}), 200
+
+
 @app.route('/api/emails/smtp-test', methods=['POST'])
 @require_auth
 def api_emails_smtp_test(current_user):

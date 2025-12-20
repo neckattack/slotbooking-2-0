@@ -293,7 +293,12 @@
         <div class="sub" style="margin-bottom:6px;">
           Freier Text oder HTML. Hier kannst du auch ein Bild per &lt;img src="https://..."&gt; einbinden.
         </div>
-        <textarea id="email_signature_html" rows="4" placeholder="--\nBeste Grüße\nChris" style="width:100%; font-size:13px; padding:8px 10px; border:1px solid var(--border); border-radius:6px; resize:vertical;"></textarea>
+        <textarea id="email_signature_html" rows="4" placeholder="--\nBeste Grüße\nChris" style="width:100%; font-size:13px; padding:8px 10px; border:1px solid var(--border); border-radius:6px; resize:vertical; margin-bottom:8px;"></textarea>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="file" id="email_signature_image" accept="image/*" style="flex:1; font-size:12px;" />
+          <button id="email_signature_upload_btn" type="button" style="background:#e5e7eb; color:#111827; border:1px solid #d1d5db; padding:6px 10px; border-radius:4px; font-size:12px; cursor:pointer; white-space:nowrap;">Bild hochladen</button>
+        </div>
+        <div id="email_signature_img_status" class="sub" style="margin-top:4px;"></div>
       </div>
       <div style="margin-bottom:12px; padding:12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;">
         <button id="smtp_test_btn" style="background:#0284c7; color:#fff; width:100%;">🔧 SMTP-Verbindung testen</button>
@@ -1869,6 +1874,46 @@
         }
       }catch(e){
         console.warn('Signatur konnte nicht geladen werden', e);
+      }
+
+      // Bild-Upload für Signatur
+      const sigFileInput = document.getElementById('email_signature_image');
+      const sigUploadBtn = document.getElementById('email_signature_upload_btn');
+      const sigStatus = document.getElementById('email_signature_img_status');
+      const sigTextarea = document.getElementById('email_signature_html');
+      if(sigFileInput && sigUploadBtn){
+        sigUploadBtn.onclick = async () => {
+          if(!sigFileInput.files || !sigFileInput.files[0]){
+            sigStatus.textContent = 'Bitte zuerst ein Bild auswählen.';
+            return;
+          }
+          const file = sigFileInput.files[0];
+          const fd = new FormData();
+          fd.append('file', file);
+          sigStatus.textContent = 'Lade Bild hoch...';
+          sigUploadBtn.disabled = true;
+          try{
+            const res = await fetch('/api/user/signature-image', {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: fd,
+            });
+            const data = await parseJsonSafe(res);
+            if(!data.__ok && !data.ok){
+              throw new Error(data.error || 'Upload fehlgeschlagen');
+            }
+            const url = data.url || data.image_url;
+            if(url && sigTextarea){
+              const snippet = `\n<img src="${url}" alt="Signaturbild" width="160" style="border-radius:50%;">`;
+              sigTextarea.value = (sigTextarea.value || '') + snippet;
+            }
+            sigStatus.textContent = 'Bild hochgeladen. In die Signatur eingefügt.';
+          }catch(e){
+            sigStatus.textContent = 'Fehler beim Upload: ' + e;
+          }finally{
+            sigUploadBtn.disabled = false;
+          }
+        };
       }
       
       // Auto-detect security based on SMTP port
