@@ -2911,6 +2911,8 @@ def api_email_account_save(current_user):
     smtp_user = (data.get('smtp_user') or '').strip()
     smtp_pass = data.get('smtp_pass') or ''
     smtp_security = (data.get('smtp_security') or 'ssl').lower()
+    # Optionale User-Signatur (wird in user_email_settings gespeichert)
+    signature_html = data.get('signature_html')
     is_active = 1 if data.get('is_active', True) else 0
 
     if not (account_email and imap_host and imap_user and smtp_host and smtp_user):
@@ -2984,6 +2986,30 @@ def api_email_account_save(current_user):
         conn.commit()
         cursor.close()
         conn.close()
+
+        # Signatur separat in user_email_settings ablegen (Best-Effort)
+        if signature_html is not None and user_email:
+            try:
+                conn2 = get_settings_db_connection()
+                cur2 = conn2.cursor()
+                # Erst versuchen zu aktualisieren
+                cur2.execute(
+                    "UPDATE user_email_settings SET signature_html=%s, updated_at=NOW() WHERE user_email=%s",
+                    (signature_html, user_email),
+                )
+                if cur2.rowcount == 0:
+                    # Falls noch kein Eintrag existiert, minimalen Datensatz anlegen
+                    cur2.execute(
+                        "INSERT INTO user_email_settings (user_email, signature_html, created_at, updated_at) "
+                        "VALUES (%s, %s, NOW(), NOW())",
+                        (user_email, signature_html),
+                    )
+                conn2.commit()
+                cur2.close()
+                conn2.close()
+            except Exception as e_sig:
+                app.logger.warning(f"[Email-Account-Save] Konnte Signatur nicht speichern: {e_sig}")
+
         return jsonify({'ok': True, 'id': int(account_id)}), 200
     except Exception as e:
         app.logger.error(f"[Email-Account-Save] error: {e}")
