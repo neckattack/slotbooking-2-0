@@ -1296,32 +1296,43 @@ def api_emails_sync(current_user):
         
         synced_count = 0
         new_contacts_count = 0
-        
+
         for uid in uids_to_fetch:
             try:
-                typ, msg_data = M.fetch(uid, '(RFC822)')
+                # FLAGS gemeinsam mit der Nachricht laden, damit wir den Gelesen-Status (\Seen) auswerten können
+                typ, msg_data = M.fetch(uid, '(FLAGS RFC822)')
                 if typ != 'OK':
                     continue
-                
-                raw_email = msg_data[0][1]
+
+                # msg_data[0] ist i.d.R. ein Tupel: (b'1 (FLAGS (..) RFC822 {bytes}', raw_bytes)
+                tup = msg_data[0]
+                if isinstance(tup, tuple):
+                    meta_raw = tup[0].decode() if isinstance(tup[0], (bytes, bytearray)) else str(tup[0])
+                    raw_email = tup[1]
+                else:
+                    meta_raw = ''
+                    raw_email = tup
+
+                # Gelesen-Status aus FLAGS extrahieren
+                is_read = 1 if ('\\Seen' in meta_raw) else 0
                 msg = email.message_from_bytes(raw_email)
-                
+
                 # Extract message_id
                 message_id = msg.get('Message-ID', '').strip()
                 if not message_id:
                     message_id = f"no-id-{uid.decode()}"
-                # Skip, wenn diese Kombination aus message_id und Ziel-Ordner
-                # bereits in der DB vorhanden ist
+
+                # Skip, wenn diese Kombination aus message_id und Ziel-Ordner bereits in der DB vorhanden ist
                 key = (message_id, (folder_db_key or 'inbox').lower())
                 if key in synced_ids:
                     continue
-                
+
                 # Extract headers
                 from_addr = msg.get('From', '')
                 to_addrs = msg.get('To', '')
                 subject = msg.get('Subject', '')
                 date_str = msg.get('Date', '')
-                
+
                 # Decode headers
                 def decode_header_value(value):
                     if not value:
@@ -1334,10 +1345,10 @@ def api_emails_sync(current_user):
                         else:
                             decoded.append(str(content))
                     return ' '.join(decoded)
-                
+
                 from_addr = decode_header_value(from_addr)
                 subject = decode_header_value(subject)
-                
+
                 # Extract email address and name from "Name <email@example.com>"
                 from_email = from_addr
                 from_name = ''
@@ -1345,19 +1356,19 @@ def api_emails_sync(current_user):
                 if email_match:
                     from_email = email_match.group(1)
                     from_name = from_addr.split('<')[0].strip().strip('"')
-                
+
                 # Parse date
                 from email.utils import parsedate_to_datetime
                 try:
                     received_at = parsedate_to_datetime(date_str)
-                except:
+                except Exception:
                     received_at = datetime.now()
-                
+
                 # Extract body
                 body_text = ''
                 body_html = ''
                 has_attachments = False
-                
+
                 if msg.is_multipart():
                     for part in msg.walk():
                         ctype = part.get_content_type()
@@ -1365,13 +1376,13 @@ def api_emails_sync(current_user):
                             try:
                                 payload = part.get_payload(decode=True)
                                 body_text = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
-                            except:
+                            except Exception:
                                 pass
                         elif ctype == 'text/html' and not body_html:
                             try:
                                 payload = part.get_payload(decode=True)
                                 body_html = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
-                            except:
+                            except Exception:
                                 pass
                         elif part.get_filename():
                             has_attachments = True
@@ -1382,16 +1393,16 @@ def api_emails_sync(current_user):
                             body_html = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
                         else:
                             body_text = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
-                    except:
+                    except Exception:
                         pass
-                
+
                 # Get or create contact
                 cursor_db.execute(
                     "SELECT id FROM contacts WHERE user_email=%s AND contact_email=%s",
                     (user_email, from_email)
                 )
                 contact_row = cursor_db.fetchone()
-                
+
                 if contact_row:
                     contact_id = contact_row[0]
                     # Update contact stats
@@ -1406,30 +1417,30 @@ def api_emails_sync(current_user):
                         "INSERT INTO contacts (user_email, contact_email, name, first_name, "
                         "email_count, first_contact_at, last_contact_at) "
                         "VALUES (%s, %s, %s, %s, 1, %s, %s)",
-                        (user_email, from_email, from_name or from_email, from_name.split()[0] if from_name else '', 
+                        (user_email, from_email, from_name or from_email, from_name.split()[0] if from_name else '',
                          received_at, received_at)
                     )
                     contact_id = cursor_db.lastrowid
                     new_contacts_count += 1
-                
+
                 # Insert email, Folder-Namen als logischen DB-Key speichern
                 folder_db = (folder_db_key or 'inbox').lower()
                 cursor_db.execute(
                     "INSERT INTO emails (message_id, user_email, account_id, contact_id, from_addr, from_name, "
-                    "to_addrs, subject, body_text, body_html, received_at, folder, has_attachments) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    "to_addrs, subject, body_text, body_html, received_at, folder, has_attachments, is_read) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                     (message_id, user_email, account_id, contact_id, from_email, from_name, to_addrs,
                      subject, body_text[:50000] if body_text else '', body_html[:100000] if body_html else '',
-                     received_at, folder_db, has_attachments)
+                     received_at, folder_db, has_attachments, is_read)
                 )
-                
+
                 synced_count += 1
                 synced_ids.add(key)
-                
+
             except Exception as e:
                 app.logger.error(f"[Sync] Error processing email {uid}: {e}")
                 continue
-        
+
         conn_db.commit()
         cursor_db.close()
         conn_db.close()
@@ -2644,35 +2655,113 @@ def api_emails_thread(current_user):
 
 
 @app.route('/api/emails/seen', methods=['POST'])
-def api_emails_seen():
+@require_auth
+def api_emails_seen(current_user):
+    """Markiert eine E-Mail als gelesen/ungelesen.
+
+    Erwartet im Body: { uid: <email_id in DB>, seen: true|false }
+    - Aktualisiert immer emails.is_read in der DB.
+    - Versucht zusätzlich, das IMAP-Flag \\Seen anhand der Message-ID zu setzen/zurückzusetzen.
+    """
     import imaplib
+
     data = request.get_json(silent=True) or {}
-    uid = data.get('uid')
-    seen = data.get('seen', True)
-    if not uid:
-        return jsonify({'error': 'uid fehlt'}), 400
-    host = os.environ.get('IMAP_HOST') or os.environ.get('IMAP_SERVER')
-    port = int(os.environ.get('IMAP_PORT', '993'))
-    user = os.environ.get('IMAP_USER') or os.environ.get('EMAIL_USER')
-    pw = os.environ.get('IMAP_PASS') or os.environ.get('EMAIL_PASS')
-    mailbox = os.environ.get('IMAP_MAILBOX', 'INBOX')
-    if not (host and user and pw):
-        return jsonify({'error': 'IMAP Konfiguration unvollständig'}), 500
+    email_id = data.get('uid') or data.get('id')
+    seen = bool(data.get('seen', True))
+    if not email_id:
+        return jsonify({'error': 'uid (email_id) fehlt'}), 400
+
+    user_email = current_user.get('user_email')
+
+    # 1) DB: is_read aktualisieren und Message-ID + Account holen
     try:
-        M = imaplib.IMAP4_SSL(host, port)
-        M.login(user, pw)
-        M.select(mailbox)
-        if seen:
-            typ, resp = M.uid('store', uid, '+FLAGS.SILENT', '(\\Seen)')
-        else:
-            typ, resp = M.uid('store', uid, '-FLAGS.SILENT', '(\\Seen)')
-        ok = (typ == 'OK')
-        M.close()
-        M.logout()
-        return jsonify({'ok': ok})
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, message_id, account_id, folder FROM emails WHERE id=%s AND user_email=%s",
+            (email_id, user_email),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'E-Mail nicht gefunden'}), 404
+
+        cursor.execute(
+            "UPDATE emails SET is_read=%s WHERE id=%s AND user_email=%s",
+            (1 if seen else 0, email_id, user_email),
+        )
+        conn.commit()
+        message_id = row.get('message_id')
+        account_id = row.get('account_id')
+        folder_db = (row.get('folder') or 'inbox').lower()
+        cursor.close()
+        conn.close()
     except Exception as e:
-        app.logger.error(f"[IMAP] seen error: {e}")
-        return jsonify({'error': str(e)}), 500
+        app.logger.error(f"[Emails Seen] DB error: {e}")
+        return jsonify({'error': 'DB-Fehler beim Aktualisieren von is_read'}), 500
+
+    # 2) Optional: IMAP-Flag \Seen setzen/zurücksetzen, falls Account + Message-ID vorhanden
+    imap_updated = False
+    try:
+        if message_id and account_id:
+            conn = get_settings_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security "
+                "FROM email_accounts WHERE id=%s AND user_email=%s AND is_active=1",
+                (account_id, user_email),
+            )
+            settings = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if settings and settings.get('imap_host') and settings.get('imap_user'):
+                from encryption_utils import decrypt_password
+
+                host = settings['imap_host']
+                port = int(settings.get('imap_port', 993))
+                imap_user = settings['imap_user']
+                pw = decrypt_password(settings['imap_pass_encrypted']) if settings['imap_pass_encrypted'] else ''
+
+                if host and imap_user and pw:
+                    # Grobe Folder-Mapping-Logik wie im Sync
+                    if folder_db == 'sent':
+                        folder_imap = 'Sent'
+                    elif folder_db == 'archive':
+                        folder_imap = 'Archive'
+                    else:
+                        folder_imap = 'INBOX'
+
+                    M = imaplib.IMAP4_SSL(host, port, timeout=15)
+                    M.login(imap_user, pw)
+                    try:
+                        try:
+                            sel_typ, _ = M.select(f'"{folder_imap}"')
+                        except imaplib.IMAP4.error:
+                            sel_typ, _ = M.select(folder_imap)
+                        if sel_typ == 'OK':
+                            # Nach Message-ID suchen (UID SEARCH HEADER)
+                            search_crit = f'(HEADER Message-ID "{message_id}")'
+                            typ, data = M.uid('search', None, search_crit)
+                            if typ == 'OK' and data and data[0]:
+                                for u in data[0].split():
+                                    if seen:
+                                        M.uid('store', u, '+FLAGS.SILENT', '(\\Seen)')
+                                    else:
+                                        M.uid('store', u, '-FLAGS.SILENT', '(\\Seen)')
+                                imap_updated = True
+                    finally:
+                        try:
+                            M.close()
+                        except Exception:
+                            pass
+                        M.logout()
+    except Exception as e:
+        # IMAP-Update ist nur Best-Effort; Fehler hier nicht als hartes API-Error behandeln
+        app.logger.warning(f"[Emails Seen] IMAP update failed: {e}")
+
+    return jsonify({'ok': True, 'imap_updated': imap_updated})
 
 
 def get_settings_db_connection():

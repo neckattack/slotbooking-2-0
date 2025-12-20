@@ -1454,7 +1454,13 @@
         }
         
         // Als gelesen markieren (opt-in: beim Öffnen)
-        try{ await fetch('/api/emails/seen', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid, seen:true})}); }catch(_){ }
+        try{
+          await fetch('/api/emails/seen', {
+            method:'POST',
+            headers:{...getAuthHeaders(), 'Content-Type':'application/json'},
+            body: JSON.stringify({uid, seen:true})
+          });
+        }catch(_){ }
         rowEl.classList.remove('unseen');
         // Prefetch: Draft im Hintergrund erzeugen
         try {
