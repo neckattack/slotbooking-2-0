@@ -1281,8 +1281,15 @@ def api_emails_sync(current_user):
         
         # Determine which emails to fetch
         if limit:
-            # Fetch latest N emails
-            uids_to_fetch = all_uids[-limit:] if len(all_uids) > limit else all_uids
+            # Anzahl bereits für diesen logischen Folder (folder_db_key) synchronisierter Nachrichten
+            current_folder_key = (folder_db_key or 'inbox').lower()
+            already_for_folder = sum(1 for _mid, f in synced_ids if f == current_folder_key)
+            # Wir holen den nächsten Block "limit" älterer UIDs hinter den bereits synchronisierten
+            # all_uids ist nach IMAP-Spezifikation von alt nach neu sortiert
+            total_uids = len(all_uids)
+            end_index = max(0, total_uids - already_for_folder)
+            start_index = max(0, end_index - int(limit))
+            uids_to_fetch = all_uids[start_index:end_index]
         else:
             # Fetch all (careful!)
             uids_to_fetch = all_uids
