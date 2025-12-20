@@ -2401,7 +2401,7 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
         # Calculate KPIs
         kpis = calculate_kpis(emails, contact['contact_email'], user_email)
         
-        # Save to database with KPIs
+        # Save to database with KPIs (inkl. Kategorie)
         cursor.execute(
             """
             UPDATE contacts 
@@ -2411,11 +2411,17 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                 sentiment = %s,
                 email_length_preference = %s,
                 communication_frequency = %s,
+                category = %s,
                 kpis_updated_at = NOW()
             WHERE id = %s
             """,
-            (summary, kpis['salutation'], kpis['sentiment'], 
-             kpis['email_length_preference'], kpis['communication_frequency'], contact_id)
+            (summary,
+             kpis.get('salutation'),
+             kpis.get('sentiment'),
+             kpis.get('email_length_preference'),
+             kpis.get('communication_frequency'),
+             kpis.get('category'),
+             contact_id)
         )
         conn.commit()
         cursor.close()
