@@ -288,6 +288,13 @@
           💡 <span id="smtp_port_hint_text"></span>
         </div>
       </div>
+      <div style="margin-bottom:16px;">
+        <h4 style="margin:0 0 8px; font-size:14px;">Signatur</h4>
+        <div class="sub" style="margin-bottom:6px;">
+          Freier Text oder HTML. Hier kannst du auch ein Bild per &lt;img src="https://..."&gt; einbinden.
+        </div>
+        <textarea id="email_signature_html" rows="4" placeholder="--\nBeste Grüße\nChris" style="width:100%; font-size:13px; padding:8px 10px; border:1px solid var(--border); border-radius:6px; resize:vertical;"></textarea>
+      </div>
       <div style="margin-bottom:12px; padding:12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;">
         <button id="smtp_test_btn" style="background:#0284c7; color:#fff; width:100%;">🔧 SMTP-Verbindung testen</button>
         <div id="smtp_test_result" class="sub" style="margin-top:8px;"></div>
@@ -1849,6 +1856,20 @@
       }catch(e){
         msg.textContent = 'Fehler beim Laden: ' + e;
       }
+
+      // Signatur aus user_email_settings laden (separat von Accounts)
+      try{
+        const sigRes = await fetch(`/api/user/email-settings?user_email=${encodeURIComponent(userEmail)}`);
+        const sigData = await parseJsonSafe(sigRes);
+        const sigField = document.getElementById('email_signature_html');
+        if(sigData && sigData.signature_html && sigField){
+          sigField.value = sigData.signature_html;
+        } else if(sigField && !sigField.value){
+          sigField.value = '';
+        }
+      }catch(e){
+        console.warn('Signatur konnte nicht geladen werden', e);
+      }
       
       // Auto-detect security based on SMTP port
       const smtpPortInput = document.getElementById('smtp_port');
@@ -1926,6 +1947,7 @@
         const smtpUser = document.getElementById('smtp_user').value.trim();
         const smtpPass = document.getElementById('smtp_pass').value;
         const smtpSecurity = document.getElementById('smtp_security').value;
+        const signatureHtml = document.getElementById('email_signature_html').value;
 
         // Account-E-Mail/Label aus SMTP- oder IMAP-Benutzername ableiten
         const accountEmail = smtpUser || imapUser || userEmail;
@@ -1944,6 +1966,7 @@
           smtp_user: smtpUser,
           smtp_pass: smtpPass,
           smtp_security: smtpSecurity,
+          signature_html: signatureHtml,
           is_active: true,
         };
 

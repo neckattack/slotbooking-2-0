@@ -979,6 +979,31 @@ def api_emails_send(current_user):
     
     app.logger.info(f"[Send] Attempting to send email to {to_addr} via {smtp_host}:{smtp_port} (security: {smtp_security})")
     
+    # Optional: User-Signatur laden und anhängen
+    try:
+        conn_sig = get_settings_db_connection()
+        cur_sig = conn_sig.cursor(dictionary=True)
+        cur_sig.execute(
+            "SELECT signature_html FROM user_email_settings WHERE user_email=%s",
+            (user_email,),
+        )
+        row_sig = cur_sig.fetchone()
+        cur_sig.close()
+        conn_sig.close()
+        signature_html = (row_sig or {}).get('signature_html') if row_sig else None
+        if signature_html:
+            html = (
+                '<div style="font-family:Arial, sans-serif; font-size:14px; line-height:1.5;">'
+                f"{html}"
+                '<br><br>'
+                '<div style="border-top:1px solid #e5e7eb; margin-top:12px; padding-top:8px;">'
+                f"{signature_html}"
+                '</div>'
+                '</div>'
+            )
+    except Exception as e:
+        app.logger.warning(f"[Send] Could not load/apply signature: {e}")
+
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
@@ -2980,7 +3005,7 @@ def api_user_email_settings_get():
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             "SELECT user_email, imap_host, imap_port, imap_user, imap_security, "
-            "smtp_host, smtp_port, smtp_user, smtp_security, created_at, updated_at "
+            "smtp_host, smtp_port, smtp_user, smtp_security, signature_html, created_at, updated_at "
             "FROM user_email_settings WHERE user_email=%s",
             (user_email,)
         )
@@ -3001,6 +3026,7 @@ def api_user_email_settings_get():
             'smtp_port': row['smtp_port'],
             'smtp_user': row['smtp_user'],
             'smtp_security': row['smtp_security'],
+            'signature_html': row.get('signature_html'),
             'created_at': str(row['created_at']),
             'updated_at': str(row['updated_at'])
         }), 200
@@ -3011,62 +3037,89 @@ def api_user_email_settings_get():
 
 @app.route('/api/user/email-settings', methods=['POST'])
 def api_user_email_settings_post():
-    """Save/update email settings for a user. Body: { user_email, imap_*, smtp_* }"""
+    """Save/update email settings for a user.
+
+    Body kann vollstaendige IMAP/SMTP-Daten (Erstkonfiguration) oder
+    nur eine Signatur-Aktualisierung enthalten:
+      { user_email, signature_html }
+    """
     data = request.get_json(silent=True) or {}
     user_email = data.get('user_email', '').strip()
     if not user_email:
         return jsonify({'error': 'user_email required'}), 400
-    imap_host = data.get('imap_host', '').strip()
-    imap_port = int(data.get('imap_port', 993))
-    imap_user = data.get('imap_user', '').strip()
+    # Signatur kann auch alleine geschickt werden
+    signature_html = data.get('signature_html')
+
+    imap_host = (data.get('imap_host') or '').strip()
+    imap_port = int(data.get('imap_port', 993)) if 'imap_port' in data else 993
+    imap_user = (data.get('imap_user') or '').strip()
     imap_pass = data.get('imap_pass', '')
     imap_security = data.get('imap_security', 'ssl')
-    smtp_host = data.get('smtp_host', '').strip()
-    smtp_port = int(data.get('smtp_port', 465))
-    smtp_user = data.get('smtp_user', '').strip()
+    smtp_host = (data.get('smtp_host') or '').strip()
+    smtp_port = int(data.get('smtp_port', 465)) if 'smtp_port' in data else 465
+    smtp_user = (data.get('smtp_user') or '').strip()
     smtp_pass = data.get('smtp_pass', '')
     smtp_security = data.get('smtp_security', 'ssl')
-    if not (imap_host and imap_user and smtp_host and smtp_user):
-        return jsonify({'error': 'Missing required fields (imap_host, imap_user, smtp_host, smtp_user)'}), 400
+
+    full_update = bool(imap_host and imap_user and smtp_host and smtp_user)
+
+    if not full_update and signature_html is None:
+        return jsonify({'error': 'Either full IMAP/SMTP config or signature_html required'}), 400
     try:
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
-        
-        # Check if settings exist
-        cursor.execute("SELECT imap_pass_encrypted, smtp_pass_encrypted FROM user_email_settings WHERE user_email=%s", (user_email,))
-        existing = cursor.fetchone()
-        
-        # Only encrypt/update password if provided, otherwise keep existing
-        if existing:
-            imap_pass_enc = encrypt_password(imap_pass) if imap_pass else existing['imap_pass_encrypted']
-            smtp_pass_enc = encrypt_password(smtp_pass) if smtp_pass else existing['smtp_pass_encrypted']
+
+        if full_update:
+            # Check if settings exist (für Passwort-Handling)
+            cursor.execute(
+                "SELECT imap_pass_encrypted, smtp_pass_encrypted FROM user_email_settings WHERE user_email=%s",
+                (user_email,)
+            )
+            existing = cursor.fetchone()
+
+            # Only encrypt/update password if provided, otherwise keep existing
+            if existing:
+                imap_pass_enc = encrypt_password(imap_pass) if imap_pass else existing['imap_pass_encrypted']
+                smtp_pass_enc = encrypt_password(smtp_pass) if smtp_pass else existing['smtp_pass_encrypted']
+            else:
+                # New entry: require passwords
+                if not imap_pass or not smtp_pass:
+                    cursor.close()
+                    conn.close()
+                    return jsonify({'error': 'Passwords required for new configuration'}), 400
+                imap_pass_enc = encrypt_password(imap_pass)
+                smtp_pass_enc = encrypt_password(smtp_pass)
+
+            # Upsert: insert or update on duplicate key (inkl. optionaler Signatur)
+            sql = """
+                INSERT INTO user_email_settings
+                (user_email, imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security,
+                 smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_security, signature_html)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON DUPLICATE KEY UPDATE
+                    imap_host=VALUES(imap_host), imap_port=VALUES(imap_port),
+                    imap_user=VALUES(imap_user), imap_pass_encrypted=VALUES(imap_pass_encrypted),
+                    imap_security=VALUES(imap_security),
+                    smtp_host=VALUES(smtp_host), smtp_port=VALUES(smtp_port),
+                    smtp_user=VALUES(smtp_user), smtp_pass_encrypted=VALUES(smtp_pass_encrypted),
+                    smtp_security=VALUES(smtp_security),
+                    signature_html=VALUES(signature_html)
+            """
+            cursor.execute(sql, (
+                user_email, imap_host, imap_port, imap_user, imap_pass_enc, imap_security,
+                smtp_host, smtp_port, smtp_user, smtp_pass_enc, smtp_security, signature_html,
+            ))
         else:
-            # New entry: require passwords
-            if not imap_pass or not smtp_pass:
+            # Nur Signatur aktualisieren
+            cursor.execute(
+                "UPDATE user_email_settings SET signature_html=%s, updated_at=NOW() WHERE user_email=%s",
+                (signature_html, user_email),
+            )
+            if cursor.rowcount == 0:
                 cursor.close()
                 conn.close()
-                return jsonify({'error': 'Passwords required for new configuration'}), 400
-            imap_pass_enc = encrypt_password(imap_pass)
-            smtp_pass_enc = encrypt_password(smtp_pass)
-        
-        # Upsert: insert or update on duplicate key
-        sql = """
-            INSERT INTO user_email_settings
-            (user_email, imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security,
-             smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_security)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON DUPLICATE KEY UPDATE
-                imap_host=VALUES(imap_host), imap_port=VALUES(imap_port),
-                imap_user=VALUES(imap_user), imap_pass_encrypted=VALUES(imap_pass_encrypted),
-                imap_security=VALUES(imap_security),
-                smtp_host=VALUES(smtp_host), smtp_port=VALUES(smtp_port),
-                smtp_user=VALUES(smtp_user), smtp_pass_encrypted=VALUES(smtp_pass_encrypted),
-                smtp_security=VALUES(smtp_security)
-        """
-        cursor.execute(sql, (
-            user_email, imap_host, imap_port, imap_user, imap_pass_enc, imap_security,
-            smtp_host, smtp_port, smtp_user, smtp_pass_enc, smtp_security
-        ))
+                return jsonify({'error': 'Email settings must be created before updating signature'}), 400
+
         conn.commit()
         cursor.close()
         conn.close()
