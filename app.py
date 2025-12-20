@@ -865,48 +865,15 @@ def api_emails_agent_compose(current_user):
             body_html = _plaintext_to_html_email(antwort_body)
             antwort_html = greeting_html + body_html
         has_body = _has_meaningful_body
-        # Debug + Signatur wie im Worker
-        debug_info = ""
-        try:
-            searched_email = (_parseaddr(from_addr)[1] or from_addr).strip().lower()
-            user_info = _get_user_info_cached(searched_email)
-            if user_info:
-                full_name = (user_info.get('first_name') or '')
-                if user_info.get('last_name'):
-                    full_name = (full_name + ' ' + user_info['last_name']).strip()
-                address = user_info.get('address') or '–'
-                source = user_info.get('source') or 'unbekannt'
-                user_id = user_info.get('user_id')
-                debug_jobs = ""
-                try:
-                    if user_info.get('role') == 'masseur' and user_id:
-                        upc, _past = _get_jobs_cached(int(user_id))
-                        jobs = upc[:2] if upc else []
-                        if jobs:
-                            parts = []
-                            for j in jobs:
-                                parts.append(str(j.get('task_title') or j.get('description') or '—'))
-                            debug_jobs = "; ".join(parts)
-                except Exception:
-                    pass
-                app_ver = os.environ.get('APP_VERSION') or os.environ.get('RENDER_GIT_COMMIT') or ''
-                version_snippet = (f" | ver: {app_ver[:7]}" if app_ver else "")
-                debug_info = f"[DEBUG: BLUE-DB] email: {searched_email} | source: {source} | user_id: {user_id} | Name: {full_name} | Adresse: {address} | Jobs: {debug_jobs}{version_snippet}"
-            else:
-                debug_info = f"[DEBUG: Kein BLUE-DB Treffer] email: {(_parseaddr(from_addr)[1] or from_addr)}"
-        except Exception:
-            pass
-        signature_block = (
-            '<div style="margin-top:28px;text-align:left;">'
-            '<img src="https://cdn-icons-png.flaticon.com/512/4712/4712035.png" alt="KI Bot" width="40" style="vertical-align:middle;border-radius:50%;margin-bottom:8px;">'
-            '<br><strong>neckattack KI-Assistenz</strong><br>'
-            '<span style="font-size:0.95em;color:#666;">Ich bin der digitale Assistent von neckattack und helfe dir rund um die Uhr.</span>'
-            '<hr style="margin:8px 0;">'
-            '<span style="font-size:0.9em;">neckattack ltd. | Landhausstr. 90, Stuttgart | hello@neckattack.net</span>'
-            f'<br><span style="color:#c00;font-size:0.95em;">{debug_info}</span>'
+        # Draft ohne feste KI-Standardsignatur: nur der eigentliche Antworttext.
+        # Die persönliche Signatur des Users wird erst beim Versand im Endpoint
+        # /api/emails/send aus den Email-Einstellungen angehängt.
+        draft_html = (
+            "<!-- DRAFT-GENERATED -->\n"
+            '<div style="font-family:Arial,sans-serif;font-size:1.08em;line-height:1.5;">'
+            f"{antwort_html}"
             '</div>'
         )
-        draft_html = f"<!-- DRAFT-GENERATED -->\n<div style=\"font-family:Arial,sans-serif;font-size:1.08em;\">{antwort_html}{signature_block}</div>"
         # Vorschlagsempfänger/Betreff
         reply_to = from_addr
         reply_subject = ("Re: " + subject) if subject and not subject.lower().startswith("re:") else (subject or "Antwort")
