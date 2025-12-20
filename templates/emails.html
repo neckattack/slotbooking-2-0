@@ -832,7 +832,7 @@
           const syncRes = await fetch('/api/emails/sync', {
             method: 'POST',
             headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-            body: JSON.stringify({ limit: 500, account_id: currentAccountId, folder: getImapFolderForSync() })
+            body: JSON.stringify({ limit: 200, account_id: currentAccountId, folder: getImapFolderForSync() })
           });
         await parseJsonSafe(syncRes); // Fehler werden unten generisch behandelt
       }catch(e){
@@ -847,7 +847,7 @@
       const originalText = loadMoreBtn.textContent;
       loadMoreBtn.disabled = true;
       loadMoreBtn.textContent = '⏳ Lade weitere E-Mails...';
-      const choice = 500; // Fester 500er-Block für Nachladen
+      const choice = 200; // Fester 200er-Block für Nachladen, um Server-Timeouts zu vermeiden
       
       try{
         // Sync more emails
