@@ -2263,7 +2263,8 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                 'sentiment': None,
                 'email_length_preference': None,
                 'avg_response_time_hours': None,
-                'communication_frequency': None
+                'communication_frequency': None,
+                'category': None,
             }
             
             # 1. Salutation (Sie/Du) - analyze emails TO the contact
@@ -2343,6 +2344,46 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                             kpis['communication_frequency'] = 'monthly'
                         else:
                             kpis['communication_frequency'] = 'rare'
+            
+            # 5. Grobe Kontakt-Kategorie (nur Heuristik, kein hartes CRM-Feld)
+            try:
+                contact_email_l = (contact_email or '').lower()
+                user_email_l = (user_email_addr or '').lower()
+                contact_domain = contact_email_l.split('@')[-1] if '@' in contact_email_l else ''
+                user_domain = user_email_l.split('@')[-1] if '@' in user_email_l else ''
+
+                # Newsletter / Spam-Heuristik überwiegend aus Absenderadresse
+                newsletter_like = any(pat in contact_email_l for pat in [
+                    'newsletter', 'news@', 'no-reply', 'noreply', 'mailer@', 'bounce@'
+                ])
+
+                # Nutzungsfrequenz erneut berechnen (robust, falls oben nicht gesetzt)
+                emails_per_day = None
+                if len(emails_list) > 1:
+                    first_date = emails_list[-1].get('received_at')
+                    last_date = emails_list[0].get('received_at')
+                    if first_date and last_date:
+                        days_diff = max(1, (last_date - first_date).days)
+                        emails_per_day = len(emails_list) / days_diff if days_diff > 0 else None
+
+                # Entscheidungslogik
+                if newsletter_like:
+                    kpis['category'] = 'Spam/Werbung'
+                elif contact_domain and user_domain and contact_domain == user_domain:
+                    # Gleiche Domain wie der User → sehr wahrscheinlich Kollege/Mitarbeiter
+                    kpis['category'] = 'Kollege/Mitarbeiter'
+                elif emails_per_day is not None and emails_per_day > 0.2:
+                    # Regelmäßiger Kontakt, keine Newsletter-Muster
+                    kpis['category'] = 'Kunde (aktiv)'
+                elif len(emails_list) >= 3:
+                    # Mehrere Mails, aber seltener → normaler Kunde
+                    kpis['category'] = 'Kunde'
+                else:
+                    kpis['category'] = 'Unklar'
+            except Exception:
+                # Heuristik ist nur Zusatz-Info – bei Fehlern neutral bleiben
+                if not kpis.get('category'):
+                    kpis['category'] = 'Unklar'
             
             return kpis
         

@@ -76,6 +76,25 @@
       overflow:auto;
       padding-right:4px;
     }
+    .detail-splitter {
+      flex:0 0 16px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:row-resize;
+      user-select:none;
+      background:#f3f4f6;
+    }
+    .detail-splitter::before {
+      content:'';
+      width:96px;
+      height:4px;
+      border-radius:999px;
+      background:#d1d5db;
+    }
+    .detail-splitter:hover::before {
+      background:#9ca3af;
+    }
     .detail > .profile {
       flex:0 0 30%;
       min-height:0;
@@ -1100,6 +1119,7 @@
             <div class="meta">Von: ${escapeHtml(t.from||'')} · An: ${escapeHtml(t.to||'')} · ${escapeHtml(t.date||'')}</div>
             <div class="content">${html}</div>
           </div>
+          <div class="detail-splitter" id="detail_splitter"></div>
           <div class="profile" id="profile_panel" data-contact-id="${t.contact_id || ''}">
             <h3>👤 KONTAKT-PROFIL</h3>
             <div class="grid">
@@ -1121,7 +1141,7 @@
                   ${profileSummary ? '🔄 Neu generieren' : 'Profil erstellen'}
                 </button>
               </div>
-              ${kpis.salutation || kpis.sentiment || kpis.email_length_preference || kpis.communication_frequency ? `
+              ${kpis.salutation || kpis.sentiment || kpis.communication_frequency || kpis.category ? `
                 <div id="contact_kpi_chips" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;">
                   ${kpis.salutation ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:500;">
                     👋 Anrede: ${kpis.salutation}
@@ -1137,12 +1157,12 @@
                       'Neutral'
                     }
                   </span>` : ''}
-                  ${kpis.email_length_preference ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#fef3c7; color:#92400e; border-radius:4px; font-size:11px; font-weight:500;">
-                    📏 E-Mail-Länge: ${kpis.email_length_preference === 'short' ? 'Kurz' : kpis.email_length_preference === 'medium' ? 'Mittel' : 'Lang'}
-                  </span>` : ''}
                   ${kpis.communication_frequency ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#e0e7ff; color:#3730a3; border-radius:4px; font-size:11px; font-weight:500;">
                     📊 Kontakt: ${kpis.communication_frequency === 'daily' ? 'Täglich' : kpis.communication_frequency === 'weekly' ? 'Wöchentlich' : kpis.communication_frequency === 'monthly' ? 'Monatlich' : 'Selten'}
                   </span>` : ''}
+                  <span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#fee2e2; color:#b91c1c; border-radius:4px; font-size:11px; font-weight:500;">
+                    🏷 Typ: ${kpis.category || 'Unklar'}
+                  </span>
                 </div>
               ` : ''}
               <div id="contact_topic_details" class="sub" style="font-size:11px; margin-bottom:8px; display:none; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px dashed #e5e7eb;"></div>
@@ -1169,6 +1189,49 @@
           viewAllBtn.onclick = () => {
             openContactDetailModal(t.contact_id, contactName, contactEmail);
           };
+        }
+
+        // Vertikalen Splitter zwischen Mailinhalt und Profil aktivieren
+        try {
+          const detailEl = document.getElementById('detail');
+          const splitter = document.getElementById('detail_splitter');
+          const topEl = detailEl ? detailEl.querySelector('.detail-scroll') : null;
+          const bottomEl = detailEl ? detailEl.querySelector('.profile') : null;
+          if(detailEl && splitter && topEl && bottomEl){
+            let isDragging = false;
+            let startY = 0;
+            let startTopHeight = 0;
+            const onMouseMove = (ev) => {
+              if(!isDragging) return;
+              const rect = detailEl.getBoundingClientRect();
+              const dy = ev.clientY - startY;
+              let newTop = startTopHeight + dy;
+              const minTop = rect.height * 0.25;
+              const maxTop = rect.height * 0.85;
+              if(newTop < minTop) newTop = minTop;
+              if(newTop > maxTop) newTop = maxTop;
+              const ratio = newTop / rect.height;
+              topEl.style.flex = `0 0 ${ratio * 100}%`;
+              bottomEl.style.flex = `0 0 ${(1 - ratio) * 100}%`;
+            };
+            const onMouseUp = () => {
+              if(!isDragging) return;
+              isDragging = false;
+              window.removeEventListener('mousemove', onMouseMove);
+              window.removeEventListener('mouseup', onMouseUp);
+            };
+            splitter.onmousedown = (ev) => {
+              if(ev.button !== 0) return;
+              isDragging = true;
+              startY = ev.clientY;
+              const rectTop = topEl.getBoundingClientRect();
+              startTopHeight = rectTop.height;
+              window.addEventListener('mousemove', onMouseMove);
+              window.addEventListener('mouseup', onMouseUp);
+            };
+          }
+        } catch(_e) {
+          // Splitter ist Komfort-Feature – Fehler hier ignorieren
         }
 
         // Kontakt-Notizen laden und speichern
@@ -1348,6 +1411,38 @@
               if(data.__ok && data.summary){
                 summaryDiv.innerHTML = formatCustomerProfile(data.summary);
                 summaryDiv.style.background = '#f0fdf4';
+                // KPI-Chips (inkl. Kategorie) aktualisieren, falls vom Server geliefert
+                if(data.kpis){
+                  const k = data.kpis || {};
+                  const chips = document.getElementById('contact_kpi_chips');
+                  if(chips){
+                    let htmlChips = '';
+                    if(k.salutation){
+                      htmlChips += `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:500;">👋 Anrede: ${k.salutation}</span>`;
+                    }
+                    if(k.sentiment){
+                      const sentBg = k.sentiment === 'positive' ? '#d1fae5;color:#065f46' : k.sentiment === 'negative' ? '#fee2e2;color:#991b1b' : '#f3f4f6;color:#374151';
+                      const sentEmoji = k.sentiment === 'positive' ? '😊' : k.sentiment === 'negative' ? '😟' : '😐';
+                      const sentLabel = k.sentiment === 'positive' ? 'Positiv' : k.sentiment === 'negative' ? 'Negativ' : 'Neutral';
+                      htmlChips += `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:${sentBg}; border-radius:4px; font-size:11px; font-weight:500;">${sentEmoji} Stimmung: ${sentLabel}</span>`;
+                    }
+                    if(k.email_length_preference){
+                      const lenLabel = k.email_length_preference === 'short' ? 'Kurz' : k.email_length_preference === 'medium' ? 'Mittel' : 'Lang';
+                      htmlChips += `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#fef3c7; color:#92400e; border-radius:4px; font-size:11px; font-weight:500;">📏 E-Mail-Länge: ${lenLabel}</span>`;
+                    }
+                    if(k.communication_frequency){
+                      let freqLabel = 'Selten';
+                      if(k.communication_frequency === 'daily') freqLabel = 'Täglich';
+                      else if(k.communication_frequency === 'weekly') freqLabel = 'Wöchentlich';
+                      else if(k.communication_frequency === 'monthly') freqLabel = 'Monatlich';
+                      htmlChips += `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#e0e7ff; color:#3730a3; border-radius:4px; font-size:11px; font-weight:500;">📊 Kontakt: ${freqLabel}</span>`;
+                    }
+                    if(k.category){
+                      htmlChips += `<span style=\"display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#fee2e2; color:#b91c1c; border-radius:4px; font-size:11px; font-weight:500;\">🏷 Kategorie: ${k.category}</span>`;
+                    }
+                    chips.innerHTML = htmlChips;
+                  }
+                }
                 generateBtn.textContent = '🔄 Neu generieren';
                 generateBtn.disabled = false;
               } else {
