@@ -1773,8 +1773,8 @@ def api_emails_get(current_user, email_id):
         cursor.execute(
             """
             SELECT e.*, c.name as contact_name, c.contact_email, c.email_count as contact_email_count,
-                   c.profile_summary, c.salutation, c.sentiment, c.email_length_preference, 
-                   c.communication_frequency
+                   c.profile_summary, c.salutation, c.sentiment, c.email_length_preference,
+                   c.communication_frequency, c.category
             FROM emails e
             LEFT JOIN contacts c ON e.contact_id = c.id
             WHERE e.id = %s AND e.user_email = %s
@@ -1807,7 +1807,8 @@ def api_emails_get(current_user, email_id):
                 'salutation': email_row.get('salutation'),
                 'sentiment': email_row.get('sentiment'),
                 'email_length_preference': email_row.get('email_length_preference'),
-                'communication_frequency': email_row.get('communication_frequency')
+                'communication_frequency': email_row.get('communication_frequency'),
+                'category': email_row.get('category')
             }
         }), 200
         
