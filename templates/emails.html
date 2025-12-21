@@ -692,12 +692,39 @@
     // Automatischer Hintergrund-Sync über alle relevanten Ordner
     let isAutoSyncRunning = false;
     let autoSyncAbort = false;
+    let autoSyncStatusInterval = null;
 
     async function autoSyncAllFoldersBackground(){
       if(isAutoSyncRunning){ return; }
       if(!currentAccountId){ return; }
       const status = document.getElementById('status');
-      if(status){ status.textContent = 'Synchronisiere Postfach im Hintergrund…'; }
+      if(status){ status.textContent = 'Hintergrund-Sync gestartet…'; }
+
+      // Kleine Status-Animation im 5-Sekunden-Rhythmus, bis die ersten Zahlen
+      // vom Server kommen oder der Sync beendet ist.
+      if(autoSyncStatusInterval){
+        clearInterval(autoSyncStatusInterval);
+        autoSyncStatusInterval = null;
+      }
+      autoSyncStatusInterval = setInterval(() => {
+        if(!isAutoSyncRunning){
+          clearInterval(autoSyncStatusInterval);
+          autoSyncStatusInterval = null;
+          return;
+        }
+        const s = document.getElementById('status');
+        if(!s) return;
+        const variants = [
+          'Hintergrund-Sync gestartet…',
+          'Hintergrund-Sync läuft…',
+          'Hintergrund-Sync prüft weitere Ordner…'
+        ];
+        const idx = Math.floor(Date.now() / 5000) % variants.length;
+        // Nur überschreiben, solange noch keine detaillierten Zahlen angezeigt werden
+        if(!/E-Mails im Ordner/.test(s.textContent)){
+          s.textContent = variants[idx];
+        }
+      }, 5000);
 
       isAutoSyncRunning = true;
       autoSyncAbort = false;
@@ -732,6 +759,11 @@
               }
               const syncedCount = typeof syncData.synced === 'number' ? syncData.synced : 0;
               if(status && typeof syncData.total_on_server === 'number'){
+                // Sobald wir echte Zahlen haben, die kleine Text-Animation beenden
+                if(autoSyncStatusInterval){
+                  clearInterval(autoSyncStatusInterval);
+                  autoSyncStatusInterval = null;
+                }
                 const totalOnServer = syncData.total_on_server;
                 const inDb = typeof syncData.total_in_db === 'number' ? syncData.total_in_db : 0;
                 const pct = totalOnServer > 0 ? Math.round((inDb / totalOnServer) * 100) : 0;
@@ -749,6 +781,10 @@
       }finally{
         isAutoSyncRunning = false;
         autoSyncAbort = false;
+        if(autoSyncStatusInterval){
+          clearInterval(autoSyncStatusInterval);
+          autoSyncStatusInterval = null;
+        }
         // Danach aktuelle Ansicht neu laden
         try {
           await loadInbox();
@@ -860,21 +896,29 @@
         setupInboxFilterToggle();
         renderInboxList();
         
-        // Automatischer Hintergrund-Sync: Button ausblenden, Status nur anzeigen
+        // Automatischer Hintergrund-Sync: Button als "Abbrechen" verwenden
         const loadMoreBtn = document.getElementById('load_more_btn');
         const totalInDB = data.total || 0;
-        if(loadMoreBtn){
-          loadMoreBtn.style.display = 'none';
-        }
-        // Wenn der Server meldet, dass noch mehr synchronisiert werden kann,
-        // starten wir im Hintergrund den Auto-Sync über alle relevanten Ordner.
         if(data.can_sync_more && !isAutoSyncRunning){
+          if(loadMoreBtn){
+            loadMoreBtn.style.display = 'inline-block';
+            loadMoreBtn.disabled = false;
+            loadMoreBtn.textContent = '❌ Synchronisierung abbrechen';
+            loadMoreBtn.onclick = () => {
+              autoSyncAbort = true;
+              loadMoreBtn.disabled = true;
+              if(status){ status.textContent = 'Synchronisierung wird beendet…'; }
+            };
+          }
           if(status){
             status.textContent = `${totalInDB.toLocaleString('de-DE')} E-Mails in diesem Ordner in DB – Hintergrund-Sync läuft…`;
           }
           // Auto-Sync bewusst "fire and forget" starten
           autoSyncAllFoldersBackground();
         } else {
+          if(loadMoreBtn){
+            loadMoreBtn.style.display = 'none';
+          }
           if(status){
             status.textContent = `${totalInDB.toLocaleString('de-DE')} E-Mails in diesem Ordner in DB`;
           }
