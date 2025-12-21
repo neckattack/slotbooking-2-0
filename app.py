@@ -2430,8 +2430,23 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
             du_count = 0
             sie_count = 0
             for em in emails_list:
-                # Check if this is FROM user (sent to contact)
-                is_from_user = user_email_addr in (em.get('from_addr') or '')
+                # Check if this is FROM user (an den Kontakt gesendet):
+                # - Kontakt-E-Mail steht im To-Feld
+                # - und die Mail stammt NICHT vom Kontakt selbst
+                from_addr = (em.get('from_addr') or '').lower()
+                to_addrs = (em.get('to_addrs') or '').lower()
+                contact_email_l = (contact_email or '').lower()
+                user_email_l = (user_email_addr or '').lower()
+
+                is_to_contact = contact_email_l and contact_email_l in to_addrs
+                is_from_contact = contact_email_l and contact_email_l in from_addr
+                is_from_user = is_to_contact and not is_from_contact
+
+                # Zusätzlich: falls die eigene User-Adresse explizit im From steht,
+                # ebenfalls als "von uns" werten (z.B. bei internen Testmails).
+                if not is_from_user and user_email_l and user_email_l in from_addr:
+                    is_from_user = True
+
                 if is_from_user:
                     text = ((em.get('body_text') or '') + (em.get('body_html') or '')).lower()
                     du_count += len(re.findall(r'\b(du|dir|dein|deine)\b', text))
