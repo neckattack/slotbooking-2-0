@@ -304,7 +304,6 @@ def api_emails_inbox(current_user):
     import imaplib, email
     from email.header import decode_header
     limit = request.args.get('limit', default=20, type=int)
-    folder = request.args.get('folder', default='INBOX', type=str) or 'INBOX'
     
     # Check if user has email settings configured
     user_email = current_user.get('user_email')
@@ -327,7 +326,7 @@ def api_emails_inbox(current_user):
             port = int(settings.get('imap_port', 993))
             user = settings['imap_user']
             pw = decrypt_password(settings['imap_pass_encrypted']) if settings['imap_pass_encrypted'] else ''
-            mailbox = folder
+            mailbox = 'INBOX'
         else:
             # No user settings - return error to prompt configuration
             return jsonify({"error": "Please configure email settings first", "needs_config": True}), 400
@@ -401,98 +400,9 @@ def api_emails_inbox(current_user):
         INBOX_CACHE["data"] = items
         INBOX_CACHE["ts"] = now
         INBOX_CACHE["key"] = cache_key
-        return jsonify({'items': items, 'folder': mailbox})
+        return jsonify({'items': items})
     except Exception as e:
         app.logger.error(f"[IMAP] Fehler beim Laden der Inbox: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/email-folders', methods=['GET'])
-@require_auth
-def api_email_folders(current_user):
-    """Liefert die IMAP-Ordnerliste für den aktuellen User (ohne Spam/Junk)."""
-    import imaplib
-
-    user_email = current_user.get('user_email')
-    try:
-        conn = get_settings_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            "SELECT imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security "
-            "FROM user_email_settings WHERE user_email=%s",
-            (user_email,)
-        )
-        settings = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        if not settings or not settings.get('imap_host'):
-            return jsonify({"error": "Please configure email settings first", "needs_config": True}), 400
-
-        from encryption_utils import decrypt_password
-        host = settings['imap_host']
-        port = int(settings.get('imap_port', 993))
-        user = settings['imap_user']
-        pw = decrypt_password(settings['imap_pass_encrypted']) if settings['imap_pass_encrypted'] else ''
-
-        if not (host and user and pw):
-            return jsonify({"error": "IMAP configuration incomplete. Please configure email settings."}), 400
-
-        M = imaplib.IMAP4_SSL(host, port)
-        M.login(user, pw)
-        typ, data = M.list()
-        if typ != 'OK':
-            M.logout()
-            return jsonify({'error': 'Could not list folders'}), 500
-
-        folders = []
-        spam_markers = ['spam', 'junk']
-        sent_markers = ['sent', 'sent mail', 'gesendet']
-
-        for raw in data or []:
-            # raw kann bytes oder str sein
-            line = raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
-            # Format typischerweise: ("(\HasNoChildren)", "/", "INBOX")
-            try:
-                parts = line.split(' "')
-                imap_name = parts[-1].rstrip('"')
-            except Exception:
-                imap_name = line
-
-            lname = imap_name.lower()
-            ftype = 'other'
-            if imap_name.upper() == 'INBOX':
-                ftype = 'inbox'
-                display = 'Posteingang'
-            elif any(m in lname for m in sent_markers):
-                ftype = 'sent'
-                display = 'Gesendet'
-            elif any(m in lname for m in spam_markers):
-                ftype = 'spam'
-                display = 'Spam'
-            else:
-                display = imap_name
-
-            # Spam/Junk zwar auflisten? Wunsch: eher ausblenden → wir filtern hier raus
-            if ftype == 'spam':
-                continue
-
-            folders.append({
-                'id': imap_name,
-                'name': display,
-                'imap_name': imap_name,
-                'type': ftype,
-            })
-
-        M.logout()
-        # INBOX zuerst sortieren, dann Gesendet, dann Rest alphabetisch
-        def _sort_key(f):
-            order = {'inbox': 0, 'sent': 1, 'other': 2}
-            return (order.get(f.get('type'), 99), f.get('name', '').lower())
-
-        folders.sort(key=_sort_key)
-        return jsonify({'folders': folders}), 200
-    except Exception as e:
-        app.logger.error(f"[IMAP] Fehler beim Laden der Folderliste: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1616,6 +1526,17 @@ def api_emails_sync(current_user):
         app.logger.error(f"[Sync] Error: {e}")
         import traceback
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/email-folders', methods=['GET'])
+@require_auth
+def api_email_folders_compat(current_user):
+    """Kompatibilitäts-Endpoint für ältere Frontend-Versionen.
+
+    Ruft intern api_emails_folders auf, damit sowohl /api/emails/folders
+    als auch /api/email-folders gültige Ordnerlisten liefern.
+    """
+    return api_emails_folders(current_user)
 
 
 @app.route('/api/emails/folders', methods=['GET'])
