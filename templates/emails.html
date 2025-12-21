@@ -693,9 +693,10 @@
     let isAutoSyncRunning = false;
     let autoSyncAbort = false;
     let autoSyncStatusInterval = null;
+    let autoSyncFinishedOnce = false;
 
     async function autoSyncAllFoldersBackground(){
-      if(isAutoSyncRunning){ return; }
+      if(isAutoSyncRunning || autoSyncFinishedOnce){ return; }
       if(!currentAccountId){ return; }
       const status = document.getElementById('status');
       if(status){ status.textContent = 'Hintergrund-Sync gestartet…'; }
@@ -899,7 +900,7 @@
         // Automatischer Hintergrund-Sync: Button als "Abbrechen" verwenden
         const loadMoreBtn = document.getElementById('load_more_btn');
         const totalInDB = data.total || 0;
-        if(data.can_sync_more && !isAutoSyncRunning){
+        if(data.can_sync_more && !isAutoSyncRunning && !autoSyncFinishedOnce){
           if(loadMoreBtn){
             loadMoreBtn.style.display = 'inline-block';
             loadMoreBtn.disabled = false;

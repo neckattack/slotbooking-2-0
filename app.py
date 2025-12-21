@@ -1514,12 +1514,16 @@ def api_emails_sync(current_user):
         M.close()
         M.logout()
         
+        # Gesamtanzahl der bereits in der DB vorhandenen Kombinationen
+        total_in_db = len(synced_ids)
+
         return jsonify({
             'ok': True,
             'synced': synced_count,
             'total_on_server': total_on_server,
+            'total_in_db': total_in_db,
             'new_contacts': new_contacts_count,
-            'already_synced': len(synced_ids) - synced_count
+            'already_synced': total_in_db - synced_count
         }), 200
         
     except Exception as e:
