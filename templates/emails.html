@@ -729,6 +729,7 @@
 
       isAutoSyncRunning = true;
       autoSyncAbort = false;
+      let anySyncedInRun = false;
 
       try{
         // Sicherstellen, dass wir eine frische Ordnerliste haben
@@ -774,12 +775,20 @@
               if(syncedCount <= 0){
                 break;
               }
+              anySyncedInRun = true;
             }catch(_){
               break;
             }
           }
         }
       }finally{
+        // Wenn in diesem Lauf keine einzige neue Mail synchronisiert wurde und
+        // der Vorgang nicht aktiv abgebrochen wurde, markieren wir den Auto-Sync
+        // als abgeschlossen, damit er nicht erneut gestartet wird.
+        if(!autoSyncAbort && !anySyncedInRun){
+          autoSyncFinishedOnce = true;
+        }
+
         isAutoSyncRunning = false;
         autoSyncAbort = false;
         if(autoSyncStatusInterval){
