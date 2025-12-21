@@ -1613,28 +1613,39 @@ def api_emails_folders(current_user):
             # Nur den letzten Pfadteil betrachten (INBOX/Sent -> Sent)
             last_part = lower_name.split('/')[-1].split('.')[-1]
 
-            # db_key: stabiler Ordner-Key, passend zu unserer DB-Speicherung
+            # Logischer Typ und db_key bestimmen (stabil für Deduplizierung)
+            logical_type = None
             if 'inbox' in last_part:
-                db_key = 'inbox'
+                logical_type = 'inbox'
             elif 'sent' in last_part or 'gesendet' in last_part:
-                db_key = 'sent'
+                logical_type = 'sent'
             elif 'archive' in last_part or 'archiv' in last_part:
-                db_key = 'archive'
+                logical_type = 'archive'
+            elif 'draft' in last_part or 'entwurf' in last_part:
+                logical_type = 'drafts'
+            elif 'spam' in last_part or 'junk' in last_part:
+                logical_type = 'spam'
+            elif 'trash' in last_part or 'deleted' in last_part or 'papierkorb' in last_part:
+                logical_type = 'trash'
+
+            # db_key: stabiler Ordner-Key, passend zu unserer DB-Speicherung
+            if logical_type is not None:
+                db_key = logical_type
             else:
                 db_key = last_part or lower_name
 
             # Label für die UI bestimmen
-            if 'inbox' in last_part:
+            if logical_type == 'inbox':
                 label = 'Posteingang'
-            elif 'sent' in last_part or 'gesendet' in last_part:
+            elif logical_type == 'sent':
                 label = 'Gesendet'
-            elif 'draft' in last_part:
+            elif logical_type == 'drafts':
                 label = 'Entwürfe'
-            elif 'spam' in last_part or 'junk' in last_part:
+            elif logical_type == 'spam':
                 label = 'Spam'
-            elif 'trash' in last_part or 'deleted' in last_part or 'papierkorb' in last_part:
+            elif logical_type == 'trash':
                 label = 'Papierkorb'
-            elif 'archive' in last_part or 'archiv' in last_part:
+            elif logical_type == 'archive':
                 label = 'Archiv'
             else:
                 # Originalnamen verwenden
@@ -1648,11 +1659,18 @@ def api_emails_folders(current_user):
 
         M.logout()
 
-        # Deduplizieren: pro logischem Ordner (db_key + label) nur einen Eintrag behalten
+        # Deduplizieren: pro logischem Ordner nur einen Eintrag behalten
         unique_folders = []
         seen = set()
         for f in folders:
-            key = (f.get('db_key'), f.get('label'))
+            # Für Standardordner (inbox/sent/archive/drafts/trash/spam) nur
+            # einen Eintrag behalten, egal wie viele IMAP-Varianten es gibt.
+            db_key = (f.get('db_key') or '').lower()
+            label = (f.get('label') or '').lower()
+            if db_key in {'inbox', 'sent', 'archive', 'drafts', 'trash', 'spam'}:
+                key = ('std', db_key)
+            else:
+                key = (db_key, label)
             if key in seen:
                 continue
             seen.add(key)
