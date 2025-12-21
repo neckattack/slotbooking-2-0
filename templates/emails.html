@@ -689,6 +689,73 @@
       return 'INBOX';
     }
 
+    // Automatischer Hintergrund-Sync über alle relevanten Ordner
+    let isAutoSyncRunning = false;
+    let autoSyncAbort = false;
+
+    async function autoSyncAllFoldersBackground(){
+      if(isAutoSyncRunning){ return; }
+      if(!currentAccountId){ return; }
+      const status = document.getElementById('status');
+      if(status){ status.textContent = 'Synchronisiere Postfach im Hintergrund…'; }
+
+      isAutoSyncRunning = true;
+      autoSyncAbort = false;
+
+      try{
+        // Sicherstellen, dass wir eine frische Ordnerliste haben
+        await loadFoldersForCurrentAccount();
+        const folders = (availableFolders || []).filter(f => {
+          const key = (f.db_key || '').toLowerCase();
+          // Spam / Trash standardmäßig überspringen
+          if(key === 'spam' || key === 'trash'){ return false; }
+          return true;
+        });
+
+        const foldersToSync = folders.length ? folders : [{ imap_name: 'INBOX', db_key: 'inbox', label: 'Posteingang' }];
+
+        for(const f of foldersToSync){
+          if(autoSyncAbort){ break; }
+          const imapFolder = f.imap_name || 'INBOX';
+          // Pro Ordner einige 200er-Batches ziehen, bis nichts mehr neu kommt
+          for(let i=0; i<5; i++){
+            if(autoSyncAbort){ break; }
+            try{
+              const syncRes = await fetch('/api/emails/sync', {
+                method: 'POST',
+                headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+                body: JSON.stringify({ limit: 200, account_id: currentAccountId, folder: imapFolder })
+              });
+              const syncData = await parseJsonSafe(syncRes);
+              if(!syncData.__ok){
+                break;
+              }
+              const syncedCount = typeof syncData.synced === 'number' ? syncData.synced : 0;
+              if(status && typeof syncData.total_on_server === 'number'){
+                const totalOnServer = syncData.total_on_server;
+                const inDb = typeof syncData.total_in_db === 'number' ? syncData.total_in_db : 0;
+                const pct = totalOnServer > 0 ? Math.round((inDb / totalOnServer) * 100) : 0;
+                status.textContent = `${inDb.toLocaleString('de-DE')} / ${totalOnServer.toLocaleString('de-DE')} E-Mails im Ordner "${f.label || f.db_key}" synchronisiert (${pct}%)`;
+              }
+              // Wenn nichts Neues mehr kam, zum nächsten Ordner springen
+              if(syncedCount <= 0){
+                break;
+              }
+            }catch(_){
+              break;
+            }
+          }
+        }
+      }finally{
+        isAutoSyncRunning = false;
+        autoSyncAbort = false;
+        // Danach aktuelle Ansicht neu laden
+        try {
+          await loadInbox();
+        } catch(_) {}
+      }
+    }
+
     function renderInboxList(){
       const list = document.getElementById('list');
       const status = document.getElementById('status');
@@ -793,51 +860,24 @@
         setupInboxFilterToggle();
         renderInboxList();
         
-        // Show/hide "Load more" button und Fortschritt anzeigen
+        // Automatischer Hintergrund-Sync: Button ausblenden, Status nur anzeigen
         const loadMoreBtn = document.getElementById('load_more_btn');
         const totalInDB = data.total || 0;
-        
-        // Check server for total count if we can sync more
-        if(data.can_sync_more){
-          loadMoreBtn.style.display = 'inline-block';
-          loadMoreBtn.textContent = `📥 Weitere E-Mails laden...`;
-          loadMoreBtn.disabled = true;
-          
-          // Get server count
-          fetch('/api/emails/sync', {
-            method: 'POST',
-            headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-            body: JSON.stringify({ count_only: true, account_id: currentAccountId, folder: getImapFolderForSync() })
-          })
-          .then(res => res.json())
-          .then(countData => {
-            loadMoreBtn.disabled = false;
-            if(countData.total_on_server){
-              const onServer = countData.total_on_server;
-              const remaining = Math.max(onServer - totalInDB, 0);
-              if(remaining > 0){
-                loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${remaining} auf Server)`;
-              } else {
-                loadMoreBtn.textContent = `✅ Alle E-Mails geladen`;
-              }
-              const pct = onServer > 0 ? Math.round((totalInDB / onServer) * 100) : 0;
-              status.textContent = `${totalInDB.toLocaleString('de-DE')} / ${onServer.toLocaleString('de-DE')} E-Mails in diesem Ordner in DB (${pct}% synchronisiert)`;
-            } else {
-              status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB`;
-            }
-          })
-          .catch(() => {
-            loadMoreBtn.disabled = false;
-            loadMoreBtn.textContent = `📥 Nach neuen E-Mails suchen`;
-          });
-        } else if(data.has_more){
-          // More emails in DB, aber keine Server-Info (z.B. ohne IMAP-Settings)
-          loadMoreBtn.style.display = 'inline-block';
-          loadMoreBtn.textContent = `📥 Weitere E-Mails laden (${totalInDB - currentEmailLimit} weitere in DB)`;
-          status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB`;
-        } else {
+        if(loadMoreBtn){
           loadMoreBtn.style.display = 'none';
-          status.textContent = `${totalInDB} E-Mails in diesem Ordner in DB`;
+        }
+        // Wenn der Server meldet, dass noch mehr synchronisiert werden kann,
+        // starten wir im Hintergrund den Auto-Sync über alle relevanten Ordner.
+        if(data.can_sync_more && !isAutoSyncRunning){
+          if(status){
+            status.textContent = `${totalInDB.toLocaleString('de-DE')} E-Mails in diesem Ordner in DB – Hintergrund-Sync läuft…`;
+          }
+          // Auto-Sync bewusst "fire and forget" starten
+          autoSyncAllFoldersBackground();
+        } else {
+          if(status){
+            status.textContent = `${totalInDB.toLocaleString('de-DE')} E-Mails in diesem Ordner in DB`;
+          }
         }
       }catch(e){
         list.innerHTML = `<div class="sub" style="padding:20px;">Fehler: ${e}</div>`;
@@ -873,49 +913,12 @@
       await loadInbox();
     }
     
+    // Manuelles Nachladen wird nicht mehr benötigt, da der Sync nun automatisch
+    // im Hintergrund läuft. Die Funktion bleibt als Stub erhalten, falls alte
+    // Event-Handler im DOM existieren.
     async function loadMoreEmails(){
-      const loadMoreBtn = document.getElementById('load_more_btn');
-      const originalText = loadMoreBtn.textContent;
-      loadMoreBtn.disabled = true;
-      loadMoreBtn.textContent = '⏳ Lade weitere E-Mails...';
-      const choice = 200; // Fester 200er-Block für Nachladen, um Server-Timeouts zu vermeiden
-      
-      try{
-        // Sync more emails
-        const syncRes = await fetch('/api/emails/sync', {
-          method: 'POST',
-          headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
-          body: JSON.stringify({ limit: choice, account_id: currentAccountId, folder: getImapFolderForSync() })
-        });
-        const syncData = await parseJsonSafe(syncRes);
-        
-        if(!syncData.__ok){
-          throw new Error(syncData.error || 'Sync fehlgeschlagen');
-        }
-        // Kurze Rückmeldung, wie viele E-Mails in diesem Durchlauf synchronisiert wurden
-        const status = document.getElementById('status');
-        if(status && typeof syncData.synced === 'number'){
-          const totalOnServer = typeof syncData.total_on_server === 'number' ? syncData.total_on_server : null;
-          const syncedBatch = syncData.synced;
-          if(totalOnServer){
-            status.textContent = `+${syncedBatch} E-Mails synchronisiert (dieser Durchlauf) – insgesamt ${totalOnServer.toLocaleString('de-DE')} auf dem Server`;
-          } else {
-            status.textContent = `+${syncedBatch} E-Mails synchronisiert (dieser Durchlauf)`;
-          }
-        }
-        
-        // Increase limit to show newly synced emails
-        currentEmailLimit += choice;
-        localStorage.setItem('emailLimit', currentEmailLimit);
-        
-        // Reload inbox with new limit
-        await loadInbox();
-        
-      }catch(e){
-        alert('Fehler beim Laden: ' + e);
-        loadMoreBtn.disabled = false;
-        loadMoreBtn.textContent = originalText;
-      }
+      // Kein manueller Sync mehr – alles läuft über autoSyncAllFoldersBackground().
+      return;
     }
     
     async function showInitialSyncDialog(){
