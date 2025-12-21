@@ -210,8 +210,14 @@
     </div>
   </header>
   <div class="container">
+    <div style="padding:8px 12px; border-bottom:1px solid var(--border); display:flex; gap:8px; align-items:center;">
+      <label for="email_folder_select" class="sub" style="font-size:11px;">Ordner</label>
+      <select id="email_folder_select" style="flex:1; padding:4px 8px; border-radius:999px; border:1px solid var(--border); font-size:12px;">
+        <option value="INBOX">Posteingang</option>
+      </select>
+    </div>
     <div class="list" id="list">
-      <div class="sub" style="padding:12px 14px;">Lade …</div>
+      <div class="sub" style="padding:20px; text-align:center;">Lade E-Mails…</div>
     </div>
     <div class="detail" id="detail">
       <div class="sub">E-Mail auswählen …</div>
@@ -505,9 +511,9 @@
     let inboxFilter = 'relevant';
     let inboxEmails = [];
     let inboxSearchQuery = '';
-    // Aktueller Ordner (DB-Key, z.B. 'inbox', 'archive', 'all')
-    let currentFolder = 'inbox';
-    // Verfügbare Ordner für den aktuellen Account
+    // Aktueller IMAP-Ordner (z.B. 'INBOX', 'Sent')
+    let currentFolder = 'INBOX';
+    // Verfügbare Ordner für den aktuellen Account (aus /api/email-folders)
     let availableFolders = [];
     const accountFolderCache = {};
     async function parseJsonSafe(res){
@@ -583,15 +589,11 @@
           <button id="filter_relevant" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#fff; color:#111827; font-weight:600;">Relevant</button>
           <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Sonstige</button>
         </div>
-        <div>
-          <select id="folder_select" style="padding:4px 8px; border-radius:6px; border:1px solid var(--border); font-size:12px;"></select>
-        </div>
       `;
       // In die Listenspalte einfügen, direkt vor dem ersten Inhalt
       list.insertBefore(toggle, list.firstChild);
       const btnRel = document.getElementById('filter_relevant');
       const btnOther = document.getElementById('filter_other');
-      const folderSelect = document.getElementById('folder_select');
       const updateButtons = () => {
         if(inboxFilter === 'relevant'){
           btnRel.style.background = '#fff';
@@ -652,7 +654,7 @@
         return;
       }
       try{
-        const res = await fetch(`/api/emails/folders?account_id=${encodeURIComponent(currentAccountId)}`, {
+        const res = await fetch(`/api/email-folders?account_id=${encodeURIComponent(currentAccountId)}`, {
           headers: getAuthHeaders()
         });
         const data = await parseJsonSafe(res);
@@ -1032,10 +1034,8 @@
           localStorage.setItem('emailLimit', currentEmailLimit);
         }
         
-        // Reload inbox after 1 second
-        setTimeout(() => {
-          loadInbox();
-        }, 1000);
+        // Reload inbox with new limit
+        await loadInbox();
         
       }catch(e){
         list.innerHTML = `
@@ -1616,7 +1616,7 @@
           }
           select.addEventListener('change', async () => {
             currentAccountId = parseInt(select.value, 10);
-            currentFolder = 'inbox';
+            currentFolder = 'INBOX';
             await loadFoldersForCurrentAccount();
             await loadInbox();
           });
@@ -1892,6 +1892,7 @@
           fd.append('file', file);
           sigStatus.textContent = 'Lade Bild hoch...';
           sigUploadBtn.disabled = true;
+          
           try{
             const res = await fetch('/api/user/signature-image', {
               method: 'POST',
@@ -1904,7 +1905,7 @@
             }
             const url = data.url || data.image_url;
             if(url && sigTextarea){
-              const snippet = `\n<img src="${url}" alt="Signaturbild" width="160" style="border-radius:50%;">`;
+              const snippet = `\n<img src="${url}" alt="Signaturbild" style="display:block; max-width:100%; height:auto; border-radius:12px; margin-top:8px;">`;
               sigTextarea.value = (sigTextarea.value || '') + snippet;
             }
             sigStatus.textContent = 'Bild hochgeladen. In die Signatur eingefügt.';
@@ -2576,7 +2577,9 @@
     };
     // Check auth on app start
     checkAuth().then(ok => {
-      if(ok) loadInbox();
+      if(ok){
+        loadFoldersForCurrentAccount().then(() => loadInbox());
+      }
     });
   </script>
 </body>
