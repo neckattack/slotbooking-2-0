@@ -2341,6 +2341,35 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
         except Exception as _:
             topics = []
 
+        # Fallback: Wenn der KI-Call keine Topics geliefert hat, baue 3-5 einfache
+        # Themen aus den letzten Betreffzeilen, damit im UI etwas sichtbar ist.
+        if not topics:
+            fallback_subjects = []
+            seen_subj = set()
+            for e in emails[:10]:
+                subj = (e.get("subject") or "").strip()
+                if not subj:
+                    continue
+                key = subj.lower()
+                if key in seen_subj:
+                    continue
+                seen_subj.add(key)
+                fallback_subjects.append(subj)
+                if len(fallback_subjects) >= 5:
+                    break
+
+            topics = [
+                {
+                    "label": s,
+                    "topic_type": "general",
+                    "status": "in_progress",
+                    "last_mentioned_at": emails[idx]["received_at"].strftime("%Y-%m-%d")
+                    if emails[idx].get("received_at")
+                    else None,
+                }
+                for idx, s in enumerate(fallback_subjects)
+            ]
+
         # Bestehende Topics für diesen Kontakt löschen und neue speichern
         try:
             cursor.execute(
