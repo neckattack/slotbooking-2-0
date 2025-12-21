@@ -2247,9 +2247,9 @@ def api_contacts_generate_profile(current_user, contact_id):
         email_context = "\n\n".join(email_texts)
         
         # Generate profile with GPT. WICHTIG: Manuelle Notizen haben Priorität.
-        prompt = f"""Analysiere die folgenden Informationen zu einem Kunden und erstelle ein prägnantes, praxisnahes Kundenprofil.
+        prompt = f"""Analysiere die folgenden Informationen zu einem Kontakt und erstelle ein prägnantes, praxisnahes Kontaktprofil.
 
-Kunde: {contact['name']} ({contact['contact_email']})
+Kontakt: {contact['name']} ({contact['contact_email']})
 
 1) Manuell gepflegte Kontakt-Notizen (vom Nutzer, HÖCHSTE Priorität):
 {notes_context}
@@ -2263,12 +2263,12 @@ WICHTIG:
 - Identifiziere explizit die aktuellsten Themen/Projekte (basierend auf den letzten E-Mails und Notizen) und erkenne offene Punkte oder noch nicht abgeschlossene Themen.
 
 Formatiere die Antwort mit klarer Struktur:
-- Nutze **Fettschrift** für Überschriften (z.B. **Wer ist dieser Kunde:**)
+- Nutze **Fettschrift** für Überschriften (z.B. **Wer ist dieser Kontakt:**)
 - Nutze Absätze (doppelte Zeilenumbrüche)
 - Nutze • oder - für Listen
 - Gliedere in diese 7 Bereiche:
 
-1. **Wer ist dieser Kunde?** (Bedürfnisse, Kontext, Hintergrund)
+1. **Wer ist dieser Kontakt?** (Rolle, Bedürfnisse, Kontext, Hintergrund)
 2. **Hauptanliegen & wiederkehrende Themen:** (Welche Themen, Probleme oder Projekte tauchen immer wieder auf?)
 3. **Aktuellstes Thema / Projekt:** (Worum geht es im Moment konkret? Kurze Zusammenfassung des letzten relevanten Themas.)
 4. **Offene Punkte & ungelöste Probleme:** (Was wirkt noch nicht abgeschlossen? Welche Fragen oder To-Dos sind noch offen?)
@@ -2298,13 +2298,17 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
         }
         topics_prompt = (
             "Analysiere die folgenden Notizen und E-Mails zu einem Kontakt. "
-            "Extrahiere daraus eine kleine Liste sehr KONKRETER Themen/Projekte als kompaktes JSON. "
-            "JEDES Topic-Label soll ein vollständiger, konkreter Satz sein, der möglichst folgende Infos kombiniert: Firma/Marke, Art des Vorgangs (z.B. Angebot, Buchung, Rechnung), Ort und Datum des Einsatzes/Workshops sowie offene Punkte (z.B. 'braucht noch Auftragsbestätigung'). "
-            "WICHTIG: Du DARFST KEINE Fakten erfinden. Nutze NUR Informationen, die explizit in Betreff, Text oder Notizen vorkommen. Wenn Firma/Marke, Ort, Datum oder offene Punkte nicht klar genannt sind, lass diese Teile im Satz weg oder formuliere neutral (z.B. 'Kunde hat Workshop gebucht, Status unklar'). "
-            "Verwende die ORIGINAL-Bezeichnungen aus Betreff oder Notizen und ergänze sie nur mit Kontext, der eindeutig aus den Daten hervorgeht. Erfinde KEINE neuen Firmennamen, Orte oder Daten. "
-            "Allgemeine Labels wie 'Anfrage', 'Auftragsbestätigung' oder 'Rechnung' sind VERBOTEN, wenn nicht mindestens Firma/Marke ODER Ort ODER Datum ODER eine andere konkrete Spezifizierung im Label vorkommt. Formuliere stattdessen z.B. 'Auftragsbestätigung für Job am 11.12.2025 in Berlin, Bestätigung steht noch aus', aber nur, wenn Datum und Ort tatsächlich genannt werden. "
-            "Wenn im Betreff/Notizen Orte, Daten oder Kundennamen vorkommen, gehören diese IMMER in das Label. Jedes Label soll in der Regel mindestens 8 Wörter enthalten und möglichst konkret sein. "
-            "Erzeuge höchstens 8 Themen und fasse sehr ähnliche E-Mails zu einem gemeinsamen Thema zusammen.\n\n"
+            "Extrahiere daraus eine kleine Liste konkreter Themen/Projekte als kompaktes JSON. "
+            "Die Topic-Labels sollen aussagekräftige, aber nicht übertriebene Sätze oder Halbsätze sein, "
+            "die möglichst Firma/Marke, Art des Vorgangs (z.B. Angebot, Buchung, Rechnung), Ort/Datum "
+            "oder besondere Stichworte aus Betreff/Text enthalten. "
+            "Nutze NUR Informationen, die im Betreff, Text oder in den Notizen vorkommen. Wenn Details "
+            "wie Ort oder Datum fehlen, formuliere neutral (z.B. 'Kunde hat Workshop gebucht, Status unklar'). "
+            "Allgemeine Labels wie 'Anfrage' oder 'Rechnung' sollen vermieden werden, wenn du sie mit ein paar "
+            "Wörtern aus Betreff/Notizen präzisieren kannst (z.B. 'Rechnung für Job bei Firma X im Dezember'). "
+            "Wenn du keine perfekten Informationen hast, erstelle trotzdem 3-6 sinnvolle, vorsichtig formulierte Themen, "
+            "die das Geschehen grob zusammenfassen. Erfinde aber keine konkreten Orte, Daten oder Firmennamen. "
+            "Fasse sehr ähnliche E-Mails zu einem gemeinsamen Thema zusammen und erzeuge höchstens 8 Themen.\n\n"
             "Gib das Ergebnis STRICT als JSON im folgenden Format zurück, ohne zusätzliche Erklärungen:\n\n"
             "{\n"
             "  \"topics\": [\n"
