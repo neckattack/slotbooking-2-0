@@ -1648,6 +1648,16 @@ def api_emails_folders(current_user):
 
         M.logout()
 
+        # Deduplizieren: pro logischem Ordner (db_key + label) nur einen Eintrag behalten
+        unique_folders = []
+        seen = set()
+        for f in folders:
+            key = (f.get('db_key'), f.get('label'))
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_folders.append(f)
+
         # Optional: nach gängigen Ordnern sortieren (Inbox, Sent, Archiv, Rest alphabetisch)
         priority = {'posteingang': 0, 'inbox': 0, 'gesendet': 1, 'sent': 1, 'archive': 2, 'archiv': 2}
 
@@ -1655,7 +1665,7 @@ def api_emails_folders(current_user):
             lp = f['label'].lower()
             return (priority.get(lp, 10), lp)
 
-        folders_sorted = sorted(folders, key=sort_key)
+        folders_sorted = sorted(unique_folders, key=sort_key)
 
         return jsonify({'folders': folders_sorted}), 200
 
