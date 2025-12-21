@@ -2436,13 +2436,18 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                     text = ((em.get('body_text') or '') + (em.get('body_html') or '')).lower()
                     du_count += len(re.findall(r'\b(du|dir|dein|deine)\b', text))
                     sie_count += len(re.findall(r'\b(sie|ihnen|ihr|ihre)\b', text))
-            
-            if du_count > sie_count:
-                kpis['salutation'] = 'Du'
-            elif sie_count > du_count:
-                kpis['salutation'] = 'Sie'
+
+            # Entscheidung mit Toleranz: Du/Sie nur bei klarem Vorsprung
+            if du_count == 0 and sie_count == 0:
+                kpis['salutation'] = 'Unklar'
             else:
-                kpis['salutation'] = 'Neutral'
+                # leichte Gewichtung: mindestens 20 % Vorsprung oder mind. 3 absolute Treffer Differenz
+                if du_count >= sie_count * 1.2 or (du_count - sie_count) >= 3:
+                    kpis['salutation'] = 'Du'
+                elif sie_count >= du_count * 1.2 or (sie_count - du_count) >= 3:
+                    kpis['salutation'] = 'Sie'
+                else:
+                    kpis['salutation'] = 'Unklar'
             
             # 2. Sentiment - analyze recent emails FROM contact
             positive_words = ['danke', 'super', 'perfekt', 'toll', 'freue', 'gerne', 'prima', 'exzellent', 'großartig']
