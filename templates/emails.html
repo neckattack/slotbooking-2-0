@@ -1485,7 +1485,13 @@
                   if(chips){
                     let htmlChips = '';
                     if(k.salutation){
-                      htmlChips += `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:500;">👋 Anrede: ${k.salutation}</span>`;
+                      // Wenn Kategorie klar Kollege/Mitarbeiter ist, interpretieren wir
+                      // eine unklare Anrede pragmatisch als "Du".
+                      let salLabel = k.salutation;
+                      if((k.category === 'Kollege/Mitarbeiter') && (k.salutation === 'Unklar' || k.salutation === 'Neutral')){
+                        salLabel = 'Du (Kolleg*in)';
+                      }
+                      htmlChips += `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:500;">👋 Anrede: ${salLabel}</span>`;
                     }
                     if(k.sentiment){
                       const sentBg = k.sentiment === 'positive' ? '#d1fae5;color:#065f46' : k.sentiment === 'negative' ? '#fee2e2;color:#991b1b' : '#f3f4f6;color:#374151';

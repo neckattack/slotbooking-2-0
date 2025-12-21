@@ -2454,15 +2454,18 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
 
             # Entscheidung mit Toleranz: Du/Sie nur bei klarem Vorsprung
             if du_count == 0 and sie_count == 0:
-                kpis['salutation'] = 'Unklar'
+                sal = 'Unklar'
             else:
                 # leichte Gewichtung: mindestens 20 % Vorsprung oder mind. 3 absolute Treffer Differenz
                 if du_count >= sie_count * 1.2 or (du_count - sie_count) >= 3:
-                    kpis['salutation'] = 'Du'
+                    sal = 'Du'
                 elif sie_count >= du_count * 1.2 or (sie_count - du_count) >= 3:
-                    kpis['salutation'] = 'Sie'
+                    sal = 'Sie'
                 else:
-                    kpis['salutation'] = 'Unklar'
+                    sal = 'Unklar'
+
+            # Speichere vorläufiges Ergebnis
+            kpis['salutation'] = sal
             
             # 2. Sentiment - analyze recent emails FROM contact
             positive_words = ['danke', 'super', 'perfekt', 'toll', 'freue', 'gerne', 'prima', 'exzellent', 'großartig']
@@ -2559,6 +2562,13 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                     kpis['category'] = 'Kunde'
                 else:
                     kpis['category'] = 'Unklar'
+
+                # Wenn der Kontakt als Kollege/Mitarbeiter eingestuft ist und die
+                # Anrede nicht eindeutig auf "Sie" steht, interpretieren wir die
+                # bevorzugte Anrede pragmatisch als "Du".
+                if kpis.get('category') == 'Kollege/Mitarbeiter':
+                    if kpis.get('salutation') != 'Sie':
+                        kpis['salutation'] = 'Du'
             except Exception:
                 # Heuristik ist nur Zusatz-Info – bei Fehlern neutral bleiben
                 if not kpis.get('category'):
