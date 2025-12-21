@@ -767,7 +767,9 @@
                   autoSyncStatusInterval = null;
                 }
                 const totalOnServer = syncData.total_on_server;
-                const inDb = typeof syncData.total_in_db === 'number' ? syncData.total_in_db : 0;
+                const inDb = typeof syncData.total_in_db_folder === 'number'
+                  ? syncData.total_in_db_folder
+                  : (typeof syncData.total_in_db === 'number' ? syncData.total_in_db : 0);
                 const pct = totalOnServer > 0 ? Math.round((inDb / totalOnServer) * 100) : 0;
                 status.textContent = `${inDb.toLocaleString('de-DE')} / ${totalOnServer.toLocaleString('de-DE')} E-Mails im Ordner "${f.label || f.db_key}" synchronisiert (${pct}%)`;
               }

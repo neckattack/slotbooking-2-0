@@ -1343,7 +1343,8 @@ def api_emails_sync(current_user):
             "SELECT message_id, folder FROM emails WHERE user_email=%s AND account_id=%s",
             (user_email, account_id)
         )
-        synced_ids = set((row[0], (row[1] or '').lower()) for row in cursor_db.fetchall() if row[0])
+        synced_rows = [(row[0], (row[1] or '').lower()) for row in cursor_db.fetchall() if row[0]]
+        synced_ids = set(synced_rows)
         
         # Determine which emails to fetch
         if limit:
@@ -1516,12 +1517,16 @@ def api_emails_sync(current_user):
         
         # Gesamtanzahl der bereits in der DB vorhandenen Kombinationen
         total_in_db = len(synced_ids)
+        # Anzahl der bereits in der DB vorhandenen Mails NUR für den aktuellen Ordner
+        current_folder_key = (folder_db_key or 'inbox').lower()
+        total_in_db_folder = sum(1 for _mid, f in synced_rows if f == current_folder_key)
 
         return jsonify({
             'ok': True,
             'synced': synced_count,
             'total_on_server': total_on_server,
             'total_in_db': total_in_db,
+            'total_in_db_folder': total_in_db_folder,
             'new_contacts': new_contacts_count,
             'already_synced': total_in_db - synced_count
         }), 200
