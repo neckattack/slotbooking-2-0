@@ -1392,11 +1392,17 @@
         } catch(_) {}
         
         // Kontakt-Themen (Topics) laden und als Badges im KI-Kundenprofil anzeigen
-        try {
-          const kpiChips = document.getElementById('contact_kpi_chips');
-          const topicDetailsBox = document.getElementById('contact_topic_details');
-          if(kpiChips && t.contact_id){
-            const res = await fetch(`/api/contacts/${t.contact_id}/topics`, { headers: getAuthHeaders() });
+        async function loadContactTopics(contactId){
+          try {
+            const kpiChips = document.getElementById('contact_kpi_chips');
+            const topicDetailsBox = document.getElementById('contact_topic_details');
+            if(!kpiChips || !contactId) return;
+
+            // Vorherige Themen-Badges entfernen (KPI-Chips wie Anrede, Stimmung, Kategorie bleiben erhalten)
+            const existingTopicBadges = kpiChips.querySelectorAll('[data-topic-badge="1"]');
+            existingTopicBadges.forEach(el => el.remove());
+
+            const res = await fetch(`/api/contacts/${contactId}/topics`, { headers: getAuthHeaders() });
             const data = await parseJsonSafe(res);
             const topics = (data && data.topics) || [];
             if(topics.length){
@@ -1430,6 +1436,7 @@
                 span.textContent = `${icon} ${tp.label}`;
                 span.style.cursor = 'pointer';
                 span.title = 'Klicken, um Details zu diesem Thema anzuzeigen';
+                span.setAttribute('data-topic-badge', '1');
 
                 span.addEventListener('click', () => {
                   if(!topicDetailsBox) return;
@@ -1452,9 +1459,14 @@
                 kpiChips.appendChild(span);
               });
             }
+          } catch(e) {
+            console.warn('Kontakt-Themen konnten nicht geladen werden', e);
           }
-        } catch(e) {
-          console.warn('Kontakt-Themen konnten nicht geladen werden', e);
+        }
+
+        // Initiale Themen-Ladung beim Öffnen der E-Mail
+        if(t.contact_id){
+          loadContactTopics(t.contact_id);
         }
         
         // Event handler for "Generate profile" button
@@ -1515,6 +1527,10 @@
                     }
                     chips.innerHTML = htmlChips;
                   }
+                }
+                // Nach erfolgreicher Profil-Generierung auch die Themen/Beschriftungen neu laden
+                if(t.contact_id){
+                  loadContactTopics(t.contact_id);
                 }
                 generateBtn.textContent = '🔄 Neu generieren';
                 generateBtn.disabled = false;
