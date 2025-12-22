@@ -1227,12 +1227,9 @@
                     'Neutral'
                   }
                 </span>` : ''}
-                ${kpis.communication_frequency ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#e0e7ff; color:#3730a3; border-radius:4px; font-size:11px; font-weight:500;">
-                  📊 Kontakt: ${kpis.communication_frequency === 'daily' ? 'Täglich' : kpis.communication_frequency === 'weekly' ? 'Wöchentlich' : kpis.communication_frequency === 'monthly' ? 'Monatlich' : 'Selten'}
-                </span>` : ''}
                 ${kpis.salutation || kpis.sentiment || kpis.communication_frequency || kpis.category ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#fee2e2; color:#b91c1c; border-radius:4px; font-size:11px; font-weight:500;">🏷 Typ: ${kpis.category || 'Unklar'}</span>` : ''}
               </div>
-              <div id="contact_topic_details" class="sub" style="font-size:11px; margin-bottom:8px; display:none; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px dashed #e5e7eb;"></div>
+              <div id="contact_topic_details" class="sub" style="font-size:11px; margin-bottom:8px; display:block; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px dashed #e5e7eb;"></div>
               <div id="prof_summary" class="sub" style="padding:10px; background:${profileSummary ? '#f0fdf4' : '#f9fafb'}; border-radius:6px; line-height:1.5;">
                 ${profileSummary ? formatCustomerProfile(profileSummary) : 'Noch kein Profil vorhanden. Klicken Sie oben, um ein KI-Profil zu erstellen.'}
               </div>
@@ -1391,74 +1388,47 @@
           loadNotes();
         } catch(_) {}
         
-        // Kontakt-Themen (Topics) laden und als Badges im KI-Kundenprofil anzeigen
+        // Kontakt-Themen (Topics) laden und als vertikale Liste im KI-Kundenprofil anzeigen
         async function loadContactTopics(contactId){
           try {
-            const kpiChips = document.getElementById('contact_kpi_chips');
             const topicDetailsBox = document.getElementById('contact_topic_details');
-            if(!kpiChips || !contactId) return;
-
-            // Vorherige Themen-Badges entfernen (KPI-Chips wie Anrede, Stimmung, Kategorie bleiben erhalten)
-            const existingTopicBadges = kpiChips.querySelectorAll('[data-topic-badge="1"]');
-            existingTopicBadges.forEach(el => el.remove());
+            if(!topicDetailsBox || !contactId) return;
 
             const res = await fetch(`/api/contacts/${contactId}/topics`, { headers: getAuthHeaders() });
             const data = await parseJsonSafe(res);
             const topics = (data && data.topics) || [];
-            if(topics.length){
-              topics.slice(0, 6).forEach(tp => {
-                const span = document.createElement('span');
-                let bg = '#eef2ff';
-                let color = '#3730a3';
-                let icon = '🏷️';
-                if(tp.status === 'open'){
-                  bg = '#fee2e2';
-                  color = '#991b1b';
-                  icon = '⚠️';
-                } else if(tp.status === 'in_progress'){
-                  bg = '#fef3c7';
-                  color = '#92400e';
-                  icon = '⏳';
-                } else if(tp.status === 'done'){
-                  bg = '#dcfce7';
-                  color = '#166534';
-                  icon = '✅';
-                }
-                span.style.display = 'inline-flex';
-                span.style.alignItems = 'center';
-                span.style.gap = '4px';
-                span.style.padding = '4px 8px';
-                span.style.borderRadius = '4px';
-                span.style.fontSize = '11px';
-                span.style.fontWeight = '500';
-                span.style.background = bg;
-                span.style.color = color;
-                span.textContent = `${icon} ${tp.label}`;
-                span.style.cursor = 'pointer';
-                span.title = 'Klicken, um Details zu diesem Thema anzuzeigen';
-                span.setAttribute('data-topic-badge', '1');
 
-                span.addEventListener('click', () => {
-                  if(!topicDetailsBox) return;
-                  const parts = [];
-                  if(tp.status){
-                    let statusLabel = tp.status;
-                    if(tp.status === 'open') statusLabel = 'offen';
-                    else if(tp.status === 'in_progress') statusLabel = 'in Bearbeitung';
-                    else if(tp.status === 'done') statusLabel = 'abgeschlossen';
-                    parts.push(`Status: ${escapeHtml(statusLabel)}`);
-                  }
-                  if(tp.last_mentioned_at){
-                    parts.push(`zuletzt erwähnt am ${escapeHtml(tp.last_mentioned_at)}`);
-                  }
-                  const metaText = parts.join(' · ');
-                  const labelText = escapeHtml(tp.label || '');
-                  topicDetailsBox.innerHTML = `${metaText ? metaText + ' – ' : ''}${labelText}`;
-                  topicDetailsBox.style.display = 'block';
-                });
-                kpiChips.appendChild(span);
-              });
+            if(!topics.length){
+              topicDetailsBox.innerHTML = '<div class="sub">Noch keine Themen erkannt.</div>';
+              return;
             }
+
+            const limited = topics.slice(0, 10); // maximal 10 aktuellste Themen anzeigen
+            const rows = limited.map(tp => {
+              let icon = '🏷️';
+              let statusLabel = tp.status || '';
+              if(tp.status === 'open'){
+                icon = '⚠️';
+                statusLabel = 'offen';
+              } else if(tp.status === 'in_progress'){
+                icon = '⏳';
+                statusLabel = 'in Bearbeitung';
+              } else if(tp.status === 'done'){
+                icon = '✅';
+                statusLabel = 'abgeschlossen';
+              }
+              const metaParts = [];
+              if(statusLabel){ metaParts.push(`Status: ${escapeHtml(statusLabel)}`); }
+              if(tp.last_mentioned_at){ metaParts.push(`zuletzt erwähnt am ${escapeHtml(tp.last_mentioned_at)}`); }
+              const metaText = metaParts.join(' · ');
+              const labelText = escapeHtml(tp.label || '');
+              return `<div style="padding:4px 0; border-bottom:1px solid #e5e7eb;">
+                <div style="font-size:12px; font-weight:500;">${icon} ${labelText}</div>
+                ${metaText ? `<div style=\"font-size:11px; color:#6b7280;\">${metaText}</div>` : ''}
+              </div>`;
+            }).join('');
+
+            topicDetailsBox.innerHTML = rows;
           } catch(e) {
             console.warn('Kontakt-Themen konnten nicht geladen werden', e);
           }
@@ -1511,17 +1481,7 @@
                       const sentLabel = k.sentiment === 'positive' ? 'Positiv' : k.sentiment === 'negative' ? 'Negativ' : 'Neutral';
                       htmlChips += `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:${sentBg}; border-radius:4px; font-size:11px; font-weight:500;">${sentEmoji} Stimmung: ${sentLabel}</span>`;
                     }
-                    if(k.email_length_preference){
-                      const lenLabel = k.email_length_preference === 'short' ? 'Kurz' : k.email_length_preference === 'medium' ? 'Mittel' : 'Lang';
-                      htmlChips += `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#fef3c7; color:#92400e; border-radius:4px; font-size:11px; font-weight:500;">📏 E-Mail-Länge: ${lenLabel}</span>`;
-                    }
-                    if(k.communication_frequency){
-                      let freqLabel = 'Selten';
-                      if(k.communication_frequency === 'daily') freqLabel = 'Täglich';
-                      else if(k.communication_frequency === 'weekly') freqLabel = 'Wöchentlich';
-                      else if(k.communication_frequency === 'monthly') freqLabel = 'Monatlich';
-                      htmlChips += `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#e0e7ff; color:#3730a3; border-radius:4px; font-size:11px; font-weight:500;">📊 Kontakt: ${freqLabel}</span>`;
-                    }
+                    // E-Mail-Länge und Kontaktfrequenz vorerst nicht anzeigen, um UI schlank zu halten
                     if(k.category){
                       htmlChips += `<span style=\"display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#fee2e2; color:#b91c1c; border-radius:4px; font-size:11px; font-weight:500;\">🏷 Kategorie: ${k.category}</span>`;
                     }

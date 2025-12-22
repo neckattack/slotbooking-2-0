@@ -2358,17 +2358,65 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                 if len(fallback_subjects) >= 5:
                     break
 
+            # Fallback-Themen: maximal 10 unterschiedliche, aus den zuletzt eingegangenen E-Mails
             topics = [
                 {
                     "label": s,
                     "topic_type": "general",
-                    "status": "in_progress",
+                    # Status wird weiter unten heuristisch gesetzt
+                    "status": None,
                     "last_mentioned_at": emails[idx]["received_at"].strftime("%Y-%m-%d")
                     if emails[idx].get("received_at")
                     else None,
                 }
-                for idx, s in enumerate(fallback_subjects)
+                for idx, s in enumerate(fallback_subjects[:10])
             ]
+
+        # Kleine Hilfsfunktion für Status-Heuristik (open / in_progress / done)
+        def _infer_topic_status(label: str, raw_source: str, last_dt):
+            import re as _re
+            txt = f"{label or ''} \n {raw_source or ''}".lower()
+
+            # Explizite Signale für "erledigt"
+            done_patterns = [
+                r"erledigt",
+                r"behoben",
+                r"gelöst",
+                r"abgeschlossen",
+                r"kein problem mehr",
+                r"passt so",
+            ]
+            # Explizite Signale für "offen"
+            open_patterns = [
+                r"noch offen",
+                r"offen",
+                r"problem besteht",
+                r"ungeklärt",
+                r"bitte nachfassen",
+                r"wartet auf antwort",
+                r"dringend",
+            ]
+
+            for pat in done_patterns:
+                if _re.search(pat, txt):
+                    return "done"
+            for pat in open_patterns:
+                if _re.search(pat, txt):
+                    return "open"
+
+            # Zeitdimension: sehr alte Themen ohne explizit offene Marker als "done" markieren
+            try:
+                from datetime import datetime as _dt, timedelta as _td
+
+                if last_dt and isinstance(last_dt, _dt):
+                    age_days = (_dt.utcnow().date() - last_dt.date()).days
+                    if age_days > 90:
+                        return "done"
+            except Exception:
+                pass
+
+            # Default: noch in Bearbeitung
+            return "in_progress"
 
         # Bestehende Topics für diesen Kontakt löschen und neue speichern
         try:
@@ -2390,6 +2438,12 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                         last_dt = _dt.strptime(last_date_str, "%Y-%m-%d")
                     except Exception:
                         last_dt = None
+
+                # Status ggf. heuristisch bestimmen (Text + Zeitdimension)
+                status = status or _infer_topic_status(label, raw_topics, last_dt)
+
+                # first_mentioned_at: wenn uns keine Historie vorliegt, identisch zu last_dt
+                first_dt = last_dt
                 cursor.execute(
                     """
                     INSERT INTO contact_topics
@@ -2402,7 +2456,7 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                         label,
                         topic_type,
                         status,
-                        last_dt,
+                        first_dt,
                         last_dt,
                         raw_topics[:1000],
                     ),
