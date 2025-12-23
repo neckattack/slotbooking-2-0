@@ -2466,10 +2466,10 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
         except Exception as e_topics:
             app.logger.error(f"[Contact Topics] Error while saving topics: {e_topics}")
 
-        # E-Mails heuristisch den Topics zuordnen (n:m) und in contact_topic_emails speichern
+        # Map emails to topics (n:m) and store in contact_topic_emails
         try:
             if topic_id_map and emails:
-                # Bestehende Mappings f fcr diesen Kontakt/User l f6schen
+                # Remove existing mappings for this contact/user
                 cursor.execute(
                     "DELETE FROM contact_topic_emails WHERE user_email=%s AND contact_id=%s",
                     (user_email, contact_id),
@@ -2487,8 +2487,8 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                     for label_l, topic_id in topic_id_map:
                         if not label_l:
                             continue
-                        # Einfache  c4hnlichkeits-Heuristik: alle bedeutenden W f6rter aus dem Label im Betreff/Text suchen
-                        words = [w for w in _re.split(r"[^a-z0-9 e4 f6 fc df]+", label_l) if len(w) >= 4]
+                        # Simple similarity heuristic: split label into words and count matches in subject/body
+                        words = [w for w in _re.split(r"[^a-z0-9]+", label_l.lower()) if len(w) >= 4]
                         if not words:
                             continue
                         hits = 0
@@ -2497,7 +2497,6 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                                 hits += 1
                         if hits <= 0:
                             continue
-                        # match_score = Anteil der getroffenen W f6rter
                         score = hits / len(words)
                         cursor.execute(
                             """
