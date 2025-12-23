@@ -1879,7 +1879,7 @@ def api_emails_debug_folders():
 def api_emails_get(current_user, email_id):
     """Get single email by ID from database"""
     user_email = current_user.get('user_email')
-    
+
     try:
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
@@ -2222,11 +2222,11 @@ def api_contacts_generate_profile(current_user, contact_id):
         # Get all emails from this contact (including from/to info for KPI calculation)
         cursor.execute(
             """
-            SELECT subject, body_text, body_html, received_at, from_addr, to_addrs
+            SELECT id, subject, body_text, body_html, received_at, from_addr, to_addrs
             FROM emails 
             WHERE contact_id = %s AND user_email = %s 
             ORDER BY received_at DESC
-            LIMIT 50
+            LIMIT 100
             """,
             (contact_id, user_email)
         )
@@ -2346,7 +2346,7 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
         if not topics:
             fallback_subjects = []
             seen_subj = set()
-            for e in emails[:10]:
+            for e in emails[:20]:
                 subj = (e.get("subject") or "").strip()
                 if not subj:
                     continue
@@ -2413,17 +2413,15 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                     if age_days > 90:
                         return "done"
             except Exception:
+                # Falls hier etwas schiefgeht, ignorieren wir die Zeit-Heuristik einfach
                 pass
-
-            # Default: noch in Bearbeitung
-            return "in_progress"
-
         # Bestehende Topics für diesen Kontakt löschen und neue speichern
         try:
             cursor.execute(
                 "DELETE FROM contact_topics WHERE user_email=%s AND contact_id=%s",
                 (user_email, contact_id),
             )
+            topic_id_map = []  # (label, topic_id)
             for t in topics:
                 label = (t.get("label") or "").strip()
                 if not label:
@@ -2461,9 +2459,57 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                         raw_topics[:1000],
                     ),
                 )
+                topic_id = cursor.lastrowid
+                if topic_id:
+                    topic_id_map.append((label.lower(), topic_id))
             conn.commit()
         except Exception as e_topics:
             app.logger.error(f"[Contact Topics] Error while saving topics: {e_topics}")
+
+        # E-Mails heuristisch den Topics zuordnen (n:m) und in contact_topic_emails speichern
+        try:
+            if topic_id_map and emails:
+                # Bestehende Mappings f fcr diesen Kontakt/User l f6schen
+                cursor.execute(
+                    "DELETE FROM contact_topic_emails WHERE user_email=%s AND contact_id=%s",
+                    (user_email, contact_id),
+                )
+
+                import re as _re
+
+                for em in emails:
+                    email_id = em.get("id")
+                    if not email_id:
+                        continue
+                    subj_l = (em.get("subject") or "").lower()
+                    body_l = ((em.get("body_text") or "") + "\n" + (em.get("body_html") or "")).lower()
+
+                    for label_l, topic_id in topic_id_map:
+                        if not label_l:
+                            continue
+                        # Einfache  c4hnlichkeits-Heuristik: alle bedeutenden W f6rter aus dem Label im Betreff/Text suchen
+                        words = [w for w in _re.split(r"[^a-z0-9 e4 f6 fc df]+", label_l) if len(w) >= 4]
+                        if not words:
+                            continue
+                        hits = 0
+                        for w in words:
+                            if w in subj_l or w in body_l:
+                                hits += 1
+                        if hits <= 0:
+                            continue
+                        # match_score = Anteil der getroffenen W f6rter
+                        score = hits / len(words)
+                        cursor.execute(
+                            """
+                            INSERT INTO contact_topic_emails
+                                (user_email, contact_id, topic_id, email_id, match_score)
+                            VALUES (%s, %s, %s, %s, %s)
+                            """,
+                            (user_email, contact_id, topic_id, email_id, score),
+                        )
+                conn.commit()
+        except Exception as e_map:
+            app.logger.error(f"[Contact Topic Mapping] Error while mapping emails to topics: {e_map}")
 
         # Calculate KPIs
         def calculate_kpis(emails_list, contact_email, user_email_addr):
@@ -2665,9 +2711,152 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
             'email_count': len(emails),
             'kpis': kpis
         }), 200
-        
+
     except Exception as e:
-        app.logger.error(f"[Generate Profile] Error: {e}")
+        try:
+            app.logger.error(f"[Generate Profile] Error: {e}")
+        except Exception:
+            pass
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/contacts/<int:contact_id>/generate-profile-full', methods=['POST'])
+@require_auth
+def api_contacts_generate_profile_full(current_user, contact_id):
+    """Erzeugt ein ausführliches Langprofil (Gesamtprofil) für einen Kontakt.
+
+    Dieses Profil darf deutlich länger sein als das Kurzprofil und fasst die komplette
+    Historie (Notizen + E-Mails) in einem Fließtext zusammen. Das Ergebnis wird im Feld
+    profile_summary_full der contacts-Tabelle gespeichert.
+    """
+    user_email = current_user.get('user_email')
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Kontakt prüfen
+        cursor.execute(
+            "SELECT id, name, contact_email FROM contacts WHERE id=%s AND user_email=%s",
+            (contact_id, user_email),
+        )
+        contact = cursor.fetchone()
+        if not contact:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Contact not found'}), 404
+
+        # Notizen laden
+        cursor.execute(
+            """
+            SELECT note_text, created_at
+            FROM contact_notes
+            WHERE contact_id = %s AND user_email = %s
+            ORDER BY created_at DESC
+            LIMIT 100
+            """,
+            (contact_id, user_email),
+        )
+        notes_rows = cursor.fetchall()
+        notes_lines = []
+        if notes_rows:
+            for n in notes_rows:
+                ts = n['created_at'].strftime('%d.%m.%Y %H:%M') if n['created_at'] else ''
+                notes_lines.append(f"- ({ts}) {n['note_text']}")
+        notes_context = "\n".join(notes_lines) if notes_lines else "(Keine Notizen hinterlegt)"
+
+        # Viele E-Mails laden (deutlich höheres Limit, aber mit Trunkierung pro Mail)
+        cursor.execute(
+            """
+            SELECT subject, body_text, body_html, received_at, from_addr, to_addrs
+            FROM emails
+            WHERE contact_id = %s AND user_email = %s
+            ORDER BY received_at DESC
+            LIMIT 300
+            """,
+            (contact_id, user_email),
+        )
+        emails = cursor.fetchall()
+        if not emails:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'No emails found for this contact'}), 404
+
+        email_blocks = []
+        for e in emails:
+            date_str = e['received_at'].strftime('%d.%m.%Y') if e['received_at'] else ''
+            subj = e.get('subject') or ''
+            sender = e.get('from_addr') or ''
+            to_addr = e.get('to_addrs') or ''
+            body = (e.get('body_text') or '')
+            if not body:
+                body = (e.get('body_html') or '')
+            body = body[:800]
+            email_blocks.append(
+                f"[{date_str}] Von: {sender} → An: {to_addr}\nBetreff: {subj}\n{body}"
+            )
+
+        email_context = "\n\n".join(email_blocks)
+
+        prompt = f"""Erstelle ein ausführliches Gesamtprofil zu folgendem Kontakt.
+
+Kontakt: {contact['name']} ({contact['contact_email']})
+
+1) Manuell gepflegte Kontakt-Notizen (vom Nutzer):
+{notes_context}
+
+2) Ausgewählte E-Mail-Historie (Ein- und Ausgang, max. {len(emails)} E-Mails):
+{email_context}
+
+Schreibe eine strukturierte, längere Zusammenfassung (ca. 600-1200 Wörter) mit folgenden Teilen:
+- Hintergrund & Rolle des Kontakts
+- Historie der Beziehung / Zusammenarbeit
+- Wichtigste Themen, Projekte und Probleme über die Zeit
+- Verhalten, Kommunikationsstil und Ton
+- Relevante Entscheidungen, Eskalationen oder kritische Punkte
+- Offene Fragen, Risiken und To-Dos
+- Empfehlungen für zukünftige Kommunikation und nächste sinnvolle Schritte
+
+Nutze eine sachliche, professionelle Sprache. Gliedere mit klaren Überschriften und Abschnitten.
+"""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Du erstellst ausführliche CRM-Gesamtprofile auf Basis von Notizen und E-Mail-Historien."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=1400,
+        )
+
+        full_summary = response.choices[0].message.content
+
+        # Im Kontakt speichern
+        cursor.execute(
+            """
+            UPDATE contacts
+            SET profile_summary_full = %s,
+                profile_updated_at = NOW()
+            WHERE id = %s AND user_email = %s
+            """,
+            (full_summary, contact_id, user_email),
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'summary_full': full_summary,
+            'email_count': len(emails),
+        }), 200
+
+    except Exception as e:
+        try:
+            app.logger.error(f"[Generate Full Profile] Error: {e}")
+        except Exception:
+            pass
         return jsonify({'error': str(e)}), 500
 
 

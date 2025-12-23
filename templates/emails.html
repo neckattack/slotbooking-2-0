@@ -1192,7 +1192,7 @@
           </div>
           <div class="detail-splitter" id="detail_splitter"></div>
           <div class="profile" id="profile_panel" data-contact-id="${t.contact_id || ''}">
-            <h3>👤 KONTAKT-PROFIL</h3>
+            <h3>👤 Profil</h3>
             <div class="grid">
               <div>
                 <div class="kv"><span>Name</span><b>${escapeHtml(contactName)}</b></div>
@@ -1206,11 +1206,16 @@
               </button>
             </div>
             <div style="margin-top:16px; font-size:13px; border-top:1px solid var(--border); padding-top:12px;">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px;">
                 <div style="font-weight:600;">🤖 KI-Kundenprofil</div>
-                <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" style="background:#7c3aed; color:#fff; border:0; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px;">
-                  ${profileSummary ? '🔄 Neu generieren' : 'Profil erstellen'}
-                </button>
+                <div style="display:flex; gap:6px;">
+                  <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" style="background:#7c3aed; color:#fff; border:0; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px;">
+                    ${profileSummary ? '🔄 Neu generieren' : 'Profil erstellen'}
+                  </button>
+                  <button id="generate_full_profile_btn" data-contact-id="${t.contact_id || ''}" style="background:#111827; color:#fff; border:0; padding:6px 10px; border-radius:6px; cursor:pointer; font-size:12px; white-space:nowrap;">
+                    📄 Gesamtprofil
+                  </button>
+                </div>
               </div>
               <div id="contact_kpi_chips" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;">
                 ${kpis.salutation ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:500;">
@@ -1233,6 +1238,7 @@
               <div id="prof_summary" class="sub" style="padding:10px; background:${profileSummary ? '#f0fdf4' : '#f9fafb'}; border-radius:6px; line-height:1.5;">
                 ${profileSummary ? formatCustomerProfile(profileSummary) : 'Noch kein Profil vorhanden. Klicken Sie oben, um ein KI-Profil zu erstellen.'}
               </div>
+              <div id="prof_summary_full" class="sub" style="margin-top:8px; padding:10px; background:#f9fafb; border-radius:6px; line-height:1.5; display:none;"></div>
             </div>
             <div style="margin-top:16px; font-size:13px; border-top:1px solid var(--border); padding-top:12px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -1439,9 +1445,48 @@
           loadContactTopics(t.contact_id);
         }
         
-        // Event handler for "Generate profile" button
+        // Event handler for "Generate profile" (Kurzprofil)
         const generateBtn = document.getElementById('generate_profile_btn');
         const summaryDiv = document.getElementById('prof_summary');
+        const fullSummaryDiv = document.getElementById('prof_summary_full');
+        const fullBtn = document.getElementById('generate_full_profile_btn');
+
+        if(fullBtn && t.contact_id){
+          fullBtn.onclick = async () => {
+            const original = fullBtn.textContent;
+            fullBtn.disabled = true;
+            fullBtn.textContent = '⏳ Lädt Gesamtprofil...';
+            if(fullSummaryDiv){
+              fullSummaryDiv.style.display = 'block';
+              fullSummaryDiv.textContent = 'Erzeuge ausführliches Gesamtprofil aus Notizen und E-Mails...';
+            }
+            try {
+              const res = await fetch(`/api/contacts/${t.contact_id}/generate-profile-full`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+              });
+              const data = await parseJsonSafe(res);
+              if(!data.__ok || !data.summary_full){
+                throw new Error(data.error || 'Gesamtprofil konnte nicht erzeugt werden');
+              }
+              if(fullSummaryDiv){
+                fullSummaryDiv.style.display = 'block';
+                fullSummaryDiv.innerHTML = formatCustomerProfile(data.summary_full);
+                fullSummaryDiv.style.background = '#eef2ff';
+              }
+            } catch(e){
+              if(fullSummaryDiv){
+                fullSummaryDiv.style.display = 'block';
+                fullSummaryDiv.textContent = `❌ Fehler beim Gesamtprofil: ${e}`;
+                fullSummaryDiv.style.background = '#fee2e2';
+              }
+            } finally {
+              fullBtn.disabled = false;
+              fullBtn.textContent = original;
+            }
+          };
+        }
+
         if(generateBtn && t.contact_id){
           generateBtn.onclick = async () => {
             const originalText = generateBtn.textContent;
