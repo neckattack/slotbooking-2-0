@@ -1445,13 +1445,12 @@ def api_emails_sync(current_user):
             start_index = max(0, end_index - int(limit))
             uids_to_fetch = all_uids[start_index:end_index]
 
-            # Fallback: Wenn laut Server noch mehr Mails existieren, aber keine UIDs
-            # berechnet wurden (oder already_for_folder unrealistisch hoch ist),
-            # hole trotzdem die letzten "limit" UIDs. Duplikate werden weiter unten
-            # über message_id+folder herausgefiltert.
-            if (not uids_to_fetch) and total_on_server > 0 and total_on_server > already_for_folder:
+            # Fallback: Wenn keine UIDs berechnet wurden (z.B. weil already_for_folder
+            # größer/gleich total_on_server ist), hole trotzdem die letzten "limit"
+            # UIDs. Duplikate werden weiter unten über message_id+folder herausgefiltert.
+            if not uids_to_fetch and total_on_server > 0:
                 app.logger.warning(
-                    f"[Sync] Fallback aktiv: total_on_server={total_on_server}, "
+                    f"[Sync] Fallback aktiv (leer uids_to_fetch): total_on_server={total_on_server}, "
                     f"already_for_folder={already_for_folder}, limit={limit}, folder={folder_db_key!r}"
                 )
                 uids_to_fetch = all_uids[max(0, total_uids - int(limit)) : total_uids]
