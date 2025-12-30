@@ -8,6 +8,7 @@ from agent_core import find_next_appointment_for_name
 from agent_gpt import agent_respond
 from encryption_utils import encrypt_password, decrypt_password
 from auth_utils import create_jwt_token, decode_jwt_token, verify_password, hash_password, require_auth, require_role
+import qdrant_store
 
 load_dotenv()
 
@@ -261,6 +262,89 @@ def debug_db_test():
     except Exception as e:
         result['error'] = str(e)
     return jsonify(result)
+
+
+@app.route('/api/debug/qdrant-contact/<int:contact_id>', methods=['GET'])
+@require_auth
+def debug_qdrant_contact(current_user, contact_id):
+    """Testet Qdrant mit echten E-Mails eines Kontakts.
+
+    - Lädt die letzten N E-Mails dieses Kontakts aus der settings-DB
+    - indexiert sie in Qdrant (falls Collection noch nicht existiert, wird sie angelegt)
+    - führt eine Similarity-Suche mit einer echten Suchanfrage aus
+    """
+    user_email = current_user.get('user_email')
+    limit_emails = request.args.get('limit_emails', default=20, type=int)
+    query_text = (request.args.get('q') or '').strip()
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT id, subject, body_text, body_html, received_at
+            FROM emails
+            WHERE user_email = %s AND contact_id = %s
+            ORDER BY received_at DESC
+            LIMIT %s
+            """,
+            (user_email, contact_id, limit_emails),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        if not rows:
+            return jsonify({'ok': False, 'error': 'Keine E-Mails für diesen Kontakt gefunden.'}), 404
+
+        texts = []
+        ids = []
+        meta = []
+        for r in rows:
+            email_id = r['id']
+            subject = r.get('subject') or ''
+            body_text = r.get('body_text') or ''
+            body_html = r.get('body_html') or ''
+
+            # Einfacher Fallback: bevorzugt Plaintext, sonst HTML roh (nur für Testzwecke)
+            content = body_text.strip() or body_html.strip() or subject
+            full_text = f"Betreff: {subject}\n\n{content}"
+            texts.append(full_text)
+            ids.append(f"email-{email_id}")
+            meta.append({
+                'contact_id': contact_id,
+                'email_id': email_id,
+                'subject': subject,
+                'received_at': r.get('received_at').isoformat() if r.get('received_at') else None,
+            })
+
+        # In Qdrant indexieren
+        try:
+            indexed_count = qdrant_store.upsert_texts(texts, ids=ids, metadata=meta)
+        except Exception as e:
+            app.logger.error(f"[QDRANT DEBUG] Upsert-Fehler: {e}")
+            return jsonify({'ok': False, 'error': f'Qdrant Upsert fehlgeschlagen: {e}'}), 500
+
+        # Suchanfrage bestimmen: explizit via q=..., sonst Betreff der neuesten Mail
+        if not query_text:
+            query_text = rows[0].get('subject') or 'E-Mail Kontext'
+
+        try:
+            results = qdrant_store.similarity_search(query_text, limit=10)
+        except Exception as e:
+            app.logger.error(f"[QDRANT DEBUG] Search-Fehler: {e}")
+            return jsonify({'ok': False, 'error': f'Qdrant Suche fehlgeschlagen: {e}'}), 500
+
+        return jsonify({
+            'ok': True,
+            'indexed_emails': indexed_count,
+            'contact_id': contact_id,
+            'query': query_text,
+            'results': results,
+        })
+    except Exception as e:
+        app.logger.error(f"[QDRANT DEBUG] Allgemeiner Fehler: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 def get_reservations_for_today():

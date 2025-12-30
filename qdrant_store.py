@@ -8,7 +8,12 @@ from openai import OpenAI
 # Konfiguration über Env
 QDRANT_URL = os.environ.get("QDRANT_URL")
 QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
-QDRANT_COLLECTION = os.environ.get("QDRANT_COLLECTION", "knowledge")
+# Priorität: spezielle E-Mail-Collection, sonst generische QDRANT_COLLECTION, Default "knowledge"
+QDRANT_COLLECTION = (
+    os.environ.get("QDRANT_COLLECTION_EMAILS")
+    or os.environ.get("QDRANT_COLLECTION")
+    or "knowledge"
+)
 EMBED_MODEL = os.environ.get("AGENT_EMBED_MODEL", "text-embedding-3-small")
 
 _openai = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
