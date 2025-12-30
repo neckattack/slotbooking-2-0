@@ -2879,6 +2879,54 @@ def api_contacts_generate_profile_full(current_user, contact_id):
 
         email_context = "\n\n".join(email_blocks)
 
+        # Zusätzlichen Kontext aus Qdrant laden (falls konfiguriert)
+        qdrant_context = "(Keine zusätzlichen Qdrant-Kontexte verfügbar)"
+        try:
+            # Wir indexieren für diesen Aufruf eine begrenzte Anzahl kürzerer Snippets,
+            # damit Qdrant eine semantische Übersicht über die Historie bekommt.
+            q_texts = []
+            q_meta = []
+            for e in emails[:50]:  # nur die neuesten 50 Mails für Qdrant verwenden
+                date_str = e['received_at'].strftime('%Y-%m-%d') if e['received_at'] else ''
+                subj = (e.get('subject') or '').strip()
+                body = (e.get('body_text') or e.get('body_html') or '')
+                snippet = body[:600]
+                q_texts.append(f"[{date_str}] {subj}\n{snippet}")
+                q_meta.append({
+                    'user_email': user_email,
+                    'contact_id': contact_id,
+                    'subject': subj,
+                    'received_at': e.get('received_at').isoformat() if e.get('received_at') else None,
+                })
+            if q_texts:
+                try:
+                    # Indexierung; IDs werden intern generiert
+                    qdrant_store.upsert_texts(q_texts, metadata=q_meta)
+                except Exception as e_q_up:
+                    app.logger.warning(f"[QDRANT FullProfile] Upsert-Fehler (ignoriert): {e_q_up}")
+
+                # Generische Suchanfrage für den Kontaktverlauf
+                query_text = f"Wichtigste Themen, Entscheidungen und Probleme in der Kommunikation mit {contact['name'] or contact['contact_email']}"
+                try:
+                    results = qdrant_store.similarity_search(query_text, limit=20)
+                    lines = []
+                    for r in results:
+                        payload = r.get('payload') or {}
+                        subj = (payload.get('subject') or '').strip()
+                        rdate = payload.get('received_at') or ''
+                        text = (payload.get('text') or r.get('text') or '')
+                        text_short = text.replace('\n', ' ')[:240]
+                        lines.append(f"- ({rdate}) {subj}: {text_short}")
+                    if lines:
+                        qdrant_context = "\n".join(lines)
+                except Exception as e_q_s:
+                    app.logger.warning(f"[QDRANT FullProfile] Search-Fehler (ignoriert): {e_q_s}")
+        except Exception as e_q:
+            try:
+                app.logger.warning(f"[QDRANT FullProfile] Allgemeiner Fehler (ignoriert): {e_q}")
+            except Exception:
+                pass
+
         prompt = f"""Erstelle ein ausführliches Gesamtprofil zu folgendem Kontakt.
 
 Kontakt: {contact['name']} ({contact['contact_email']})
@@ -2886,7 +2934,10 @@ Kontakt: {contact['name']} ({contact['contact_email']})
 1) Manuell gepflegte Kontakt-Notizen (vom Nutzer):
 {notes_context}
 
-2) Ausgewählte E-Mail-Historie (Ein- und Ausgang, max. {len(emails)} E-Mails):
+2) Semantische Zusammenfassung aus Qdrant (wichtigste Themen, Probleme, Entscheidungen):
+{qdrant_context}
+
+3) Ausgewählte E-Mail-Historie (Ein- und Ausgang, max. {len(emails)} E-Mails, chronologisch sortiert):
 {email_context}
 
 Schreibe eine strukturierte, längere Zusammenfassung (ca. 600-1200 Wörter) mit folgenden Teilen:
