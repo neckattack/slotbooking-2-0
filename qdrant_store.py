@@ -40,7 +40,11 @@ def ensure_collection(vector_size: int, distance: str = "Cosine") -> None:
     except Exception:
         exists = False
     if not exists:
-        dist = getattr(qmodels.Distance, distance)
+        # Distance-String robust auf Enum-Werte mappen (COSINE, DOT, EUCLID)
+        dist_key = (distance or "cosine").strip().upper()
+        if dist_key not in {"COSINE", "DOT", "EUCLID"}:
+            dist_key = "COSINE"
+        dist = getattr(qmodels.Distance, dist_key)
         client.recreate_collection(
             collection_name=QDRANT_COLLECTION,
             vectors_config=qmodels.VectorParams(size=vector_size, distance=dist),
