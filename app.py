@@ -299,7 +299,6 @@ def debug_qdrant_contact(current_user, contact_id):
             return jsonify({'ok': False, 'error': 'Keine E-Mails für diesen Kontakt gefunden.'}), 404
 
         texts = []
-        ids = []
         meta = []
         for r in rows:
             email_id = r['id']
@@ -313,7 +312,6 @@ def debug_qdrant_contact(current_user, contact_id):
             # Sicherheit: Text für Embeddings hart begrenzen, um invalid_request_error zu vermeiden
             full_text = full_text[:1500]
             texts.append(full_text)
-            ids.append(f"email-{email_id}")
             meta.append({
                 'contact_id': contact_id,
                 'email_id': email_id,
@@ -321,9 +319,9 @@ def debug_qdrant_contact(current_user, contact_id):
                 'received_at': r.get('received_at').isoformat() if r.get('received_at') else None,
             })
 
-        # In Qdrant indexieren
+        # In Qdrant indexieren (IDs von Qdrant generieren lassen)
         try:
-            indexed_count = qdrant_store.upsert_texts(texts, ids=ids, metadata=meta)
+            indexed_count = qdrant_store.upsert_texts(texts, metadata=meta)
         except Exception as e:
             app.logger.error(f"[QDRANT DEBUG] Upsert-Fehler: {e}")
             return jsonify({'ok': False, 'error': f'Qdrant Upsert fehlgeschlagen: {e}'}), 500
