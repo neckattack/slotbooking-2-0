@@ -61,7 +61,10 @@ def upsert_texts(texts: Sequence[str], ids: Optional[Sequence[str]] = None, meta
         pid = (ids[i] if ids and i < len(ids) else None) or None
         payload = (metadata[i] if metadata and i < len(metadata) else {}) or {}
         payload.setdefault("text", texts[i])
-        points.append(qmodels.PointStruct(id=pid, vector=v, payload=payload))
+        if pid is None:
+            points.append(qmodels.PointStruct(vector=v, payload=payload))
+        else:
+            points.append(qmodels.PointStruct(id=pid, vector=v, payload=payload))
     client = get_client()
     client.upsert(collection_name=QDRANT_COLLECTION, points=points)
     return len(points)
