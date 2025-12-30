@@ -1435,25 +1435,12 @@ def api_emails_sync(current_user):
         
         # Determine which emails to fetch
         if limit:
-            # Anzahl bereits für diesen logischen Folder (folder_db_key) synchronisierter Nachrichten
-            current_folder_key = (folder_db_key or 'inbox').lower()
-            already_for_folder = sum(1 for _mid, f in synced_ids if f == current_folder_key)
-            # Wir holen den nächsten Block "limit" älterer UIDs hinter den bereits synchronisierten
-            # all_uids ist nach IMAP-Spezifikation von alt nach neu sortiert
+            # Vereinfachte Logik: immer die letzten "limit" UIDs holen.
+            # all_uids ist von alt nach neu sortiert, daher nehmen wir das
+            # Tail. Duplikate werden weiter unten über message_id+folder
+            # ignoriert.
             total_uids = len(all_uids)
-            end_index = max(0, total_uids - already_for_folder)
-            start_index = max(0, end_index - int(limit))
-            uids_to_fetch = all_uids[start_index:end_index]
-
-            # Fallback: Wenn keine UIDs berechnet wurden (z.B. weil already_for_folder
-            # größer/gleich total_on_server ist), hole trotzdem die letzten "limit"
-            # UIDs. Duplikate werden weiter unten über message_id+folder herausgefiltert.
-            if not uids_to_fetch and total_on_server > 0:
-                app.logger.warning(
-                    f"[Sync] Fallback aktiv (leer uids_to_fetch): total_on_server={total_on_server}, "
-                    f"already_for_folder={already_for_folder}, limit={limit}, folder={folder_db_key!r}"
-                )
-                uids_to_fetch = all_uids[max(0, total_uids - int(limit)) : total_uids]
+            uids_to_fetch = all_uids[max(0, total_uids - int(limit)) : total_uids]
         else:
             # Fetch all (careful!)
             uids_to_fetch = all_uids
