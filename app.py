@@ -274,7 +274,8 @@ def debug_qdrant_contact(current_user, contact_id):
     - führt eine Similarity-Suche mit einer echten Suchanfrage aus
     """
     user_email = current_user.get('user_email')
-    limit_emails = request.args.get('limit_emails', default=20, type=int)
+    # Für Debug-Zwecke klein halten, um Embedding-Limits nicht zu sprengen
+    limit_emails = request.args.get('limit_emails', default=5, type=int)
     query_text = (request.args.get('q') or '').strip()
 
     try:
@@ -309,6 +310,8 @@ def debug_qdrant_contact(current_user, contact_id):
             # Einfacher Fallback: bevorzugt Plaintext, sonst HTML roh (nur für Testzwecke)
             content = body_text.strip() or body_html.strip() or subject
             full_text = f"Betreff: {subject}\n\n{content}"
+            # Sicherheit: Text für Embeddings hart begrenzen, um invalid_request_error zu vermeiden
+            full_text = full_text[:1500]
             texts.append(full_text)
             ids.append(f"email-{email_id}")
             meta.append({
@@ -1441,6 +1444,17 @@ def api_emails_sync(current_user):
             end_index = max(0, total_uids - already_for_folder)
             start_index = max(0, end_index - int(limit))
             uids_to_fetch = all_uids[start_index:end_index]
+
+            # Fallback: Wenn laut Server noch mehr Mails existieren, aber keine UIDs
+            # berechnet wurden (oder already_for_folder unrealistisch hoch ist),
+            # hole trotzdem die letzten "limit" UIDs. Duplikate werden weiter unten
+            # über message_id+folder herausgefiltert.
+            if (not uids_to_fetch) and total_on_server > 0 and total_on_server > already_for_folder:
+                app.logger.warning(
+                    f"[Sync] Fallback aktiv: total_on_server={total_on_server}, "
+                    f"already_for_folder={already_for_folder}, limit={limit}, folder={folder_db_key!r}"
+                )
+                uids_to_fetch = all_uids[max(0, total_uids - int(limit)) : total_uids]
         else:
             # Fetch all (careful!)
             uids_to_fetch = all_uids
