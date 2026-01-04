@@ -3146,58 +3146,112 @@ def api_contacts_quick_card(current_user, contact_id):
         else:
             who_line = f"{name} – {cat}"
 
-        # Timeline (max 5 Touchpoints), nach Thema (Betreff) gruppiert
-        def _normalize_subject(s: str) -> str:
-            s = (s or '').strip().lower()
-            # Standard-Präfixe entfernen (re:, aw:, wg: etc.) mehrfach
-            prefixes = ['re:', 'aw:', 'wg:', 'fw:', 'fwd:']
-            changed = True
-            while changed and s:
-                changed = False
-                for p in prefixes:
-                    if s.startswith(p):
-                        s = s[len(p):].strip()
-                        changed = True
-            return s or '(ohne betreff)'
-
-        from collections import OrderedDict
-        grouped = OrderedDict()  # norm_subject -> dict with latest info + count
-        for e in email_rows:
-            subj_raw = (e.get('subject') or '').strip() or '(ohne Betreff)'
-            norm = _normalize_subject(subj_raw)
-            dt = e.get('received_at')
-            ts = dt.timestamp() if dt else 0
-            direction = 'out' if (e.get('from_addr') or '').lower() == (user_email or '').lower() else 'in'
-            status = 'gesendet' if direction == 'out' else 'eingegangen'
-            if norm not in grouped:
-                grouped[norm] = {
-                    'latest_ts': ts,
-                    'latest_date': dt,
-                    'latest_subj': subj_raw,
-                    'status': status,
-                    'count': 1,
-                }
-            else:
-                g = grouped[norm]
-                g['count'] += 1
-                if ts >= g['latest_ts']:
-                    g['latest_ts'] = ts
-                    g['latest_date'] = dt
-                    g['latest_subj'] = subj_raw
-                    g['status'] = status
-
-        # Nach letztem Datum sortieren und nur die ersten 5 Themen anzeigen
+        # Timeline (max 5 Touchpoints) primär Topic-basiert (1 Zeile pro Topic)
         timeline = []
-        for norm, g in sorted(grouped.items(), key=lambda kv: kv[1]['latest_ts'], reverse=True)[:5]:
-            dt = g['latest_date']
-            date_str = dt.strftime('%d.%m') if dt else ''
-            subj = g['latest_subj'] or '(ohne Betreff)'
-            status = g['status']
-            count = g['count'] or 1
-            if count > 1:
-                timeline.append(f"{date_str} – {subj} ({count}×) – {status}")
-            else:
-                timeline.append(f"{date_str} – {subj} – {status}")
+        try:
+            conn2 = get_settings_db_connection()
+            cursor2 = conn2.cursor(dictionary=True)
+            cursor2.execute(
+                """
+                SELECT ct.id, ct.topic_label, ct.status,
+                       MAX(e.received_at) AS last_received_at,
+                       COUNT(*) AS email_count
+                FROM contact_topic_emails cte
+                JOIN emails e ON e.id = cte.email_id
+                JOIN contact_topics ct ON ct.id = cte.topic_id
+                WHERE cte.user_email = %s AND cte.contact_id = %s
+                GROUP BY ct.id, ct.topic_label, ct.status
+                ORDER BY last_received_at DESC
+                LIMIT 5
+                """,
+                (user_email, contact_id),
+            )
+            topic_timeline_rows = cursor2.fetchall() or []
+            cursor2.close()
+            conn2.close()
+
+            for r in topic_timeline_rows:
+                dt = r.get('last_received_at')
+                date_str = dt.strftime('%d.%m') if dt else ''
+                label = r.get('topic_label') or ''
+                cnt = r.get('email_count') or 0
+                status = (r.get('status') or '').lower()
+                if status == 'open':
+                    status_label = 'offen'
+                elif status == 'in_progress':
+                    status_label = 'in Bearbeitung'
+                elif status == 'done':
+                    status_label = 'abgeschlossen'
+                else:
+                    status_label = status or ''
+                parts = []
+                if date_str:
+                    parts.append(date_str)
+                if label:
+                    parts.append(label)
+                if cnt:
+                    parts.append(f"{cnt} E-Mails")
+                if status_label:
+                    parts.append(status_label)
+                if parts:
+                    timeline.append(" – ".join(parts))
+        except Exception as _e_tl:
+            try:
+                app.logger.warning(f"[Quick Card] Topic timeline failed, falling back to subject grouping: {_e_tl}")
+            except Exception:
+                pass
+
+        # Fallback: Betreff-basierte Gruppierung, wenn keine Topic-Timeline vorhanden ist
+        if not timeline:
+            def _normalize_subject(s: str) -> str:
+                s = (s or '').strip().lower()
+                # Standard-Präfixe entfernen (re:, aw:, wg: etc.) mehrfach
+                prefixes = ['re:', 'aw:', 'wg:', 'fw:', 'fwd:']
+                changed = True
+                while changed and s:
+                    changed = False
+                    for p in prefixes:
+                        if s.startswith(p):
+                            s = s[len(p):].strip()
+                            changed = True
+                return s or '(ohne betreff)'
+
+            from collections import OrderedDict
+            grouped = OrderedDict()  # norm_subject -> dict with latest info + count
+            for e in email_rows:
+                subj_raw = (e.get('subject') or '').strip() or '(ohne Betreff)'
+                norm = _normalize_subject(subj_raw)
+                dt = e.get('received_at')
+                ts = dt.timestamp() if dt else 0
+                direction = 'out' if (e.get('from_addr') or '').lower() == (user_email or '').lower() else 'in'
+                status = 'gesendet' if direction == 'out' else 'eingegangen'
+                if norm not in grouped:
+                    grouped[norm] = {
+                        'latest_ts': ts,
+                        'latest_date': dt,
+                        'latest_subj': subj_raw,
+                        'status': status,
+                        'count': 1,
+                    }
+                else:
+                    g = grouped[norm]
+                    g['count'] += 1
+                    if ts >= g['latest_ts']:
+                        g['latest_ts'] = ts
+                        g['latest_date'] = dt
+                        g['latest_subj'] = subj_raw
+                        g['status'] = status
+
+            for norm, g in sorted(grouped.items(), key=lambda kv: kv[1]['latest_ts'], reverse=True)[:5]:
+                dt = g['latest_date']
+                date_str = dt.strftime('%d.%m') if dt else ''
+                subj = g['latest_subj'] or '(ohne Betreff)'
+                status = g['status']
+                count = g['count'] or 1
+                if count > 1:
+                    timeline.append(f"{date_str} – {subj} ({count}×) – {status}")
+                else:
+                    timeline.append(f"{date_str} – {subj} – {status}")
 
         # Now relevant & Offene Themen (Top-3) vorbereiten
         import datetime as _dt
