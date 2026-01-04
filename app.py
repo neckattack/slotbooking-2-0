@@ -2955,7 +2955,7 @@ Nutze eine sachliche, professionelle Sprache. Gliedere mit klaren Überschriften
 """
 
         response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "Du erstellst ausführliche CRM-Gesamtprofile auf Basis von Notizen und E-Mail-Historien."},
                 {"role": "user", "content": prompt},
