@@ -3081,14 +3081,13 @@ def api_contacts_quick_card(current_user, contact_id):
             status = 'gesendet' if direction == 'out' else 'eingegangen'
             timeline.append(f"{date_str} – {subj} – {status}")
 
-        # Now relevant: letzte Mail + evtl. erstes offenes Thema
+        # Now relevant & Offene Themen (Top-3) vorbereiten
+        import datetime as _dt
+
         now_relevant = []
         if email_rows:
             last_subj = (email_rows[0].get('subject') or '').strip() or '(ohne Betreff)'
             now_relevant.append(f"Letzte Anfrage: {last_subj}")
-
-        # Offene Themen (Top-3)
-        import datetime as _dt
 
         open_topics_formatted = []
         open_topics = []
@@ -3125,7 +3124,7 @@ def api_contacts_quick_card(current_user, contact_id):
             # nimm das wichtigste Topic auch in "Now relevant" auf
             now_relevant.append(open_topics_formatted[0])
 
-        # Antwort-Strategie
+        # Standard-Antwort-Strategie (Fallback)
         reply_strategy = "Nur auf die letzte E-Mail antworten; keine älteren Themen nötig."
         if open_topics:
             # Wenn es frische offene Themen gibt, Reminder empfehlen
@@ -3140,6 +3139,58 @@ def api_contacts_quick_card(current_user, contact_id):
                     days = None
             if days is None or days >= 3:
                 reply_strategy = f"Auf die letzte E-Mail antworten und {topic_label} kurz als Reminder erwähnen."
+
+        # Optional: LLM-Feintuning für now_relevant und reply_strategy
+        try:
+            import json as _json
+
+            # Kontext für Modell: letzte 3 Mails + offene Themen
+            last_mails_for_llm = []
+            for e in email_rows[:3]:
+                dt = e.get('received_at')
+                date_str = dt.strftime('%d.%m.%Y') if dt else ''
+                subj = (e.get('subject') or '').strip() or '(ohne Betreff)'
+                last_mails_for_llm.append(f"{date_str}: {subj}")
+
+            llm_prompt = (
+                "Du hilfst im E-Mail-CRM. Fasse sehr kurz zusammen, was für die nächste Antwort "
+                "am wichtigsten ist und ob ältere Themen mit angesprochen werden sollen. "
+                "Antworte IMMER als JSON mit den Schlüsseln now_relevant (Liste aus 1-3 Strings) "
+                "und reply_strategy (ein kurzer Satz auf Deutsch). Keine weiteren Felder.\n\n"
+                f"Kontakt: {name}\n"
+                f"Kategorie: {cat or 'Unklar'}\n\n"
+                f"Letzte E-Mails (neueste zuerst):\n- " + "\n- ".join(last_mails_for_llm) + "\n\n"
+                f"Offene Themen: \n- " + ("\n- ".join(open_topics_formatted) if open_topics_formatted else "(keine)")
+            )
+
+            llm_res = openai_client.chat.completions.create(
+                model="gpt-4.1-mini",
+                messages=[
+                    {"role": "system", "content": "Du schreibst extrem knappe CRM-Zusammenfassungen als JSON."},
+                    {"role": "user", "content": llm_prompt},
+                ],
+                temperature=0.2,
+                max_tokens=200,
+            )
+            llm_content = llm_res.choices[0].message.content if llm_res.choices else None
+            if llm_content:
+                try:
+                    parsed = _json.loads(llm_content)
+                    nr = parsed.get("now_relevant")
+                    rs = parsed.get("reply_strategy")
+                    if isinstance(nr, list) and nr:
+                        # Hart auf 3 Einträge begrenzen
+                        now_relevant = [str(x) for x in nr[:3]]
+                    if isinstance(rs, str) and rs.strip():
+                        reply_strategy = rs.strip()
+                except Exception:
+                    # Wenn das Modell kein valides JSON geliefert hat, bei Heuristik bleiben
+                    pass
+        except Exception as _e_llm:
+            try:
+                app.logger.warning(f"[Quick Card] LLM helper failed: {_e_llm}")
+            except Exception:
+                pass
 
         # Ton / Stil
         sal = contact.get('salutation') or ''
