@@ -1969,7 +1969,7 @@ def api_emails_get(current_user, email_id):
         cursor.execute(
             """
             SELECT e.*, c.name as contact_name, c.contact_email, c.email_count as contact_email_count,
-                   c.profile_summary, c.salutation, c.sentiment, c.email_length_preference,
+                   c.profile_summary, c.profile_summary_full, c.salutation, c.sentiment, c.email_length_preference,
                    c.communication_frequency, c.category
             FROM emails e
             LEFT JOIN contacts c ON e.contact_id = c.id
@@ -1999,6 +1999,7 @@ def api_emails_get(current_user, email_id):
             'contact_email_count': email_row['contact_email_count'] or 1,
             'contact_id': email_row.get('contact_id'),
             'profile_summary': email_row.get('profile_summary', ''),
+            'profile_summary_full': email_row.get('profile_summary_full', ''),
             'kpis': {
                 'salutation': email_row.get('salutation'),
                 'sentiment': email_row.get('sentiment'),

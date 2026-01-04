@@ -1145,6 +1145,7 @@
         const contactEmail = t.contact_email || t.from_addr || '–';
         const emailCount = t.contact_email_count || 1;
         const profileSummary = t.profile_summary || '';
+        const profileSummaryFull = t.profile_summary_full || '';
         const kpis = t.kpis || {};
         
         // Helper: Extract real name from email or profile
@@ -1238,7 +1239,9 @@
               <div id="prof_summary" class="sub" style="padding:10px; background:${profileSummary ? '#f0fdf4' : '#f9fafb'}; border-radius:6px; line-height:1.5;">
                 ${profileSummary ? formatCustomerProfile(profileSummary) : 'Noch kein Profil vorhanden. Klicken Sie oben, um ein KI-Profil zu erstellen.'}
               </div>
-              <div id="prof_summary_full" class="sub" style="margin-top:8px; padding:10px; background:#f9fafb; border-radius:6px; line-height:1.5; display:none;"></div>
+              <div id="prof_summary_full" class="sub" style="margin-top:8px; padding:10px; background:#f9fafb; border-radius:6px; line-height:1.5; display:${profileSummaryFull ? 'block' : 'none'};">
+                ${profileSummaryFull ? formatCustomerProfile(profileSummaryFull) : ''}
+              </div>
             </div>
             <div style="margin-top:16px; font-size:13px; border-top:1px solid var(--border); padding-top:12px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
