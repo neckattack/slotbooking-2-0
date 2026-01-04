@@ -1224,6 +1224,7 @@
                 <div id="qc_now" style="margin-bottom:2px;"><span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span></div>
                 <div id="qc_topics" style="margin-bottom:2px;"><span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span></div>
                 <div id="qc_reply" style="margin-bottom:2px;"><span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span></div>
+                <div id="qc_reply_mode" style="margin-bottom:2px;"><span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Lade...</span></div>
                 <div id="qc_tone" style="margin-bottom:2px;"><span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span></div>
                 <div id="qc_timeline" style="margin-top:4px;"><span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span></div>
               </div>
@@ -1244,7 +1245,11 @@
                 </span>` : ''}
                 ${kpis.salutation || kpis.sentiment || kpis.communication_frequency || kpis.category ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#fee2e2; color:#b91c1c; border-radius:4px; font-size:11px; font-weight:500;">🏷 Typ: ${kpis.category || 'Unklar'}</span>` : ''}
               </div>
-              <div id="contact_topic_details" class="sub" style="font-size:11px; margin-bottom:8px; display:block; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px dashed #e5e7eb;"></div>
+              <div id="contact_topic_details" class="sub" style="font-size:11px; margin-bottom:4px; display:block; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px dashed #e5e7eb;">
+                <div style="font-weight:600; margin-bottom:4px;">Themen</div>
+                <div id="topic_list" style="margin-bottom:8px;"></div>
+              </div>
+              <div id="contact_topic_detail_panel" class="sub" style="font-size:11px; margin-bottom:8px; display:none; padding:6px 8px; border-radius:4px; background:#eff6ff; border:1px solid #bfdbfe;"></div>
               <div id="prof_summary" class="sub" style="padding:10px; background:${profileSummary ? '#f0fdf4' : '#f9fafb'}; border-radius:6px; line-height:1.5;">
                 ${profileSummary ? formatCustomerProfile(profileSummary) : 'Noch kein Profil vorhanden. Klicken Sie oben, um ein KI-Profil zu erstellen.'}
               </div>
@@ -1446,7 +1451,36 @@
               </div>`;
             }).join('');
 
-            topicDetailsBox.innerHTML = rows;
+            const topicList = document.getElementById('topic_list');
+            topicList.innerHTML = rows;
+
+            // Event handler für Themen (Klick auf Thema)
+            const topicItems = topicList.children;
+            for(let i = 0; i < topicItems.length; i++){
+              const item = topicItems[i];
+              item.onclick = async () => {
+                const topicId = limited[i].id;
+                const topicDetailPanel = document.getElementById('contact_topic_detail_panel');
+                topicDetailPanel.style.display = 'block';
+                topicDetailPanel.innerHTML = 'Lade Thema-Detail...';
+                try {
+                  const res = await fetch(`/api/contacts/${contactId}/topics/${topicId}/detail`, { headers: getAuthHeaders() });
+                  const data = await parseJsonSafe(res);
+                  if(!data.__ok){ throw new Error(data.error || 'Fehler'); }
+                  const topicDetail = data.topic || {};
+                  const desc = topicDetail.description || '';
+                  const detailHtml = `
+                    <div style="font-weight:600; margin-bottom:4px;">${escapeHtml(topicDetail.label || '')}</div>
+                    ${desc ? `<div style=\"font-size:11px; margin-bottom:4px;\">${escapeHtml(desc)}</div>` : ''}
+                    <div style="font-size:11px; margin-bottom:4px;">Status: ${escapeHtml(topicDetail.status || '')}</div>
+                    <div style="font-size:11px; margin-bottom:4px;">Zuletzt erwähnt am: ${escapeHtml(topicDetail.last_mentioned_at || '')}</div>
+                  `;
+                  topicDetailPanel.innerHTML = detailHtml;
+                } catch(e) {
+                  topicDetailPanel.innerHTML = `Fehler: ${e}`;
+                }
+              };
+            }
           } catch(e) {
             console.warn('Kontakt-Themen konnten nicht geladen werden', e);
           }
@@ -1464,6 +1498,7 @@
           const qcNow = document.getElementById('qc_now');
           const qcTopics = document.getElementById('qc_topics');
           const qcReply = document.getElementById('qc_reply');
+          const qcReplyMode = document.getElementById('qc_reply_mode');
           const qcTone = document.getElementById('qc_tone');
           const qcTimeline = document.getElementById('qc_timeline');
           if(qcBox && qcName && qcNow && qcTopics && qcReply && qcTone && qcTimeline){
@@ -1472,6 +1507,7 @@
             qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span>';
             qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span>';
             qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span>';
+            qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Lade...</span>';
             qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span>';
             qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span>';
             fetch(`/api/contacts/${t.contact_id}/quick-card`, { headers: getAuthHeaders() })
@@ -1482,6 +1518,7 @@
                   qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Keine Daten</span>';
                   qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Keine Daten</span>';
                   qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Keine Empfehlung</span>';
+                  qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Unklar</span>';
                   qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Unbekannt</span>';
                   qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Einträge</span>';
                   return;
@@ -1490,12 +1527,18 @@
                 const now = data.now_relevant || [];
                 const topics = data.open_topics || [];
                 const reply = data.reply_strategy || '';
+                const replyMode = data.reply_mode || '';
                 const tone = data.tone || '';
                 const timeline = data.timeline || [];
                 qcName.innerHTML = `<span style="font-weight:500;">Name:</span> <span>${escapeHtml(who || (contactName + ' – ' + contactEmail))}</span>`;
                 qcNow.innerHTML = `<span style="font-weight:500;">Jetzt relevant:</span> <span>${now.length ? now.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine Infos</span>'}</span>`;
                 qcTopics.innerHTML = `<span style="font-weight:500;">Offene Themen:</span> <span>${topics.length ? topics.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine offenen Themen</span>'}</span>`;
                 qcReply.innerHTML = `<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span>${reply ? escapeHtml(reply) : '<span class="muted">Keine Empfehlung</span>'}</span>`;
+                let replyModeLabel = 'Unklar';
+                if(replyMode === 'last_only') replyModeLabel = 'Nur letzte E-Mail beantworten';
+                else if(replyMode === 'last_plus_reminder') replyModeLabel = 'Letzte E-Mail + kurzes Erinnern an ein offenes Thema';
+                else if(replyMode === 'follow_up_old_issue') replyModeLabel = 'Altes offenes Thema proaktiv aufgreifen';
+                qcReplyMode.innerHTML = `<span style="font-weight:500;">Antwort-Modus:</span> <span>${escapeHtml(replyModeLabel)}</span>`;
                 qcTone.innerHTML = `<span style="font-weight:500;">Ton &amp; Stil:</span> <span>${tone ? escapeHtml(tone) : '<span class="muted">Unbekannt</span>'}</span>`;
                 if(timeline.length){
                   const tl = timeline.map(x => `<div>${escapeHtml(x)}</div>`).join('');

@@ -491,6 +491,81 @@ def api_emails_inbox(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/contacts/<int:contact_id>/topics/<int:topic_id>/detail', methods=['GET'])
+@require_auth
+def api_contact_topic_detail(current_user, contact_id, topic_id):
+    """Gibt Detailinfos zu einem Kontakt-Topic inkl. zugehöriger E-Mails zurück."""
+    user_email = current_user.get('user_email')
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Topic selbst laden
+        cursor.execute(
+            """
+            SELECT id, topic_label, status, last_mentioned_at, created_at
+            FROM contact_topics
+            WHERE id = %s AND contact_id = %s AND user_email = %s
+            """,
+            (topic_id, contact_id, user_email),
+        )
+        topic = cursor.fetchone()
+        if not topic:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Topic not found'}), 404
+
+        # Zugehörige E-Mails (falls Mapping vorhanden)
+        cursor.execute(
+            """
+            SELECT e.id, e.subject, e.received_at, e.from_addr, e.to_addrs
+            FROM contact_topic_emails cte
+            JOIN emails e ON e.id = cte.email_id
+            WHERE cte.user_email = %s AND cte.contact_id = %s AND cte.topic_id = %s
+            ORDER BY e.received_at DESC
+            LIMIT 20
+            """,
+            (user_email, contact_id, topic_id),
+        )
+        email_rows = cursor.fetchall() or []
+
+        cursor.close()
+        conn.close()
+
+        def fmt_dt(dt):
+            return dt.strftime('%d.%m.%Y %H:%M') if dt else ''
+
+        emails_payload = []
+        for e in email_rows:
+            emails_payload.append({
+                'id': e['id'],
+                'subject': e.get('subject') or '(ohne Betreff)',
+                'received_at': fmt_dt(e.get('received_at')),
+                'from_addr': e.get('from_addr'),
+                'to_addrs': e.get('to_addrs'),
+            })
+
+        return jsonify({
+            '__ok': True,
+            'topic': {
+                'id': topic['id'],
+                'label': topic.get('topic_label'),
+                'status': topic.get('status'),
+                'last_mentioned_at': fmt_dt(topic.get('last_mentioned_at')),
+                'created_at': fmt_dt(topic.get('created_at')),
+            },
+            'emails': emails_payload,
+        }), 200
+
+    except Exception as e:
+        try:
+            app.logger.error(f"[Contact Topic Detail] Error: {e}")
+        except Exception:
+            pass
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/contacts/<int:contact_id>/topics', methods=['GET'])
 @require_auth
 def api_contacts_topics_list(current_user, contact_id):
@@ -3167,8 +3242,9 @@ def api_contacts_quick_card(current_user, contact_id):
             # nimm das wichtigste Topic auch in "Now relevant" auf
             now_relevant.append(open_topics_formatted[0])
 
-        # Standard-Antwort-Strategie (Fallback)
+        # Standard-Antwort-Strategie (Fallback) + Modus
         reply_strategy = "Nur auf die letzte E-Mail antworten; keine älteren Themen nötig."
+        reply_mode = "last_only"
         if open_topics:
             # Wenn es frische offene Themen gibt, Reminder empfehlen
             newest = open_topics[0]
@@ -3182,6 +3258,9 @@ def api_contacts_quick_card(current_user, contact_id):
                     days = None
             if days is None or days >= 3:
                 reply_strategy = f"Auf die letzte E-Mail antworten und {topic_label} kurz als Reminder erwähnen."
+                reply_mode = "last_plus_reminder"
+            else:
+                reply_mode = "last_only"
 
         # Optional: LLM-Feintuning für now_relevant und reply_strategy
         try:
@@ -3235,6 +3314,10 @@ def api_contacts_quick_card(current_user, contact_id):
             except Exception:
                 pass
 
+        # Wenn es gar keine letzte Mail gibt, aber offene Themen, fokussiere alte Issues
+        if not email_rows and open_topics:
+            reply_mode = "follow_up_old_issue"
+
         # Ton / Stil
         sal = contact.get('salutation') or ''
         sent = (contact.get('sentiment') or '').lower()
@@ -3258,6 +3341,7 @@ def api_contacts_quick_card(current_user, contact_id):
             'now_relevant': now_relevant,
             'open_topics': open_topics_formatted,
             'reply_strategy': reply_strategy,
+            'reply_mode': reply_mode,
             'tone': tone,
             'timeline': timeline,
         }), 200
