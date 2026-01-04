@@ -2846,14 +2846,14 @@ def api_contacts_generate_profile_full(current_user, contact_id):
                 notes_lines.append(f"- ({ts}) {n['note_text']}")
         notes_context = "\n".join(notes_lines) if notes_lines else "(Keine Notizen hinterlegt)"
 
-        # Viele E-Mails laden (deutlich höheres Limit, aber mit Trunkierung pro Mail)
+        # Viele E-Mails laden (Limit und Trunkierung so wählen, dass das LLM-Kontextlimit nicht gesprengt wird)
         cursor.execute(
             """
             SELECT subject, body_text, body_html, received_at, from_addr, to_addrs
             FROM emails
             WHERE contact_id = %s AND user_email = %s
             ORDER BY received_at DESC
-            LIMIT 300
+            LIMIT 150
             """,
             (contact_id, user_email),
         )
@@ -2872,25 +2872,26 @@ def api_contacts_generate_profile_full(current_user, contact_id):
             body = (e.get('body_text') or '')
             if not body:
                 body = (e.get('body_html') or '')
-            body = body[:800]
+            # Hart kürzen, um Token-Limit einzuhalten
+            body = body[:400]
             email_blocks.append(
                 f"[{date_str}] Von: {sender} → An: {to_addr}\nBetreff: {subj}\n{body}"
             )
 
         email_context = "\n\n".join(email_blocks)
 
-        # Zusätzlichen Kontext aus Qdrant laden (falls konfiguriert)
+        # Zusätzlichen Kontext aus Qdrant laden (falls konfiguriert), aber stark begrenzt
         qdrant_context = "(Keine zusätzlichen Qdrant-Kontexte verfügbar)"
         try:
             # Wir indexieren für diesen Aufruf eine begrenzte Anzahl kürzerer Snippets,
             # damit Qdrant eine semantische Übersicht über die Historie bekommt.
             q_texts = []
             q_meta = []
-            for e in emails[:50]:  # nur die neuesten 50 Mails für Qdrant verwenden
+            for e in emails[:40]:  # nur die neuesten 40 Mails für Qdrant verwenden
                 date_str = e['received_at'].strftime('%Y-%m-%d') if e['received_at'] else ''
                 subj = (e.get('subject') or '').strip()
                 body = (e.get('body_text') or e.get('body_html') or '')
-                snippet = body[:600]
+                snippet = body[:300]
                 q_texts.append(f"[{date_str}] {subj}\n{snippet}")
                 q_meta.append({
                     'user_email': user_email,
@@ -2908,14 +2909,15 @@ def api_contacts_generate_profile_full(current_user, contact_id):
                 # Generische Suchanfrage für den Kontaktverlauf
                 query_text = f"Wichtigste Themen, Entscheidungen und Probleme in der Kommunikation mit {contact['name'] or contact['contact_email']}"
                 try:
-                    results = qdrant_store.similarity_search(query_text, limit=20)
+                    # Nur wenige Top-Treffer verwenden, um Tokens klein zu halten
+                    results = qdrant_store.similarity_search(query_text, limit=10)
                     lines = []
                     for r in results:
                         payload = r.get('payload') or {}
                         subj = (payload.get('subject') or '').strip()
                         rdate = payload.get('received_at') or ''
                         text = (payload.get('text') or r.get('text') or '')
-                        text_short = text.replace('\n', ' ')[:240]
+                        text_short = text.replace('\n', ' ')[:180]
                         lines.append(f"- ({rdate}) {subj}: {text_short}")
                     if lines:
                         qdrant_context = "\n".join(lines)
