@@ -3054,8 +3054,22 @@ def api_contacts_quick_card(current_user, contact_id):
 
         # WHO: Wer ist das?
         name = contact.get('name') or contact.get('contact_email') or ''
-        cat = contact.get('category') or 'Unklar'
-        who_line = f"{name} – {cat}"
+        cat = contact.get('category') or ''
+        # Falls Kategorie fehlt/unklar, aber gleiche Domain wie Nutzer: als Kollege/Mitarbeiter interpretieren
+        try:
+            contact_email = (contact.get('contact_email') or '').lower()
+            user_domain = (user_email or '').split('@', 1)[1].lower() if (user_email and '@' in user_email) else ''
+            contact_domain = contact_email.split('@', 1)[1] if ('@' in contact_email) else ''
+        except Exception:
+            contact_domain = ''
+            user_domain = ''
+        if (not cat or cat == 'Unklar') and user_domain and contact_domain and contact_domain == user_domain:
+            cat = 'Kollege/Mitarbeiter'
+        # Wenn Kategorie immer noch leer/unklar ist, zeige nur den Namen ohne Suffix
+        if not cat or cat == 'Unklar':
+            who_line = name
+        else:
+            who_line = f"{name} – {cat}"
 
         # Timeline (max 5 Touchpoints)
         timeline = []

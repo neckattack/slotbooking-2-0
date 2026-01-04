@@ -1497,7 +1497,12 @@
                 qcTopics.innerHTML = `<span style="font-weight:500;">Offene Themen:</span> <span>${topics.length ? topics.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine offenen Themen</span>'}</span>`;
                 qcReply.innerHTML = `<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span>${reply ? escapeHtml(reply) : '<span class="muted">Keine Empfehlung</span>'}</span>`;
                 qcTone.innerHTML = `<span style="font-weight:500;">Ton &amp; Stil:</span> <span>${tone ? escapeHtml(tone) : '<span class="muted">Unbekannt</span>'}</span>`;
-                qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span> <span>${timeline.length ? timeline.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine Einträge</span>'}</span>`;
+                if(timeline.length){
+                  const tl = timeline.map(x => `<div>${escapeHtml(x)}</div>`).join('');
+                  qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span> <div>${tl}</div>`;
+                } else {
+                  qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Einträge</span>';
+                }
               })
               .catch(err => {
                 qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Fehler</span>';
