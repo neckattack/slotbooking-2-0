@@ -2995,6 +2995,173 @@ Nutze eine sachliche, professionelle Sprache. Gliedere mit klaren Überschriften
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/contacts/<int:contact_id>/quick-card', methods=['GET'])
+@require_auth
+def api_contacts_quick_card(current_user, contact_id):
+    """Gibt eine kompakte Quick-Ansicht zum Kontakt zurück.
+
+    Diese Ansicht ist für den schnellen Scan gedacht (10–20 Sekunden) und basiert auf
+    bestehenden Daten: Kontaktdaten, Topics und den letzten E-Mails.
+    """
+    user_email = current_user.get('user_email')
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Basis-Kontaktdaten laden
+        cursor.execute(
+            """
+            SELECT id, name, contact_email, category, salutation, sentiment
+            FROM contacts
+            WHERE id = %s AND user_email = %s
+            """,
+            (contact_id, user_email),
+        )
+        contact = cursor.fetchone()
+        if not contact:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Contact not found'}), 404
+
+        # Letzte E-Mails für Timeline und "Now relevant"
+        cursor.execute(
+            """
+            SELECT subject, received_at, from_addr, to_addrs
+            FROM emails
+            WHERE contact_id = %s AND user_email = %s
+            ORDER BY received_at DESC
+            LIMIT 10
+            """,
+            (contact_id, user_email),
+        )
+        email_rows = cursor.fetchall() or []
+
+        # Kontakt-Themen (Issues)
+        cursor.execute(
+            """
+            SELECT topic_label, status, last_mentioned_at, created_at
+            FROM contact_topics
+            WHERE contact_id = %s AND user_email = %s
+            ORDER BY COALESCE(last_mentioned_at, created_at) DESC, id DESC
+            """,
+            (contact_id, user_email),
+        )
+        topic_rows = cursor.fetchall() or []
+
+        cursor.close()
+        conn.close()
+
+        # WHO: Wer ist das?
+        name = contact.get('name') or contact.get('contact_email') or ''
+        cat = contact.get('category') or 'Unklar'
+        who_line = f"{name} – {cat}"
+
+        # Timeline (max 5 Touchpoints)
+        timeline = []
+        for e in email_rows[:5]:
+            dt = e.get('received_at')
+            date_str = dt.strftime('%d.%m') if dt else ''
+            subj = (e.get('subject') or '').strip() or '(ohne Betreff)'
+            direction = 'out' if (e.get('from_addr') or '').lower() == (user_email or '').lower() else 'in'
+            status = 'gesendet' if direction == 'out' else 'eingegangen'
+            timeline.append(f"{date_str} – {subj} – {status}")
+
+        # Now relevant: letzte Mail + evtl. erstes offenes Thema
+        now_relevant = []
+        if email_rows:
+            last_subj = (email_rows[0].get('subject') or '').strip() or '(ohne Betreff)'
+            now_relevant.append(f"Letzte Anfrage: {last_subj}")
+
+        # Offene Themen (Top-3)
+        import datetime as _dt
+
+        open_topics_formatted = []
+        open_topics = []
+        for t_row in topic_rows:
+            status = (t_row.get('status') or '').lower() or 'open'
+            if status not in ('open', 'in_progress'):
+                continue
+            open_topics.append(t_row)
+
+        # Nach Recency sortiert, dann max. 3 anzeigen
+        for t_row in open_topics[:3]:
+            lm = t_row.get('last_mentioned_at') or t_row.get('created_at')
+            age_txt = ''
+            if lm:
+                try:
+                    days = ( _dt.datetime.utcnow() - lm.replace(tzinfo=None) ).days
+                    age_txt = f"{days}d"
+                except Exception:
+                    age_txt = ''
+            status = (t_row.get('status') or '').lower()
+            if status == 'open':
+                status_label = 'Open'
+            elif status == 'in_progress':
+                status_label = 'In Bearbeitung'
+            else:
+                status_label = status or 'Open'
+            label = t_row.get('topic_label') or ''
+            if age_txt:
+                open_topics_formatted.append(f"({status_label}, {age_txt}) {label}")
+            else:
+                open_topics_formatted.append(f"({status_label}) {label}")
+
+        if open_topics_formatted:
+            # nimm das wichtigste Topic auch in "Now relevant" auf
+            now_relevant.append(open_topics_formatted[0])
+
+        # Antwort-Strategie
+        reply_strategy = "Nur auf die letzte E-Mail antworten; keine älteren Themen nötig."
+        if open_topics:
+            # Wenn es frische offene Themen gibt, Reminder empfehlen
+            newest = open_topics[0]
+            topic_label = newest.get('topic_label') or 'offenes Thema'
+            lm = newest.get('last_mentioned_at') or newest.get('created_at')
+            days = None
+            if lm:
+                try:
+                    days = ( _dt.datetime.utcnow() - lm.replace(tzinfo=None) ).days
+                except Exception:
+                    days = None
+            if days is None or days >= 3:
+                reply_strategy = f"Auf die letzte E-Mail antworten und {topic_label} kurz als Reminder erwähnen."
+
+        # Ton / Stil
+        sal = contact.get('salutation') or ''
+        sent = (contact.get('sentiment') or '').lower()
+        tone_parts = []
+        if sal:
+            if sal.lower().startswith('du'):
+                tone_parts.append('duzend')
+            elif sal.lower().startswith('sie'):
+                tone_parts.append('formell (Sie)')
+        if sent == 'positive':
+            tone_parts.append('eher positiv')
+        elif sent == 'negative':
+            tone_parts.append('eher kritisch/angespannt')
+        else:
+            tone_parts.append('neutral')
+        tone = 'Ton: ' + ', '.join(tone_parts)
+
+        return jsonify({
+            '__ok': True,
+            'who': who_line,
+            'now_relevant': now_relevant,
+            'open_topics': open_topics_formatted,
+            'reply_strategy': reply_strategy,
+            'tone': tone,
+            'timeline': timeline,
+        }), 200
+
+    except Exception as e:
+        try:
+            app.logger.error(f"[Quick Card] Error: {e}")
+        except Exception:
+            pass
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route("/api/emails/imap-debug")
 def api_emails_imap_debug():
     import imaplib
