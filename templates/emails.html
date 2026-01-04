@@ -1218,6 +1218,15 @@
                   </button>
                 </div>
               </div>
+              <div id="contact_quick_card" class="sub" style="font-size:11px; margin-bottom:8px; padding:8px 10px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
+                <div style="font-weight:600; margin-bottom:4px;">Überblick</div>
+                <div id="qc_name" style="margin-bottom:2px;"><span style="font-weight:500;">Name:</span> <span class="muted">Lade...</span></div>
+                <div id="qc_now" style="margin-bottom:2px;"><span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span></div>
+                <div id="qc_topics" style="margin-bottom:2px;"><span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span></div>
+                <div id="qc_reply" style="margin-bottom:2px;"><span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span></div>
+                <div id="qc_tone" style="margin-bottom:2px;"><span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span></div>
+                <div id="qc_timeline" style="margin-top:4px;"><span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span></div>
+              </div>
               <div id="contact_kpi_chips" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;">
                 ${kpis.salutation ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:500;">
                   👋 Anrede: ${kpis.salutation}
@@ -1446,6 +1455,59 @@
         // Initiale Themen-Ladung beim Öffnen der E-Mail
         if(t.contact_id){
           loadContactTopics(t.contact_id);
+        }
+        
+        // Quick Card (Überblick) laden
+        if(t.contact_id){
+          const qcBox = document.getElementById('contact_quick_card');
+          const qcName = document.getElementById('qc_name');
+          const qcNow = document.getElementById('qc_now');
+          const qcTopics = document.getElementById('qc_topics');
+          const qcReply = document.getElementById('qc_reply');
+          const qcTone = document.getElementById('qc_tone');
+          const qcTimeline = document.getElementById('qc_timeline');
+          if(qcBox && qcName && qcNow && qcTopics && qcReply && qcTone && qcTimeline){
+            qcBox.style.display = 'block';
+            qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Lade...</span>';
+            qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span>';
+            qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span>';
+            qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span>';
+            qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span>';
+            qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span>';
+            fetch(`/api/contacts/${t.contact_id}/quick-card`, { headers: getAuthHeaders() })
+              .then(res => parseJsonSafe(res))
+              .then(data => {
+                if(!data.__ok){
+                  qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Keine Daten</span>';
+                  qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Keine Daten</span>';
+                  qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Keine Daten</span>';
+                  qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Keine Empfehlung</span>';
+                  qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Unbekannt</span>';
+                  qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Einträge</span>';
+                  return;
+                }
+                const who = data.who || '';
+                const now = data.now_relevant || [];
+                const topics = data.open_topics || [];
+                const reply = data.reply_strategy || '';
+                const tone = data.tone || '';
+                const timeline = data.timeline || [];
+                qcName.innerHTML = `<span style="font-weight:500;">Name:</span> <span>${escapeHtml(who || (contactName + ' – ' + contactEmail))}</span>`;
+                qcNow.innerHTML = `<span style="font-weight:500;">Jetzt relevant:</span> <span>${now.length ? now.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine Infos</span>'}</span>`;
+                qcTopics.innerHTML = `<span style="font-weight:500;">Offene Themen:</span> <span>${topics.length ? topics.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine offenen Themen</span>'}</span>`;
+                qcReply.innerHTML = `<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span>${reply ? escapeHtml(reply) : '<span class="muted">Keine Empfehlung</span>'}</span>`;
+                qcTone.innerHTML = `<span style="font-weight:500;">Ton &amp; Stil:</span> <span>${tone ? escapeHtml(tone) : '<span class="muted">Unbekannt</span>'}</span>`;
+                qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span> <span>${timeline.length ? timeline.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine Einträge</span>'}</span>`;
+              })
+              .catch(err => {
+                qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Fehler</span>';
+                qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Fehler</span>';
+                qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Fehler</span>';
+                qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Fehler</span>';
+                qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Fehler</span>';
+                qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Fehler</span>';
+              });
+          }
         }
         
         // Event handler for "Generate profile" (Kurzprofil)
