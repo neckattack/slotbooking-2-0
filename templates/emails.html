@@ -1494,6 +1494,215 @@
           const qcReplyMode = document.getElementById('qc_reply_mode');
           const qcTone = document.getElementById('qc_tone');
           const qcTimeline = document.getElementById('qc_timeline');
+          const topicDetailPanel = document.getElementById('contact_topic_detail_panel');
+
+          function renderQuickCard(data){
+            if(!qcBox || !qcName || !qcNow || !qcTopics || !qcReply || !qcReplyMode || !qcTone || !qcTimeline){
+              return;
+            }
+            if(!data.__ok){
+              qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Keine Daten</span>';
+              qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Keine Daten</span>';
+              qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Keine Daten</span>';
+              qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Keine Empfehlung</span>';
+              qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Unklar</span>';
+              qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Unbekannt</span>';
+              qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Einträge</span>';
+              return;
+            }
+            const who = data.who || '';
+            const now = data.now_relevant || [];
+            const topics = data.open_topics || [];
+            const reply = data.reply_strategy || '';
+            const replyMode = data.reply_mode || '';
+            const tone = data.tone || '';
+            const timeline = data.timeline || [];
+            const timelineTopics = data.timeline_topics || [];
+
+            qcBox.style.display = 'block';
+            qcName.innerHTML = `<span style="font-weight:500;">Name:</span> <span>${escapeHtml(who || (contactName + ' – ' + contactEmail))}</span>`;
+            qcNow.innerHTML = `<span style="font-weight:500;">Jetzt relevant:</span> <span>${now.length ? now.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine Infos</span>'}</span>`;
+            qcTopics.innerHTML = `<span style="font-weight:500;">Offene Themen:</span> <span>${topics.length ? topics.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine offenen Themen</span>'}</span>`;
+            let replyModeLabel = 'Unklar';
+            if(replyMode === 'last_only') replyModeLabel = 'Nur letzte E-Mail beantworten';
+            else if(replyMode === 'last_plus_reminder') replyModeLabel = 'Letzte E-Mail + kurzes Erinnern an ein offenes Thema';
+            else if(replyMode === 'follow_up_old_issue') replyModeLabel = 'Altes offenes Thema proaktiv aufgreifen';
+            qcReplyMode.innerHTML = `<span style="font-weight:500;">Antwort-Modus:</span> <span>${escapeHtml(replyModeLabel)}</span>`;
+            qcReply.innerHTML = `<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span>${reply ? escapeHtml(reply) : '<span class="muted">Keine Empfehlung</span>'}</span>`;
+            qcTone.innerHTML = `<span style="font-weight:500;">Ton &amp; Stil:</span> <span>${tone ? escapeHtml(tone) : '<span class="muted">Unbekannt</span>'}</span>`;
+
+            if(timelineTopics.length){
+              // Checkbox-Zustand für geschlossene Themen auslesen (falls bereits vorhanden)
+              const existingToggle = document.getElementById('qc_show_closed_topics');
+              const showClosed = existingToggle ? existingToggle.checked : false;
+
+              const filteredTopics = (showClosed ? timelineTopics : timelineTopics.filter(tp => tp.status !== 'done'));
+              const items = filteredTopics.map((tp) => {
+                const parts = [];
+                if(tp.last_received_at){
+                  const d = new Date(tp.last_received_at);
+                  const ds = d.toLocaleDateString('de-DE', { day: '2-digit', month:'2-digit' });
+                  parts.push(ds);
+                }
+                if(tp.label){ parts.push(tp.label); }
+                if(tp.email_count){ parts.push(`${tp.email_count} E-Mails`); }
+                let statusLabel = '';
+                if(tp.status === 'open') statusLabel = 'offen';
+                else if(tp.status === 'in_progress') statusLabel = 'in Bearbeitung';
+                else if(tp.status === 'done') statusLabel = 'abgeschlossen';
+                if(statusLabel){ parts.push(statusLabel); }
+                const text = parts.join(' – ');
+                return `<div class="timeline-topic" data-topic-id="${tp.id}" style="padding:4px 6px; margin:2px 0; cursor:pointer; border-radius:4px; position:relative;" onmouseover="this.style.backgroundColor='#f3f4f6';" onmouseout="this.style.backgroundColor='transparent';">
+                  <div style="font-size:12px; font-weight:500;">${escapeHtml(text)}</div>
+                  <span class="timeline-topic-close" data-topic-id="${tp.id}" style="position:absolute; right:4px; top:2px; color:#b91c1c; font-weight:bold; cursor:pointer;">×</span>
+                </div>`;
+              }).join('');
+
+              qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span>
+                <div>${items}</div>
+                <div style="margin-top:4px; font-size:10px; color:#6b7280;">
+                  <label><input type="checkbox" id="qc_show_closed_topics" ${showClosed ? 'checked' : ''}> Geschlossene Themen anzeigen</label>
+                </div>`;
+
+              // Helper zum Laden eines Topic-Details (auch nach Statuswechsel wiederverwendbar)
+              async function loadTopicDetail(topicId){
+                if(!topicId || !topicDetailPanel){ return; }
+                topicDetailPanel.style.display = 'block';
+                topicDetailPanel.innerHTML = 'Lade Themen-Details...';
+                try {
+                  const res = await fetch(`/api/contacts/${t.contact_id}/topics/${topicId}/detail`, { headers: getAuthHeaders() });
+                  const dataDet = await parseJsonSafe(res);
+                  if(!dataDet.__ok){ throw new Error(dataDet.error || 'Fehler beim Laden des Themas'); }
+                  const td = dataDet.topic || {};
+                  const emails = dataDet.emails || [];
+                  let html = '';
+                  html += `<div style="font-weight:600; margin-bottom:4px;">${escapeHtml(td.label || '')}</div>`;
+                  if(td.summary){
+                    html += `<div style="font-size:11px; margin-bottom:4px; white-space:pre-line;">${escapeHtml(td.summary)}</div>`;
+                  }
+                  html += `<div style="font-size:11px; margin-bottom:4px;">Status: ${escapeHtml(td.status || '')}</div>`;
+                  if(td.last_mentioned_at){
+                    html += `<div style="font-size:11px; margin-bottom:4px;">Zuletzt erwähnt am: ${escapeHtml(td.last_mentioned_at)}</div>`;
+                  }
+                  // Toggle-Button für Status
+                  const isDone = (td.status || '').toLowerCase() === 'done';
+                  const newStatus = isDone ? 'open' : 'done';
+                  const btnLabel = isDone ? 'Thema wieder öffnen' : 'Thema schließen (erledigt)';
+                  html += `<div style="margin:6px 0 8px 0;"><button class="topic-status-toggle" data-topic-id="${td.id}" data-new-status="${newStatus}" style="background:${isDone ? '#3b82f6' : '#10b981'}; color:#fff; border:0; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;">${btnLabel}</button></div>`;
+
+                  if(emails.length){
+                    html += '<div style="font-size:11px; margin-top:6px; margin-bottom:2px; font-weight:500;">Relevante E-Mails:</div>';
+                    html += '<ul style="list-style:none; padding-left:0; margin:0;">';
+                    emails.slice(0,5).forEach((em) => {
+                      const liText = `${em.received_at || ''} – ${em.subject || ''}`;
+                      html += `<li style="padding:2px 0;"><span style="cursor:pointer; text-decoration:underline;" data-email-id="${em.id}" class="topic-email-link">${escapeHtml(liText)}</span></li>`;
+                    });
+                    html += '</ul>';
+                  }
+                  topicDetailPanel.innerHTML = html;
+
+                  // Status-Toggle-Button verkabeln
+                  const toggleBtn = topicDetailPanel.querySelector('.topic-status-toggle');
+                  if(toggleBtn){
+                    toggleBtn.addEventListener('click', async () => {
+                      const tgtId = toggleBtn.getAttribute('data-topic-id');
+                      const ns = toggleBtn.getAttribute('data-new-status');
+                      if(!tgtId || !ns){ return; }
+                      toggleBtn.disabled = true;
+                      try {
+                        const resSt = await fetch(`/api/contacts/${t.contact_id}/topics/${tgtId}/status`, {
+                          method: 'POST',
+                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: ns })
+                        });
+                        const stData = await parseJsonSafe(resSt);
+                        if(!stData.__ok){ throw new Error(stData.error || 'Status konnte nicht geändert werden'); }
+                        // Quick Card nach Statuswechsel neu laden und Timeline/Open Topics aktualisieren
+                        try{
+                          const qcRes = await fetch(`/api/contacts/${t.contact_id}/quick-card`, { headers: getAuthHeaders() });
+                          const qcData = await parseJsonSafe(qcRes);
+                          renderQuickCard(qcData);
+                        }catch(_){ }
+                        // Topic-Detail erneut laden, um neuen Status zu zeigen
+                        await loadTopicDetail(topicId);
+                      } catch(err) {
+                        topicDetailPanel.innerHTML = `Fehler beim Ändern des Status: ${err}`;
+                      }
+                    });
+                  }
+
+                  // Klick auf E-Mail-Link: direkt zur entsprechenden Mail springen
+                  topicDetailPanel.querySelectorAll('.topic-email-link').forEach(link => {
+                    link.addEventListener('click', () => {
+                      const eid = link.getAttribute('data-email-id');
+                      if(!eid){ return; }
+                      const listEl = document.getElementById('list');
+                      if(!listEl){ return; }
+                      const row = listEl.querySelector(`.item[data-uid="${eid}"]`);
+                      if(row){
+                        try{
+                          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }catch(_){ }
+                        selectItem(eid, row);
+                      } else {
+                        alert('Diese E-Mail ist nicht in der aktuellen Liste sichtbar.');
+                      }
+                    });
+                  });
+                } catch(e) {
+                  topicDetailPanel.innerHTML = `Fehler: ${e}`;
+                }
+              }
+
+              // Click-Handler für Timeline-Themen
+              const topicNodes = qcTimeline.querySelectorAll('.timeline-topic');
+              topicNodes.forEach((node) => {
+                node.addEventListener('click', async () => {
+                  const topicId = node.getAttribute('data-topic-id');
+                  await loadTopicDetail(topicId);
+                });
+              });
+
+              // Mini-Schließen-Buttons (rotes X) in der Timeline
+              const closeButtons = qcTimeline.querySelectorAll('.timeline-topic-close');
+              closeButtons.forEach(btn => {
+                btn.addEventListener('click', async (ev) => {
+                  ev.stopPropagation();
+                  const tid = btn.getAttribute('data-topic-id');
+                  if(!tid){ return; }
+                  try {
+                    const resSt = await fetch(`/api/contacts/${t.contact_id}/topics/${tid}/status`, {
+                      method: 'POST',
+                      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: 'done' })
+                    });
+                    const stData = await parseJsonSafe(resSt);
+                    if(!stData.__ok){ throw new Error(stData.error || 'Status konnte nicht geändert werden'); }
+                    // Quick-Card neu laden, damit Timeline und offene Themen aktualisiert werden
+                    const qcRes = await fetch(`/api/contacts/${t.contact_id}/quick-card`, { headers: getAuthHeaders() });
+                    const qcData = await parseJsonSafe(qcRes);
+                    renderQuickCard(qcData);
+                  } catch(err){
+                    alert('Fehler beim Schließen des Themas: ' + err);
+                  }
+                });
+              });
+
+              // Toggle für "geschlossene Themen anzeigen" neu verkabeln
+              const toggleClosed = document.getElementById('qc_show_closed_topics');
+              if(toggleClosed){
+                toggleClosed.addEventListener('change', () => {
+                  renderQuickCard(data);
+                });
+              }
+            } else if(timeline.length){
+              const tl = timeline.map(x => `<div>${escapeHtml(x)}</div>`).join('');
+              qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span> <div>${tl}</div>`;
+            } else {
+              qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Einträge</span>';
+            }
+          }
+
           if(qcBox && qcName && qcNow && qcTopics && qcReply && qcTone && qcTimeline){
             qcBox.style.display = 'block';
             qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Lade...</span>';
@@ -1506,160 +1715,7 @@
             fetch(`/api/contacts/${t.contact_id}/quick-card`, { headers: getAuthHeaders() })
               .then(res => parseJsonSafe(res))
               .then(data => {
-                if(!data.__ok){
-                  qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Keine Daten</span>';
-                  qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Keine Daten</span>';
-                  qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Keine Daten</span>';
-                  qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Keine Empfehlung</span>';
-                  qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Unklar</span>';
-                  qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Unbekannt</span>';
-                  qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Einträge</span>';
-                  return;
-                }
-                const who = data.who || '';
-                const now = data.now_relevant || [];
-                const topics = data.open_topics || [];
-                const reply = data.reply_strategy || '';
-                const replyMode = data.reply_mode || '';
-                const tone = data.tone || '';
-                const timeline = data.timeline || [];
-                const timelineTopics = data.timeline_topics || [];
-                qcName.innerHTML = `<span style="font-weight:500;">Name:</span> <span>${escapeHtml(who || (contactName + ' – ' + contactEmail))}</span>`;
-                qcNow.innerHTML = `<span style="font-weight:500;">Jetzt relevant:</span> <span>${now.length ? now.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine Infos</span>'}</span>`;
-                qcTopics.innerHTML = `<span style="font-weight:500;">Offene Themen:</span> <span>${topics.length ? topics.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine offenen Themen</span>'}</span>`;
-                qcReply.innerHTML = `<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span>${reply ? escapeHtml(reply) : '<span class="muted">Keine Empfehlung</span>'}</span>`;
-                let replyModeLabel = 'Unklar';
-                if(replyMode === 'last_only') replyModeLabel = 'Nur letzte E-Mail beantworten';
-                else if(replyMode === 'last_plus_reminder') replyModeLabel = 'Letzte E-Mail + kurzes Erinnern an ein offenes Thema';
-                else if(replyMode === 'follow_up_old_issue') replyModeLabel = 'Altes offenes Thema proaktiv aufgreifen';
-                qcReplyMode.innerHTML = `<span style="font-weight:500;">Antwort-Modus:</span> <span>${escapeHtml(replyModeLabel)}</span>`;
-                qcTone.innerHTML = `<span style="font-weight:500;">Ton &amp; Stil:</span> <span>${tone ? escapeHtml(tone) : '<span class="muted">Unbekannt</span>'}</span>`;
-                const topicDetailPanel = document.getElementById('contact_topic_detail_panel');
-                if(timelineTopics.length){
-                  const items = timelineTopics.map((tp) => {
-                    const parts = [];
-                    if(tp.last_received_at){
-                      const d = new Date(tp.last_received_at);
-                      const ds = d.toLocaleDateString('de-DE', { day: '2-digit', month:'2-digit' });
-                      parts.push(ds);
-                    }
-                    if(tp.label){ parts.push(tp.label); }
-                    if(tp.email_count){ parts.push(`${tp.email_count} E-Mails`); }
-                    let statusLabel = '';
-                    if(tp.status === 'open') statusLabel = 'offen';
-                    else if(tp.status === 'in_progress') statusLabel = 'in Bearbeitung';
-                    else if(tp.status === 'done') statusLabel = 'abgeschlossen';
-                    if(statusLabel){ parts.push(statusLabel); }
-                    const text = parts.join(' – ');
-                    return `<div class="timeline-topic" data-topic-id="${tp.id}" style="padding:4px 6px; margin:2px 0; cursor:pointer; border-radius:4px;" onmouseover="this.style.backgroundColor='#f3f4f6';" onmouseout="this.style.backgroundColor='transparent';">
-                      <div style="font-size:12px; font-weight:500;">${escapeHtml(text)}</div>
-                    </div>`;
-                  }).join('');
-                  qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span> <div>${items}</div>`;
-
-                  // Helper zum Laden eines Topic-Details (auch nach Statuswechsel wiederverwendbar)
-                  async function loadTopicDetail(topicId){
-                    if(!topicId || !topicDetailPanel){ return; }
-                    topicDetailPanel.style.display = 'block';
-                    topicDetailPanel.innerHTML = 'Lade Themen-Details...';
-                    try {
-                      const res = await fetch(`/api/contacts/${t.contact_id}/topics/${topicId}/detail`, { headers: getAuthHeaders() });
-                      const dataDet = await parseJsonSafe(res);
-                      if(!dataDet.__ok){ throw new Error(dataDet.error || 'Fehler beim Laden des Themas'); }
-                      const td = dataDet.topic || {};
-                      const emails = dataDet.emails || [];
-                      let html = '';
-                      html += `<div style="font-weight:600; margin-bottom:4px;">${escapeHtml(td.label || '')}</div>`;
-                      if(td.summary){
-                        html += `<div style="font-size:11px; margin-bottom:4px; white-space:pre-line;">${escapeHtml(td.summary)}</div>`;
-                      }
-                      html += `<div style="font-size:11px; margin-bottom:4px;">Status: ${escapeHtml(td.status || '')}</div>`;
-                      if(td.last_mentioned_at){
-                        html += `<div style="font-size:11px; margin-bottom:4px;">Zuletzt erwähnt am: ${escapeHtml(td.last_mentioned_at)}</div>`;
-                      }
-                      // Toggle-Button für Status
-                      const isDone = (td.status || '').toLowerCase() === 'done';
-                      const newStatus = isDone ? 'open' : 'done';
-                      const btnLabel = isDone ? 'Thema wieder öffnen' : 'Thema schließen (erledigt)';
-                      html += `<div style="margin:6px 0 8px 0;"><button class="topic-status-toggle" data-topic-id="${td.id}" data-new-status="${newStatus}" style="background:${isDone ? '#3b82f6' : '#10b981'}; color:#fff; border:0; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;">${btnLabel}</button></div>`;
-
-                      if(emails.length){
-                        html += '<div style="font-size:11px; margin-top:6px; margin-bottom:2px; font-weight:500;">Relevante E-Mails:</div>';
-                        html += '<ul style="list-style:none; padding-left:0; margin:0;">';
-                        emails.slice(0,5).forEach((em) => {
-                          const liText = `${em.received_at || ''} – ${em.subject || ''}`;
-                          html += `<li style="padding:2px 0;"><span style="cursor:pointer; text-decoration:underline;" data-email-id="${em.id}" class="topic-email-link">${escapeHtml(liText)}</span></li>`;
-                        });
-                        html += '</ul>';
-                      }
-                      topicDetailPanel.innerHTML = html;
-
-                      // Status-Toggle-Button verkabeln
-                      const toggleBtn = topicDetailPanel.querySelector('.topic-status-toggle');
-                      if(toggleBtn){
-                        toggleBtn.addEventListener('click', async () => {
-                          const tgtId = toggleBtn.getAttribute('data-topic-id');
-                          const ns = toggleBtn.getAttribute('data-new-status');
-                          if(!tgtId || !ns){ return; }
-                          toggleBtn.disabled = true;
-                          try {
-                            const resSt = await fetch(`/api/contacts/${t.contact_id}/topics/${tgtId}/status`, {
-                              method: 'POST',
-                              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ status: ns })
-                            });
-                            const stData = await parseJsonSafe(resSt);
-                            if(!stData.__ok){ throw new Error(stData.error || 'Status konnte nicht geändert werden'); }
-                            // Quick Card nach Statuswechsel neu laden
-                            try{
-                              const qcRes = await fetch(`/api/contacts/${t.contact_id}/quick-card`, { headers: getAuthHeaders() });
-                              const _ = await parseJsonSafe(qcRes);
-                            }catch(_){}
-                            // Topic-Detail erneut laden, um neuen Status zu zeigen
-                            await loadTopicDetail(topicId);
-                          } catch(err) {
-                            topicDetailPanel.innerHTML = `Fehler beim Ändern des Status: ${err}`;
-                          }
-                        });
-                      }
-
-                      // Klick auf E-Mail-Link: direkt zur entsprechenden Mail springen
-                      topicDetailPanel.querySelectorAll('.topic-email-link').forEach(link => {
-                        link.addEventListener('click', () => {
-                          const eid = link.getAttribute('data-email-id');
-                          if(!eid){ return; }
-                          const listEl = document.getElementById('list');
-                          if(!listEl){ return; }
-                          const row = listEl.querySelector(`.item[data-uid="${eid}"]`);
-                          if(row){
-                            try{
-                              row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }catch(_){}
-                            selectItem(eid, row);
-                          } else {
-                            alert('Diese E-Mail ist nicht in der aktuellen Liste sichtbar.');
-                          }
-                        });
-                      });
-                    } catch(e) {
-                      topicDetailPanel.innerHTML = `Fehler: ${e}`;
-                    }
-                  }
-
-                  // Click-Handler für Timeline-Themen
-                  const topicNodes = qcTimeline.querySelectorAll('.timeline-topic');
-                  topicNodes.forEach((node) => {
-                    node.addEventListener('click', async () => {
-                      const topicId = node.getAttribute('data-topic-id');
-                      await loadTopicDetail(topicId);
-                    });
-                  });
-                } else if(timeline.length){
-                  const tl = timeline.map(x => `<div>${escapeHtml(x)}</div>`).join('');
-                  qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span> <div>${tl}</div>`;
-                } else {
-                  qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Einträge</span>';
-                }
+                renderQuickCard(data);
               })
               .catch(err => {
                 qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Fehler</span>';
