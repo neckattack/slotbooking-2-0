@@ -3532,6 +3532,216 @@ def api_emails_imap_debug():
         return jsonify({"ok": False, "info": info}), 500
 
 
+@app.route('/api/emails/<int:email_id>/reply-prep', methods=['GET'])
+@require_auth
+def api_email_reply_prep(current_user, email_id):
+    """Bereitet Infos für eine KI-Antwort vor (Zusammenfassung, Themen, Antwortoptionen)."""
+    user_email = current_user.get('user_email')
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Aktuelle Mail + Kontakt laden
+        cursor.execute(
+            """
+            SELECT e.id, e.subject, e.body_text, e.body_html, e.received_at,
+                   e.from_addr, e.to_addrs, e.contact_id,
+                   c.name AS contact_name, c.contact_email
+            FROM emails e
+            LEFT JOIN contacts c ON c.id = e.contact_id
+            WHERE e.id = %s AND e.user_email = %s
+            """,
+            (email_id, user_email),
+        )
+        email_row = cursor.fetchone()
+        if not email_row:
+            cursor.close()
+            conn.close()
+            return jsonify({'__ok': False, 'error': 'E-Mail nicht gefunden'}), 404
+
+        contact_id = email_row.get('contact_id')
+
+        # Text für Zusammenfassung vorbereiten
+        def _html_to_text(s: str) -> str:
+            import re, html as _html
+            if not s:
+                return ''
+            s = re.sub(r'<\s*br\s*/?>', '\n', s, flags=re.IGNORECASE)
+            s = re.sub(r'</\s*p\s*>', '\n\n', s, flags=re.IGNORECASE)
+            s = re.sub(r'</\s*div\s*>', '\n', s, flags=re.IGNORECASE)
+            s = re.sub(r'</\s*li\s*>', '\n', s, flags=re.IGNORECASE)
+            s = re.sub(r'<[^>]+>', '', s)
+            s = _html.unescape(s)
+            s = re.sub(r'\n\s*\n\s*\n+', '\n\n', s)
+            return s.strip()
+
+        body_text = email_row.get('body_text') or ''
+        if not body_text and email_row.get('body_html'):
+            body_text = _html_to_text(email_row.get('body_html') or '')
+        # Hart auf z.B. 4000 Zeichen kappen
+        body_for_summary = (body_text or '')[:4000]
+
+        # LLM: Kurz-Zusammenfassung in Bulletpoints
+        summary_points = []
+        try:
+            if body_for_summary:
+                prompt = (
+                    "Fasse die folgende E-Mail für eine Antwortvorbereitung stichpunktartig zusammen. "
+                    "Gib 3-5 kurze Bulletpoints auf Deutsch zurück. Fokus: Was will der Absender, "
+                    "was ist offen, worauf sollte ich antworten?\n\n" + body_for_summary
+                )
+                resp = openai_client.chat.completions.create(
+                    model="gpt-4.1-mini",
+                    messages=[
+                        {"role": "system", "content": "Du schreibst sehr knappe, stichpunktartige Zusammenfassungen."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.2,
+                    max_tokens=220,
+                )
+                txt = resp.choices[0].message.content if resp.choices else ''
+                if txt:
+                    for line in txt.splitlines():
+                        line = line.strip().lstrip("-•*").strip()
+                        if line:
+                            summary_points.append(line)
+        except Exception as e_llm:
+            try:
+                app.logger.warning(f"[Reply Prep] LLM summary failed: {e_llm}")
+            except Exception:
+                pass
+
+        # Themen & offene Threads für den Kontakt (letzte 6 Monate)
+        topics_payload = []
+        if contact_id:
+            import datetime as _dt
+            six_months_ago = _dt.datetime.utcnow() - _dt.timedelta(days=180)
+
+            # Alle Topics des Kontakts mit E-Mail-Stats der letzten 6 Monate
+            cursor.execute(
+                """
+                SELECT ct.id, ct.topic_label, ct.status,
+                       MIN(e.received_at) AS first_received_at,
+                       MAX(e.received_at) AS last_received_at,
+                       COUNT(*) AS email_count
+                FROM contact_topics ct
+                JOIN contact_topic_emails cte ON cte.topic_id = ct.id
+                JOIN emails e ON e.id = cte.email_id
+                WHERE ct.contact_id = %s
+                  AND ct.user_email = %s
+                  AND e.received_at >= %s
+                GROUP BY ct.id, ct.topic_label, ct.status
+                ORDER BY COALESCE(MAX(e.received_at), ct.created_at) DESC
+                LIMIT 10
+                """,
+                (contact_id, user_email, six_months_ago),
+            )
+            topic_rows = cursor.fetchall() or []
+
+            for t_row in topic_rows:
+                topic_id = t_row['id']
+                label = t_row.get('topic_label') or ''
+                status = (t_row.get('status') or '').lower() or 'open'
+                first_dt = t_row.get('first_received_at')
+                last_dt = t_row.get('last_received_at')
+                age_days = None
+                if first_dt:
+                    try:
+                        age_days = ( _dt.datetime.utcnow() - first_dt.replace(tzinfo=None) ).days
+                    except Exception:
+                        age_days = None
+
+                # Relevante E-Mails für dieses Topic (letzte 6 Monate)
+                cursor.execute(
+                    """
+                    SELECT e.id, e.subject, e.received_at, e.from_addr, e.to_addrs
+                    FROM contact_topic_emails cte
+                    JOIN emails e ON e.id = cte.email_id
+                    WHERE cte.topic_id = %s AND cte.contact_id = %s AND cte.user_email = %s
+                      AND e.received_at >= %s
+                    ORDER BY e.received_at DESC
+                    LIMIT 15
+                    """,
+                    (topic_id, contact_id, user_email, six_months_ago),
+                )
+                email_rows = cursor.fetchall() or []
+                emails_payload = []
+                for er in email_rows:
+                    dt = er.get('received_at')
+                    when_str = dt.strftime('%d.%m.%Y %H:%M') if dt else ''
+                    direction = 'out'
+                    if (er.get('from_addr') or '').lower() == (user_email or '').lower():
+                        direction = 'out'
+                    else:
+                        direction = 'in'
+                    emails_payload.append({
+                        'id': er['id'],
+                        'subject': er.get('subject') or '(ohne Betreff)',
+                        'received_at': when_str,
+                        'direction': direction,
+                    })
+
+                # Einfache Antwortoptionen pro Topic (ohne extra LLM-Call, statisch aber themenbezogen benannt)
+                base_label = label or 'dieses Thema'
+                reply_options = [
+                    {
+                        'id': 'ack',
+                        'label': 'Ja / Zusagen',
+                        'snippet': f"Zum Thema '{base_label}': Ja, das können wir so machen."
+                    },
+                    {
+                        'id': 'decline',
+                        'label': 'Nein / Absagen',
+                        'snippet': f"Zum Thema '{base_label}': Leider können wir das aktuell nicht anbieten."
+                    },
+                    {
+                        'id': 'later',
+                        'label': 'Später kümmern',
+                        'snippet': f"Zum Thema '{base_label}': Ich komme darauf später noch einmal ausführlicher zurück."
+                    },
+                    {
+                        'id': 'close',
+                        'label': 'Thema schließen',
+                        'snippet': f"Zum Thema '{base_label}': Aus meiner Sicht ist dieses Thema damit abgeschlossen."
+                    },
+                    {
+                        'id': 'delegate',
+                        'label': 'Delegieren',
+                        'snippet': f"Zum Thema '{base_label}': Ich leite das intern an die zuständige Person weiter."
+                    },
+                ]
+
+                topics_payload.append({
+                    'id': topic_id,
+                    'label': label,
+                    'status': status,
+                    'age_days': age_days,
+                    'email_count': t_row.get('email_count') or len(emails_payload),
+                    'first_received_at': first_dt.strftime('%d.%m.%Y') if first_dt else None,
+                    'last_received_at': last_dt.strftime('%d.%m.%Y') if last_dt else None,
+                    'emails': emails_payload,
+                    'reply_options': reply_options,
+                })
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            '__ok': True,
+            'email_id': email_id,
+            'summary': summary_points,
+            'topics': topics_payload,
+        }), 200
+
+    except Exception as e:
+        try:
+            app.logger.error(f"[Reply Prep] Error: {e}")
+        except Exception:
+            pass
+        return jsonify({'__ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/emails/smtp-debug')
 def api_emails_smtp_debug():
     """Diagnose SMTP-Erreichbarkeit (DNS, TCP, SSL/STARTTLS) mit kurzen Timeouts."""

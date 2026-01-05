@@ -1190,6 +1190,12 @@
             <h2>${escapeHtml(t.subject || '')}</h2>
             <div class="meta">Von: ${escapeHtml(t.from||'')} · An: ${escapeHtml(t.to||'')} · ${escapeHtml(t.date||'')}</div>
             <div class="content">${html}</div>
+            <div id="reply_prep_block" class="sub" style="margin-top:12px; padding:8px 10px; border-radius:6px; background:#fefce8; border:1px solid #facc15; font-size:12px;">
+              <div style="font-weight:600; margin-bottom:4px;">🧠 Antwort-Vorbereitung (KI)</div>
+              <div id="reply_prep_status" class="sub" style="margin-bottom:4px;">Analysiere E-Mail…</div>
+              <div id="reply_prep_summary" style="margin-bottom:4px;"></div>
+              <div id="reply_prep_topics"></div>
+            </div>
           </div>
           <div class="detail-splitter" id="detail_splitter"></div>
           <div class="profile" id="profile_panel" data-contact-id="${t.contact_id || ''}">
@@ -1313,6 +1319,101 @@
         } catch(_e) {
           // Splitter ist Komfort-Feature – Fehler hier ignorieren
         }
+
+        // Antwort-Vorbereitung (KI) laden
+        try {
+          const prepBlock = document.getElementById('reply_prep_block');
+          const prepStatus = document.getElementById('reply_prep_status');
+          const prepSummary = document.getElementById('reply_prep_summary');
+          const prepTopics = document.getElementById('reply_prep_topics');
+          if(prepBlock && prepStatus && prepSummary && prepTopics){
+            prepStatus.textContent = 'Analysiere E-Mail…';
+            prepSummary.innerHTML = '';
+            prepTopics.innerHTML = '';
+            fetch(`/api/emails/${t.id}/reply-prep`, { headers: getAuthHeaders() })
+              .then(res => parseJsonSafe(res))
+              .then(data => {
+                if(!data.__ok){
+                  prepStatus.textContent = 'Analyse nicht verfügbar.';
+                  return;
+                }
+                prepStatus.textContent = '';
+                const summary = data.summary || [];
+                if(summary.length){
+                  prepSummary.innerHTML = '<ul style="margin:0; padding-left:18px;">' +
+                    summary.map(s => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>';
+                } else {
+                  prepSummary.innerHTML = '<span class="muted">Keine Zusammenfassung verfügbar.</span>';
+                }
+
+                const topics = data.topics || [];
+                if(!topics.length){
+                  prepTopics.innerHTML = '<div class="sub">Keine Themen erkannt.</div>';
+                  return;
+                }
+
+                const editor = document.getElementById('compose_editor');
+                function appendSnippet(snippet){
+                  if(!editor || !snippet) return;
+                  const current = editor.innerText === 'Hier erscheint der Vorschlag …' ? '' : editor.innerHTML;
+                  const esc = snippet.replace(/\n/g, '<br>');
+                  editor.innerHTML = (current ? current + '<br><br>' : '') + esc;
+                }
+
+                prepTopics.innerHTML = topics.map(tp => {
+                  const ageTxt = (tp.age_days != null) ? ` · seit ${tp.age_days} Tagen` : '';
+                  const meta = `${tp.email_count || 0} E-Mails${ageTxt}`;
+                  const optHtml = (tp.reply_options || []).map((opt, idx) => {
+                    return `<button class="reply-opt-btn" data-topic-id="${tp.id}" data-opt-id="${opt.id}" data-snippet="${encodeURIComponent(opt.snippet || '')}" style="border:0; padding:3px 6px; border-radius:4px; font-size:11px; margin:2px 4px 2px 0; cursor:pointer; background:#e5e7eb; color:#374151;">${escapeHtml(opt.label || '')}</button>`;
+                  }).join('');
+                  const mailsHtml = (tp.emails || []).slice(0,5).map(em => {
+                    const text = `${em.received_at || ''} – ${em.subject || ''}`;
+                    return `<div style="font-size:11px; cursor:pointer; text-decoration:underline;" data-email-id="${em.id}" class="reply-prep-email-link">${escapeHtml(text)}</div>`;
+                  }).join('');
+                  return `
+                    <div class="reply-prep-topic" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb;">
+                      <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(tp.label || '(ohne Titel)')}</div>
+                      <div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(meta)}</div>
+                      <div style="margin-bottom:4px;">${optHtml}</div>
+                      ${mailsHtml ? `<div style="font-size:11px; margin-top:2px;"><span class="muted">Relevante E-Mails:</span></div>${mailsHtml}` : ''}
+                    </div>
+                  `;
+                }).join('');
+
+                // Buttons verkabeln
+                prepTopics.querySelectorAll('.reply-opt-btn').forEach(btn => {
+                  btn.addEventListener('click', () => {
+                    const snippetEnc = btn.getAttribute('data-snippet') || '';
+                    const snippet = decodeURIComponent(snippetEnc);
+                    appendSnippet(snippet);
+                    // Button optisch als ausgewählt markieren
+                    btn.style.backgroundColor = '#16a34a';
+                    btn.style.color = '#ffffff';
+                  });
+                });
+
+                // Klick auf relevante E-Mails -> zur Mail springen
+                prepTopics.querySelectorAll('.reply-prep-email-link').forEach(link => {
+                  link.addEventListener('click', () => {
+                    const eid = link.getAttribute('data-email-id');
+                    if(!eid) return;
+                    const listEl = document.getElementById('list');
+                    if(!listEl) return;
+                    const row = listEl.querySelector(`.item[data-uid="${eid}"]`);
+                    if(row){
+                      try{ row.scrollIntoView({ behavior: 'smooth', block: 'center' }); }catch(_){ }
+                      selectItem(eid, row);
+                    } else {
+                      alert('Diese E-Mail ist nicht in der aktuellen Liste sichtbar.');
+                    }
+                  });
+                });
+              })
+              .catch(err => {
+                prepStatus.textContent = 'Fehler bei der Analyse.';
+              });
+          }
+        } catch(_) {}
 
         // Kontakt-Notizen laden und speichern
         try {
