@@ -519,7 +519,7 @@ def api_contact_topic_detail(current_user, contact_id, topic_id):
         # Zugehörige E-Mails (falls Mapping vorhanden)
         cursor.execute(
             """
-            SELECT e.id, e.subject, e.received_at, e.from_addr, e.to_addrs
+            SELECT e.id, e.subject, e.body_text, e.body_html, e.received_at, e.from_addr, e.to_addrs
             FROM contact_topic_emails cte
             JOIN emails e ON e.id = cte.email_id
             WHERE cte.user_email = %s AND cte.contact_id = %s AND cte.topic_id = %s
@@ -537,7 +537,10 @@ def api_contact_topic_detail(current_user, contact_id, topic_id):
             return dt.strftime('%d.%m.%Y %H:%M') if dt else ''
 
         emails_payload = []
+        email_summaries = []
         for e in email_rows:
+            body = (e.get('body_text') or '') or (e.get('body_html') or '')
+            body_short = (body or '')[:400]
             emails_payload.append({
                 'id': e['id'],
                 'subject': e.get('subject') or '(ohne Betreff)',
@@ -545,6 +548,34 @@ def api_contact_topic_detail(current_user, contact_id, topic_id):
                 'from_addr': e.get('from_addr'),
                 'to_addrs': e.get('to_addrs'),
             })
+            email_summaries.append(
+                f"- {fmt_dt(e.get('received_at'))} | {e.get('subject') or '(ohne Betreff)'}\n{body_short}"
+            )
+
+        topic_summary = None
+        try:
+            if email_summaries:
+                prompt = (
+                    "Du bist ein CRM-Assistent. Fasse das folgende Thema für eine Antworthilfe zusammen. "
+                    "Beschreibe in 3-6 kurzen Stichpunkten: Worum geht es, was ist offen, was sollte in der Antwort erwähnt werden.\n\n"
+                    f"Thema: {topic.get('topic_label')}\n\n"
+                    "Relevante E-Mails (neueste zuerst):\n" + "\n".join(email_summaries)
+                )
+                resp = openai_client.chat.completions.create(
+                    model="gpt-4.1-mini",
+                    messages=[
+                        {"role": "system", "content": "Du schreibst sehr knappe, stichpunktartige CRM-Zusammenfassungen."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.3,
+                    max_tokens=220,
+                )
+                topic_summary = resp.choices[0].message.content if resp.choices else None
+        except Exception as e_llm:
+            try:
+                app.logger.warning(f"[Contact Topic Detail] LLM summary failed: {e_llm}")
+            except Exception:
+                pass
 
         return jsonify({
             '__ok': True,
@@ -554,6 +585,7 @@ def api_contact_topic_detail(current_user, contact_id, topic_id):
                 'status': topic.get('status'),
                 'last_mentioned_at': fmt_dt(topic.get('last_mentioned_at')),
                 'created_at': fmt_dt(topic.get('created_at')),
+                'summary': topic_summary,
             },
             'emails': emails_payload,
         }), 200
@@ -3148,6 +3180,7 @@ def api_contacts_quick_card(current_user, contact_id):
 
         # Timeline (max 5 Touchpoints) primär Topic-basiert (1 Zeile pro Topic)
         timeline = []
+        timeline_topics = []
         try:
             conn2 = get_settings_db_connection()
             cursor2 = conn2.cursor(dictionary=True)
@@ -3195,6 +3228,13 @@ def api_contacts_quick_card(current_user, contact_id):
                     parts.append(status_label)
                 if parts:
                     timeline.append(" – ".join(parts))
+                timeline_topics.append({
+                    'id': r.get('id'),
+                    'label': label,
+                    'status': status,
+                    'last_received_at': dt.isoformat() if dt else None,
+                    'email_count': cnt,
+                })
         except Exception as _e_tl:
             try:
                 app.logger.warning(f"[Quick Card] Topic timeline failed, falling back to subject grouping: {_e_tl}")
@@ -3398,6 +3438,7 @@ def api_contacts_quick_card(current_user, contact_id):
             'reply_mode': reply_mode,
             'tone': tone,
             'timeline': timeline,
+            'timeline_topics': timeline_topics,
         }), 200
 
     except Exception as e:

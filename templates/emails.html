@@ -1211,10 +1211,7 @@
                 <div style="font-weight:600;">🤖 KI-Kundenprofil</div>
                 <div style="display:flex; gap:6px;">
                   <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" style="background:#7c3aed; color:#fff; border:0; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px;">
-                    ${profileSummary ? '🔄 Neu generieren' : 'Profil erstellen'}
-                  </button>
-                  <button id="generate_full_profile_btn" data-contact-id="${t.contact_id || ''}" style="background:#111827; color:#fff; border:0; padding:6px 10px; border-radius:6px; cursor:pointer; font-size:12px; white-space:nowrap;">
-                    📄 Gesamtprofil
+                    ${profileSummary ? '🔄 Profil aktualisieren' : 'Profil erstellen'}
                   </button>
                 </div>
               </div>
@@ -1245,13 +1242,9 @@
                 </span>` : ''}
                 ${kpis.salutation || kpis.sentiment || kpis.communication_frequency || kpis.category ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#fee2e2; color:#b91c1c; border-radius:4px; font-size:11px; font-weight:500;">🏷 Typ: ${kpis.category || 'Unklar'}</span>` : ''}
               </div>
-              <div id="contact_topic_details" class="sub" style="font-size:11px; margin-bottom:4px; display:block; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px dashed #e5e7eb;">
-                <div style="font-weight:600; margin-bottom:4px;">Themen</div>
-                <div id="topic_list" style="margin-bottom:8px;"></div>
-              </div>
               <div id="contact_topic_detail_panel" class="sub" style="font-size:11px; margin-bottom:8px; display:none; padding:6px 8px; border-radius:4px; background:#eff6ff; border:1px solid #bfdbfe;"></div>
-              <div id="prof_summary" class="sub" style="padding:10px; background:${profileSummary ? '#f0fdf4' : '#f9fafb'}; border-radius:6px; line-height:1.5;">
-                ${profileSummary ? formatCustomerProfile(profileSummary) : 'Noch kein Profil vorhanden. Klicken Sie oben, um ein KI-Profil zu erstellen.'}
+              <div id="prof_summary" class="sub" style="padding:10px; background:${profileSummary ? '#f0fdf4' : '#f9fafb'}; border-radius:6px; line-height:1.5; display:none;">
+                ${profileSummary ? formatCustomerProfile(profileSummary) : ''}
               </div>
               <div id="prof_summary_full" class="sub" style="margin-top:8px; padding:10px; background:#f9fafb; border-radius:6px; line-height:1.5; display:${profileSummaryFull ? 'block' : 'none'};">
                 ${profileSummaryFull ? formatCustomerProfile(profileSummaryFull) : ''}
@@ -1530,6 +1523,7 @@
                 const replyMode = data.reply_mode || '';
                 const tone = data.tone || '';
                 const timeline = data.timeline || [];
+                const timelineTopics = data.timeline_topics || [];
                 qcName.innerHTML = `<span style="font-weight:500;">Name:</span> <span>${escapeHtml(who || (contactName + ' – ' + contactEmail))}</span>`;
                 qcNow.innerHTML = `<span style="font-weight:500;">Jetzt relevant:</span> <span>${now.length ? now.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine Infos</span>'}</span>`;
                 qcTopics.innerHTML = `<span style="font-weight:500;">Offene Themen:</span> <span>${topics.length ? topics.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine offenen Themen</span>'}</span>`;
@@ -1540,7 +1534,78 @@
                 else if(replyMode === 'follow_up_old_issue') replyModeLabel = 'Altes offenes Thema proaktiv aufgreifen';
                 qcReplyMode.innerHTML = `<span style="font-weight:500;">Antwort-Modus:</span> <span>${escapeHtml(replyModeLabel)}</span>`;
                 qcTone.innerHTML = `<span style="font-weight:500;">Ton &amp; Stil:</span> <span>${tone ? escapeHtml(tone) : '<span class="muted">Unbekannt</span>'}</span>`;
-                if(timeline.length){
+                const topicDetailPanel = document.getElementById('contact_topic_detail_panel');
+                if(timelineTopics.length){
+                  const items = timelineTopics.map((tp) => {
+                    const parts = [];
+                    if(tp.last_received_at){
+                      const d = new Date(tp.last_received_at);
+                      const ds = d.toLocaleDateString('de-DE', { day: '2-digit', month:'2-digit' });
+                      parts.push(ds);
+                    }
+                    if(tp.label){ parts.push(tp.label); }
+                    if(tp.email_count){ parts.push(`${tp.email_count} E-Mails`); }
+                    let statusLabel = '';
+                    if(tp.status === 'open') statusLabel = 'offen';
+                    else if(tp.status === 'in_progress') statusLabel = 'in Bearbeitung';
+                    else if(tp.status === 'done') statusLabel = 'abgeschlossen';
+                    if(statusLabel){ parts.push(statusLabel); }
+                    const text = parts.join(' – ');
+                    return `<div class="timeline-topic" data-topic-id="${tp.id}" style="padding:2px 0; cursor:pointer;">
+                      <div style="font-size:11px;">${escapeHtml(text)}</div>
+                    </div>`;
+                  }).join('');
+                  qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span> <div>${items}</div>`;
+
+                  // Click-Handler für Timeline-Themen
+                  const topicNodes = qcTimeline.querySelectorAll('.timeline-topic');
+                  topicNodes.forEach((node) => {
+                    node.addEventListener('click', async () => {
+                      const topicId = node.getAttribute('data-topic-id');
+                      if(!topicId || !topicDetailPanel){ return; }
+                      topicDetailPanel.style.display = 'block';
+                      topicDetailPanel.innerHTML = 'Lade Themen-Details...';
+                      try {
+                        const res = await fetch(`/api/contacts/${t.contact_id}/topics/${topicId}/detail`, { headers: getAuthHeaders() });
+                        const dataDet = await parseJsonSafe(res);
+                        if(!dataDet.__ok){ throw new Error(dataDet.error || 'Fehler beim Laden des Themas'); }
+                        const td = dataDet.topic || {};
+                        const emails = dataDet.emails || [];
+                        let html = '';
+                        html += `<div style="font-weight:600; margin-bottom:4px;">${escapeHtml(td.label || '')}</div>`;
+                        if(td.summary){
+                          html += `<div style="font-size:11px; margin-bottom:4px; white-space:pre-line;">${escapeHtml(td.summary)}</div>`;
+                        }
+                        html += `<div style="font-size:11px; margin-bottom:4px;">Status: ${escapeHtml(td.status || '')}</div>`;
+                        if(td.last_mentioned_at){
+                          html += `<div style="font-size:11px; margin-bottom:4px;">Zuletzt erwähnt am: ${escapeHtml(td.last_mentioned_at)}</div>`;
+                        }
+                        if(emails.length){
+                          html += '<div style="font-size:11px; margin-top:6px; margin-bottom:2px; font-weight:500;">Relevante E-Mails:</div>';
+                          html += '<ul style="list-style:none; padding-left:0; margin:0;">';
+                          emails.slice(0,5).forEach((em) => {
+                            const liText = `${em.received_at || ''} – ${em.subject || ''}`;
+                            html += `<li style="padding:2px 0;"><span style="cursor:pointer; text-decoration:underline;" data-email-id="${em.id}" class="topic-email-link">${escapeHtml(liText)}</span></li>`;
+                          });
+                          html += '</ul>';
+                        }
+                        topicDetailPanel.innerHTML = html;
+
+                        // Klick auf E-Mail-Link: nur Hinweis anzeigen (Jump-Logik kann später ergänzt werden)
+                        topicDetailPanel.querySelectorAll('.topic-email-link').forEach(link => {
+                          link.addEventListener('click', () => {
+                            const eid = link.getAttribute('data-email-id');
+                            if(eid){
+                              alert('E-Mail-Ansicht per ID-Navigation kann im nächsten Schritt ergänzt werden (Email-ID: ' + eid + ')');
+                            }
+                          });
+                        });
+                      } catch(e) {
+                        topicDetailPanel.innerHTML = `Fehler: ${e}`;
+                      }
+                    });
+                  });
+                } else if(timeline.length){
                   const tl = timeline.map(x => `<div>${escapeHtml(x)}</div>`).join('');
                   qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span> <div>${tl}</div>`;
                 } else {
@@ -1562,53 +1627,25 @@
         const generateBtn = document.getElementById('generate_profile_btn');
         const summaryDiv = document.getElementById('prof_summary');
         const fullSummaryDiv = document.getElementById('prof_summary_full');
-        const fullBtn = document.getElementById('generate_full_profile_btn');
-
-        if(fullBtn && t.contact_id){
-          fullBtn.onclick = async () => {
-            const original = fullBtn.textContent;
-            fullBtn.disabled = true;
-            fullBtn.textContent = '⏳ Lädt Gesamtprofil...';
-            if(fullSummaryDiv){
-              fullSummaryDiv.style.display = 'block';
-              fullSummaryDiv.textContent = 'Erzeuge ausführliches Gesamtprofil aus Notizen und E-Mails...';
-            }
-            try {
-              const res = await fetch(`/api/contacts/${t.contact_id}/generate-profile-full`, {
-                method: 'POST',
-                headers: getAuthHeaders(),
-              });
-              const data = await parseJsonSafe(res);
-              if(!data.__ok || !data.summary_full){
-                throw new Error(data.error || 'Gesamtprofil konnte nicht erzeugt werden');
-              }
-              if(fullSummaryDiv){
-                fullSummaryDiv.style.display = 'block';
-                fullSummaryDiv.innerHTML = formatCustomerProfile(data.summary_full);
-                fullSummaryDiv.style.background = '#eef2ff';
-              }
-            } catch(e){
-              if(fullSummaryDiv){
-                fullSummaryDiv.style.display = 'block';
-                fullSummaryDiv.textContent = `❌ Fehler beim Gesamtprofil: ${e}`;
-                fullSummaryDiv.style.background = '#fee2e2';
-              }
-            } finally {
-              fullBtn.disabled = false;
-              fullBtn.textContent = original;
-            }
-          };
-        }
 
         if(generateBtn && t.contact_id){
           generateBtn.onclick = async () => {
             const originalText = generateBtn.textContent;
             generateBtn.disabled = true;
             generateBtn.textContent = '⏳ Generiere...';
-            summaryDiv.textContent = 'Analysiere E-Mails und erstelle Kundenprofil...';
-            summaryDiv.style.background = '#fef3c7';
+            if(summaryDiv){
+              summaryDiv.textContent = 'Analysiere E-Mails und aktualisiere Kundenprofil...';
+              summaryDiv.style.background = '#fef3c7';
+              summaryDiv.style.display = 'none';
+            }
+            if(fullSummaryDiv){
+              fullSummaryDiv.style.display = 'block';
+              fullSummaryDiv.textContent = 'Erzeuge ausführliches Gesamtprofil...';
+              fullSummaryDiv.style.background = '#f9fafb';
+            }
             
             try{
+              // 1) Kurzprofil/KPIs/Topics aktualisieren
               const res = await fetch(`/api/contacts/${t.contact_id}/generate-profile`, {
                 method: 'POST',
                 headers: getAuthHeaders()
@@ -1616,8 +1653,10 @@
               const data = await parseJsonSafe(res);
               
               if(data.__ok && data.summary){
-                summaryDiv.innerHTML = formatCustomerProfile(data.summary);
-                summaryDiv.style.background = '#f0fdf4';
+                if(summaryDiv){
+                  summaryDiv.innerHTML = formatCustomerProfile(data.summary);
+                  summaryDiv.style.background = '#f0fdf4';
+                }
                 // KPI-Chips (inkl. Kategorie) aktualisieren, falls vom Server geliefert
                 if(data.kpis){
                   const k = data.kpis || {};
@@ -1650,14 +1689,44 @@
                 if(t.contact_id){
                   loadContactTopics(t.contact_id);
                 }
-                generateBtn.textContent = '🔄 Neu generieren';
+                // Quick Card nachziehen
+                if(t.contact_id){
+                  // Einfach erneut quick-card laden
+                  fetch(`/api/contacts/${t.contact_id}/quick-card`, { headers: getAuthHeaders() })
+                    .then(res => parseJsonSafe(res))
+                    .then(() => {})
+                    .catch(() => {});
+                }
+
+                // 2) Direkt im Anschluss das Gesamtprofil aktualisieren
+                try {
+                  const resFull = await fetch(`/api/contacts/${t.contact_id}/generate-profile-full`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                  });
+                  const dataFull = await parseJsonSafe(resFull);
+                  if(dataFull.__ok && dataFull.summary_full && fullSummaryDiv){
+                    fullSummaryDiv.innerHTML = formatCustomerProfile(dataFull.summary_full);
+                    fullSummaryDiv.style.background = '#eef2ff';
+                  }
+                } catch(eFull){
+                  if(fullSummaryDiv){
+                    fullSummaryDiv.textContent = `❌ Fehler beim Gesamtprofil: ${eFull}`;
+                    fullSummaryDiv.style.background = '#fee2e2';
+                  }
+                }
+
+                generateBtn.textContent = '🔄 Profil aktualisieren';
                 generateBtn.disabled = false;
               } else {
                 throw new Error(data.error || 'Profil-Generierung fehlgeschlagen');
               }
             }catch(e){
-              summaryDiv.textContent = `❌ Fehler: ${e}`;
-              summaryDiv.style.background = '#fee2e2';
+              if(summaryDiv){
+                summaryDiv.textContent = `❌ Fehler: ${e}`;
+                summaryDiv.style.background = '#fee2e2';
+                summaryDiv.style.display = 'block';
+              }
               generateBtn.textContent = originalText;
               generateBtn.disabled = false;
             }
