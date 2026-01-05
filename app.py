@@ -638,6 +638,43 @@ def api_contacts_topics_list(current_user, contact_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/contacts/<int:contact_id>/topics/<int:topic_id>/status', methods=['POST'])
+@require_auth
+def api_contact_topic_set_status(current_user, contact_id, topic_id):
+    """Setzt den Status eines Topics (open, in_progress, done) manuell.
+
+    Wird aus dem UI genutzt, um Themen als erledigt zu markieren oder wieder zu öffnen.
+    """
+    user_email = current_user.get('user_email')
+    data = request.get_json(silent=True) or {}
+    new_status = (data.get('status') or '').lower()
+    allowed = {'open', 'in_progress', 'done'}
+    if new_status not in allowed:
+        return jsonify({'__ok': False, 'error': 'Ungültiger Status'}), 400
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE contact_topics
+            SET status = %s
+            WHERE id = %s AND contact_id = %s AND user_email = %s
+            """,
+            (new_status, topic_id, contact_id, user_email),
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'__ok': True, 'status': new_status}), 200
+    except Exception as e:
+        try:
+            app.logger.error(f"[Contact Topic Set Status] Error: {e}")
+        except Exception:
+            pass
+        return jsonify({'__ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/emails/agent-compose', methods=['POST'])
 @require_auth
 def api_emails_agent_compose(current_user):
