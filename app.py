@@ -501,12 +501,14 @@ def api_contact_topic_detail(current_user, contact_id, topic_id):
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Topic selbst laden
+        # Topic über Mapping-Tabelle auflösen, damit IDs garantiert zu den Timeline-Topics passen
         cursor.execute(
             """
-            SELECT id, topic_label, status, last_mentioned_at, created_at
-            FROM contact_topics
-            WHERE id = %s AND contact_id = %s AND user_email = %s
+            SELECT ct.id, ct.topic_label, ct.status, ct.last_mentioned_at, ct.created_at
+            FROM contact_topics ct
+            JOIN contact_topic_emails cte ON cte.topic_id = ct.id
+            WHERE ct.id = %s AND cte.contact_id = %s AND cte.user_email = %s
+            LIMIT 1
             """,
             (topic_id, contact_id, user_email),
         )
@@ -514,7 +516,7 @@ def api_contact_topic_detail(current_user, contact_id, topic_id):
         if not topic:
             cursor.close()
             conn.close()
-            return jsonify({'error': 'Topic not found'}), 404
+            return jsonify({'__ok': False, 'error': 'Topic not found'}), 200
 
         # Zugehörige E-Mails (falls Mapping vorhanden)
         cursor.execute(

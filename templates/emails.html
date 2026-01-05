@@ -1551,8 +1551,8 @@
                     else if(tp.status === 'done') statusLabel = 'abgeschlossen';
                     if(statusLabel){ parts.push(statusLabel); }
                     const text = parts.join(' – ');
-                    return `<div class="timeline-topic" data-topic-id="${tp.id}" style="padding:2px 0; cursor:pointer;">
-                      <div style="font-size:11px;">${escapeHtml(text)}</div>
+                    return `<div class="timeline-topic" data-topic-id="${tp.id}" style="padding:4px 6px; margin:2px 0; cursor:pointer; border-radius:4px;" onmouseover="this.style.backgroundColor='#f3f4f6';" onmouseout="this.style.backgroundColor='transparent';">
+                      <div style="font-size:12px; font-weight:500;">${escapeHtml(text)}</div>
                     </div>`;
                   }).join('');
                   qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span> <div>${items}</div>`;
