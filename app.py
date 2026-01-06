@@ -3582,33 +3582,77 @@ def api_email_reply_prep(current_user, email_id):
         # Hart auf z.B. 4000 Zeichen kappen
         body_for_summary = (body_text or '')[:4000]
 
-        # LLM: Kurz-Zusammenfassung in Bulletpoints
+        # LLM: Kurz-Zusammenfassung in Bulletpoints (optional) und E-Mail-Themen (title + explanation)
         summary_points = []
+        current_email_topics = []
         try:
-            if body_for_summary:
-                prompt = (
-                    "Fasse die folgende E-Mail für eine Antwortvorbereitung stichpunktartig zusammen. "
-                    "Gib 3-5 kurze Bulletpoints auf Deutsch zurück. Fokus: Was will der Absender, "
-                    "was ist offen, worauf sollte ich antworten?\n\n" + body_for_summary
+            import json as _json
+
+            # Nur bei längeren E-Mails eine Zusammenfassung erzeugen
+            if body_for_summary and len(body_for_summary) > 500:
+                prompt_sum = (
+                    "Fasse die folgende E-Mail extrem knapp für eine Antwortvorbereitung zusammen. "
+                    "Gib 2-4 sehr kurze Stichworte (max. 6-8 Wörter) auf Deutsch zurück. "
+                    "Kein Fließtext, nur Stichworte. Fokus: Kernanliegen und offene Punkte.\n\n" + body_for_summary
                 )
-                resp = openai_client.chat.completions.create(
+                resp_sum = openai_client.chat.completions.create(
                     model="gpt-4.1-mini",
                     messages=[
                         {"role": "system", "content": "Du schreibst sehr knappe, stichpunktartige Zusammenfassungen."},
-                        {"role": "user", "content": prompt},
+                        {"role": "user", "content": prompt_sum},
                     ],
                     temperature=0.2,
                     max_tokens=220,
                 )
-                txt = resp.choices[0].message.content if resp.choices else ''
+                txt = resp_sum.choices[0].message.content if resp_sum.choices else ''
                 if txt:
                     for line in txt.splitlines():
                         line = line.strip().lstrip("-•*").strip()
                         if line:
                             summary_points.append(line)
+
+            # Immer (auch bei kurzen Mails) 1-3 Themen der aktuellen E-Mail extrahieren
+            if body_for_summary:
+                prompt_topics = (
+                    "Analysiere die folgende E-Mail. Identifiziere 1-3 getrennte Themen oder Anliegen. "
+                    "Antwort NUR als JSON-Liste, z.B. "
+                    "[{\"title\":\"kurzer Titel\",\"explanation\":\"1-2 Sätze Erklärung\"}, ...]. "
+                    "title: maximal 8-10 Wörter, sehr präzise. explanation: 1-2 kurze Sätze, kein Smalltalk.\n\n"
+                    + body_for_summary
+                )
+                resp_topics = openai_client.chat.completions.create(
+                    model="gpt-4.1-mini",
+                    messages=[
+                        {"role": "system", "content": "Du extrahierst Themen aus E-Mails und antwortest strikt als JSON-Liste."},
+                        {"role": "user", "content": prompt_topics},
+                    ],
+                    temperature=0.2,
+                    max_tokens=260,
+                )
+                t_txt = resp_topics.choices[0].message.content if resp_topics.choices else ''
+                if t_txt:
+                    try:
+                        parsed = _json.loads(t_txt)
+                        if isinstance(parsed, list):
+                            for idx, item in enumerate(parsed[:3]):
+                                if not isinstance(item, dict):
+                                    continue
+                                title = str(item.get("title") or "").strip()
+                                expl = str(item.get("explanation") or "").strip()
+                                if not title and not expl:
+                                    continue
+                                current_email_topics.append({
+                                    "id": f"mailtopic_{email_id}_{idx}",
+                                    "label": title or "Thema",
+                                    "explanation": expl,
+                                })
+                    except Exception:
+                        # Wenn das Modell kein valides JSON geliefert hat, ignorieren wir die Themen
+                        pass
+
         except Exception as e_llm:
             try:
-                app.logger.warning(f"[Reply Prep] LLM summary failed: {e_llm}")
+                app.logger.warning(f"[Reply Prep] LLM summary/topics failed: {e_llm}")
             except Exception:
                 pass
 
@@ -3618,7 +3662,7 @@ def api_email_reply_prep(current_user, email_id):
             import datetime as _dt
             six_months_ago = _dt.datetime.utcnow() - _dt.timedelta(days=180)
 
-            # Alle Topics des Kontakts mit E-Mail-Stats der letzten 6 Monate
+            # Alle offenen Topics des Kontakts mit E-Mail-Stats der letzten 6 Monate
             cursor.execute(
                 """
                 SELECT ct.id, ct.topic_label, ct.status,
@@ -3630,6 +3674,7 @@ def api_email_reply_prep(current_user, email_id):
                 JOIN emails e ON e.id = cte.email_id
                 WHERE ct.contact_id = %s
                   AND ct.user_email = %s
+                  AND ct.status IN ('open','in_progress')
                   AND e.received_at >= %s
                 GROUP BY ct.id, ct.topic_label, ct.status
                 ORDER BY COALESCE(MAX(e.received_at), ct.created_at) DESC
@@ -3732,6 +3777,7 @@ def api_email_reply_prep(current_user, email_id):
             'email_id': email_id,
             'summary': summary_points,
             'topics': topics_payload,
+            'current_email_topics': current_email_topics,
         }), 200
 
     except Exception as e:

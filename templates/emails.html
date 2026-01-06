@@ -1328,6 +1328,7 @@
           const prepTopics = document.getElementById('reply_prep_topics');
           if(prepBlock && prepStatus && prepSummary && prepTopics){
             prepStatus.textContent = 'Analysiere E-Mail…';
+            // Zusammenfassung aktuell nicht anzeigen – Fokus auf Themenblöcke
             prepSummary.innerHTML = '';
             prepTopics.innerHTML = '';
             fetch(`/api/emails/${t.id}/reply-prep`, { headers: getAuthHeaders() })
@@ -1338,16 +1339,12 @@
                   return;
                 }
                 prepStatus.textContent = '';
-                const summary = data.summary || [];
-                if(summary.length){
-                  prepSummary.innerHTML = '<ul style="margin:0; padding-left:18px;">' +
-                    summary.map(s => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>';
-                } else {
-                  prepSummary.innerHTML = '<span class="muted">Keine Zusammenfassung verfügbar.</span>';
-                }
+                // Zusammenfassung aus Backend wird derzeit im UI nicht angezeigt,
+                // um die Ansicht schlank zu halten. Daten bleiben dennoch verfügbar.
 
+                const currentTopics = data.current_email_topics || [];
                 const topics = data.topics || [];
-                if(!topics.length){
+                if(!currentTopics.length && !topics.length){
                   prepTopics.innerHTML = '<div class="sub">Keine Themen erkannt.</div>';
                   return;
                 }
@@ -1360,35 +1357,142 @@
                   editor.innerHTML = (current ? current + '<br><br>' : '') + esc;
                 }
 
-                prepTopics.innerHTML = topics.map(tp => {
-                  const ageTxt = (tp.age_days != null) ? ` · seit ${tp.age_days} Tagen` : '';
-                  const meta = `${tp.email_count || 0} E-Mails${ageTxt}`;
-                  const optHtml = (tp.reply_options || []).map((opt, idx) => {
-                    return `<button class="reply-opt-btn" data-topic-id="${tp.id}" data-opt-id="${opt.id}" data-snippet="${encodeURIComponent(opt.snippet || '')}" style="border:0; padding:3px 6px; border-radius:4px; font-size:11px; margin:2px 4px 2px 0; cursor:pointer; background:#e5e7eb; color:#374151;">${escapeHtml(opt.label || '')}</button>`;
+                let topicsHtml = '';
+
+                // 1) Aktuelle E-Mail-Themen zuerst anzeigen (ohne Historien-Meta, optional mit Erklärung)
+                if(currentTopics.length){
+                  topicsHtml += currentTopics.map(ct => {
+                    const optHtml = (ct.reply_options || [
+                      { id: 'ack', label: 'Ja / Zusagen', snippet: `Zum Thema '${ct.label || 'dieses Thema'}': Ja, das können wir so machen.` },
+                      { id: 'decline', label: 'Nein / Absagen', snippet: `Zum Thema '${ct.label || 'dieses Thema'}': Leider können wir das aktuell nicht anbieten.` },
+                      { id: 'later', label: 'Später kümmern', snippet: `Zum Thema '${ct.label || 'dieses Thema'}': Ich komme darauf später noch einmal ausführlicher zurück.` },
+                      { id: 'delegate', label: 'Delegieren', snippet: `Zum Thema '${ct.label || 'dieses Thema'}': Ich leite das intern an die zuständige Person weiter.` },
+                    ]).map(opt => {
+                      return `<button class="reply-opt-btn" data-topic-id="" data-opt-id="${opt.id}" data-snippet="${encodeURIComponent(opt.snippet || '')}" style="border:0; padding:3px 6px; border-radius:4px; font-size:11px; margin:2px 4px 2px 0; cursor:pointer; background:#e5e7eb; color:#374151;">${escapeHtml(opt.label || '')}</button>`;
+                    }).join('');
+                    const expl = ct.explanation ? `<div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(ct.explanation)}</div>` : '';
+                    return `
+                      <div class="reply-prep-topic" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb;">
+                        <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(ct.label || '(ohne Titel)')}</div>
+                        ${expl}
+                        <div style="margin-bottom:4px;">${optHtml}</div>
+                      </div>
+                    `;
                   }).join('');
-                  const mailsHtml = (tp.emails || []).slice(0,5).map(em => {
-                    const text = `${em.received_at || ''} – ${em.subject || ''}`;
-                    return `<div style="font-size:11px; cursor:pointer; text-decoration:underline;" data-email-id="${em.id}" class="reply-prep-email-link">${escapeHtml(text)}</div>`;
+                }
+
+                // 2) Historische offene Themen darunter anzeigen
+                if(topics.length){
+                  topicsHtml += topics.map(tp => {
+                    const ageTxt = (tp.age_days != null) ? ` · seit ${tp.age_days} Tagen` : '';
+                    const meta = `${tp.email_count || 0} E-Mails${ageTxt}`;
+                    const optHtml = (tp.reply_options || []).map((opt, idx) => {
+                      return `<button class="reply-opt-btn" data-topic-id="${tp.id}" data-opt-id="${opt.id}" data-snippet="${encodeURIComponent(opt.snippet || '')}" style="border:0; padding:3px 6px; border-radius:4px; font-size:11px; margin:2px 4px 2px 0; cursor:pointer; background:#e5e7eb; color:#374151;">${escapeHtml(opt.label || '')}</button>`;
+                    }).join('');
+                    const mailsHtml = (tp.emails || []).slice(0,5).map(em => {
+                      const text = `${em.received_at || ''} – ${em.subject || ''}`;
+                      return `<div style="font-size:11px; cursor:pointer; text-decoration:underline;" data-email-id="${em.id}" class="reply-prep-email-link">${escapeHtml(text)}</div>`;
+                    }).join('');
+                    return `
+                      <div class="reply-prep-topic" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb;">
+                        <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(tp.label || '(ohne Titel)')}</div>
+                        <div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(meta)}</div>
+                        <div style="margin-bottom:4px;">${optHtml}</div>
+                        ${mailsHtml ? `<div style="font-size:11px; margin-top:2px;"><span class="muted">Relevante E-Mails:</span></div>${mailsHtml}` : ''}
+                      </div>
+                    `;
                   }).join('');
-                  return `
-                    <div class="reply-prep-topic" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb;">
-                      <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(tp.label || '(ohne Titel)')}</div>
-                      <div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(meta)}</div>
-                      <div style="margin-bottom:4px;">${optHtml}</div>
-                      ${mailsHtml ? `<div style="font-size:11px; margin-top:2px;"><span class="muted">Relevante E-Mails:</span></div>${mailsHtml}` : ''}
-                    </div>
-                  `;
-                }).join('');
+                }
+
+                prepTopics.innerHTML = topicsHtml;
 
                 // Buttons verkabeln
                 prepTopics.querySelectorAll('.reply-opt-btn').forEach(btn => {
-                  btn.addEventListener('click', () => {
+                  btn.addEventListener('click', async () => {
                     const snippetEnc = btn.getAttribute('data-snippet') || '';
                     const snippet = decodeURIComponent(snippetEnc);
                     appendSnippet(snippet);
                     // Button optisch als ausgewählt markieren
                     btn.style.backgroundColor = '#16a34a';
                     btn.style.color = '#ffffff';
+
+                    // Wenn es sich um die Option "Thema schließen" handelt, Topic im Backend schließen
+                    const optId = btn.getAttribute('data-opt-id');
+                    const topicId = btn.getAttribute('data-topic-id');
+                    if(optId === 'close' && topicId && t.contact_id){
+                      try{
+                        const resSt = await fetch(`/api/contacts/${t.contact_id}/topics/${topicId}/status`, {
+                          method: 'POST',
+                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'done' })
+                        });
+                        const stData = await parseJsonSafe(resSt);
+                        if(!stData.__ok){
+                          console.error('Status konnte nicht geändert werden', stData.error);
+                        } else {
+                          // Reply-Prep-Block nach Schließen des Themas neu laden, damit es verschwindet
+                          prepStatus.textContent = 'Aktualisiere Themen…';
+                          fetch(`/api/emails/${t.id}/reply-prep`, { headers: getAuthHeaders() })
+                            .then(res2 => parseJsonSafe(res2))
+                            .then(data2 => {
+                              prepStatus.textContent = '';
+                              // Rekursiver einfacher Re-Render: nur Topics neu zeichnen
+                              const topics2 = data2.topics || [];
+                              if(!topics2.length){
+                                prepTopics.innerHTML = '<div class="sub">Keine offenen Themen mehr.</div>';
+                                return;
+                              }
+                              prepTopics.innerHTML = topics2.map(tp2 => {
+                                const ageTxt2 = (tp2.age_days != null) ? ` · seit ${tp2.age_days} Tagen` : '';
+                                const meta2 = `${tp2.email_count || 0} E-Mails${ageTxt2}`;
+                                const optHtml2 = (tp2.reply_options || []).map((opt, idx) => {
+                                  return `<button class="reply-opt-btn" data-topic-id="${tp2.id}" data-opt-id="${opt.id}" data-snippet="${encodeURIComponent(opt.snippet || '')}" style="border:0; padding:3px 6px; border-radius:4px; font-size:11px; margin:2px 4px 2px 0; cursor:pointer; background:#e5e7eb; color:#374151;">${escapeHtml(opt.label || '')}</button>`;
+                                }).join('');
+                                const mailsHtml2 = (tp2.emails || []).slice(0,5).map(em2 => {
+                                  const text2 = `${em2.received_at || ''} – ${em2.subject || ''}`;
+                                  return `<div style="font-size:11px; cursor:pointer; text-decoration:underline;" data-email-id="${em2.id}" class="reply-prep-email-link">${escapeHtml(text2)}</div>`;
+                                }).join('');
+                                return `
+                                  <div class="reply-prep-topic" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb;">
+                                    <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(tp2.label || '(ohne Titel)')}</div>
+                                    <div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(meta2)}</div>
+                                    <div style="margin-bottom:4px;">${optHtml2}</div>
+                                    ${mailsHtml2 ? `<div style="font-size:11px; margin-top:2px;"><span class="muted">Relevante E-Mails:</span></div>${mailsHtml2}` : ''}
+                                  </div>
+                                `;
+                              }).join('');
+
+                              // Neue Buttons und Links erneut verkabeln
+                              prepTopics.querySelectorAll('.reply-opt-btn').forEach(btn2 => {
+                                btn2.addEventListener('click', async () => {
+                                  const snippetEnc2 = btn2.getAttribute('data-snippet') || '';
+                                  const snippet2 = decodeURIComponent(snippetEnc2);
+                                  appendSnippet(snippet2);
+                                  btn2.style.backgroundColor = '#16a34a';
+                                  btn2.style.color = '#ffffff';
+                                });
+                              });
+                              prepTopics.querySelectorAll('.reply-prep-email-link').forEach(link2 => {
+                                link2.addEventListener('click', () => {
+                                  const eid2 = link2.getAttribute('data-email-id');
+                                  if(!eid2) return;
+                                  const listEl2 = document.getElementById('list');
+                                  if(!listEl2) return;
+                                  const row2 = listEl2.querySelector(`.item[data-uid="${eid2}"]`);
+                                  if(row2){
+                                    try{ row2.scrollIntoView({ behavior: 'smooth', block: 'center' }); }catch(_){ }
+                                    selectItem(eid2, row2);
+                                  } else {
+                                    alert('Diese E-Mail ist nicht in der aktuellen Liste sichtbar.');
+                                  }
+                                });
+                              });
+                            });
+                        }
+                      } catch(e){
+                        console.error('Fehler beim Schließen des Themas aus Reply-Prep:', e);
+                      }
+                    }
                   });
                 });
 
