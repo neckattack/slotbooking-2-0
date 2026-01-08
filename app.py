@@ -3395,58 +3395,6 @@ def api_contacts_quick_card(current_user, contact_id):
             else:
                 reply_mode = "last_only"
 
-        # Optional: LLM-Feintuning für now_relevant und reply_strategy
-        try:
-            import json as _json
-
-            # Kontext für Modell: letzte 3 Mails + offene Themen
-            last_mails_for_llm = []
-            for e in email_rows[:3]:
-                dt = e.get('received_at')
-                date_str = dt.strftime('%d.%m.%Y') if dt else ''
-                subj = (e.get('subject') or '').strip() or '(ohne Betreff)'
-                last_mails_for_llm.append(f"{date_str}: {subj}")
-
-            llm_prompt = (
-                "Du hilfst im E-Mail-CRM. Fasse sehr kurz zusammen, was für die nächste Antwort "
-                "am wichtigsten ist und ob ältere Themen mit angesprochen werden sollen. "
-                "Antworte IMMER als JSON mit den Schlüsseln now_relevant (Liste aus 1-3 Strings) "
-                "und reply_strategy (ein kurzer Satz auf Deutsch). Keine weiteren Felder.\n\n"
-                f"Kontakt: {name}\n"
-                f"Kategorie: {cat or 'Unklar'}\n\n"
-                f"Letzte E-Mails (neueste zuerst):\n- " + "\n- ".join(last_mails_for_llm) + "\n\n"
-                f"Offene Themen: \n- " + ("\n- ".join(open_topics_formatted) if open_topics_formatted else "(keine)")
-            )
-
-            llm_res = openai_client.chat.completions.create(
-                model="gpt-4.1-mini",
-                messages=[
-                    {"role": "system", "content": "Du schreibst extrem knappe CRM-Zusammenfassungen als JSON."},
-                    {"role": "user", "content": llm_prompt},
-                ],
-                temperature=0.2,
-                max_tokens=200,
-            )
-            llm_content = llm_res.choices[0].message.content if llm_res.choices else None
-            if llm_content:
-                try:
-                    parsed = _json.loads(llm_content)
-                    nr = parsed.get("now_relevant")
-                    rs = parsed.get("reply_strategy")
-                    if isinstance(nr, list) and nr:
-                        # Hart auf 3 Einträge begrenzen
-                        now_relevant = [str(x) for x in nr[:3]]
-                    if isinstance(rs, str) and rs.strip():
-                        reply_strategy = rs.strip()
-                except Exception:
-                    # Wenn das Modell kein valides JSON geliefert hat, bei Heuristik bleiben
-                    pass
-        except Exception as _e_llm:
-            try:
-                app.logger.warning(f"[Quick Card] LLM helper failed: {_e_llm}")
-            except Exception:
-                pass
-
         # Wenn es gar keine letzte Mail gibt, aber offene Themen, fokussiere alte Issues
         if not email_rows and open_topics:
             reply_mode = "follow_up_old_issue"
