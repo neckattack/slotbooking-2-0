@@ -1388,6 +1388,13 @@
                         <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(ct.label || '(ohne Titel)')}</div>
                         ${expl}
                         <div style="margin-bottom:4px;">${optHtml}</div>
+                        <div style="margin-top:4px; border-top:1px dashed #e5e7eb; padding-top:4px;">
+                          <div class="sub" style="font-size:10px; margin-bottom:2px;">Manuelle Antwort (Stichworte):</div>
+                          <div style="display:flex; gap:4px; align-items:flex-start;">
+                            <textarea class="reply-manual-note" data-topic-label="${escapeHtml(ct.label || '')}" data-topic-expl="${ct.explanation ? escapeHtml(ct.explanation) : ''}" rows="2" placeholder="Eigene Stichworte zur Antwort..." style="flex:1; font-size:11px; padding:4px 6px; border-radius:4px; border:1px solid #e5e7eb; resize:vertical;"></textarea>
+                            <button class="reply-manual-btn" data-kind="current" style="border:0; padding:4px 6px; border-radius:4px; font-size:11px; cursor:pointer; background:#6366f1; color:#ffffff; white-space:nowrap;">Manuell formulieren</button>
+                          </div>
+                        </div>
                       </div>
                     `;
                   }).join('');
@@ -1413,6 +1420,13 @@
                         <div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(meta)}</div>
                         <div style="margin-bottom:4px;">${optHtml}</div>
                         ${mailsHtml ? `<div style="font-size:11px; margin-top:2px;"><span class="muted">Relevante E-Mails:</span></div>${mailsHtml}` : ''}
+                        <div style="margin-top:4px; border-top:1px dashed #e5e7eb; padding-top:4px;">
+                          <div class="sub" style="font-size:10px; margin-bottom:2px;">Manuelle Antwort (Stichworte):</div>
+                          <div style="display:flex; gap:4px; align-items:flex-start;">
+                            <textarea class="reply-manual-note" data-topic-label="${escapeHtml(tp.label || '')}" data-topic-expl="" rows="2" placeholder="Eigene Stichworte zur Antwort..." style="flex:1; font-size:11px; padding:4px 6px; border-radius:4px; border:1px solid #e5e7eb; resize:vertical;"></textarea>
+                            <button class="reply-manual-btn" data-kind="historical" data-topic-id="${tp.id}" style="border:0; padding:4px 6px; border-radius:4px; font-size:11px; cursor:pointer; background:#6366f1; color:#ffffff; white-space:nowrap;">Manuell formulieren</button>
+                          </div>
+                        </div>
                       </div>
                     `;
                   }).join('');
@@ -1531,6 +1545,67 @@
                       } catch(e){
                         console.error('Fehler beim Schließen des Themas aus Reply-Prep:', e);
                       }
+                    }
+                  });
+                });
+
+                // Manuelle Antwortkategorie: Stichworte -> LLM-Formulierung
+                prepTopics.querySelectorAll('.reply-manual-btn').forEach(btn => {
+                  btn.addEventListener('click', async () => {
+                    const topicKind = btn.getAttribute('data-kind') || 'current';
+                    const topicId = btn.getAttribute('data-topic-id') || '';
+                    const container = btn.closest('.reply-prep-topic');
+                    if(!container) return;
+                    const noteEl = container.querySelector('.reply-manual-note');
+                    if(!noteEl) return;
+                    const note = noteEl.value.trim();
+                    if(!note){
+                      alert('Bitte zuerst Stichworte eingeben.');
+                      return;
+                    }
+
+                    const topicLabel = noteEl.getAttribute('data-topic-label') || '';
+                    const topicExpl = noteEl.getAttribute('data-topic-expl') || '';
+
+                    btn.disabled = true;
+                    const oldText = btn.textContent;
+                    btn.textContent = 'Formuliere...';
+                    try{
+                      const res = await fetch('/api/reply-prep/manual-draft', {
+                        method: 'POST',
+                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          topic_label: topicLabel,
+                          topic_explanation: topicExpl,
+                          note: note,
+                          contact_name: contactName || ''
+                        })
+                      });
+                      const data = await parseJsonSafe(res);
+                      if(!data.__ok){
+                        alert('Konnte keine manuelle Antwort formulieren: ' + (data.error || 'Unbekannter Fehler'));
+                      } else {
+                        const snippet = data.snippet || '';
+                        const optId = topicId ? `manual_${topicId}` : `manual_${topicLabel || 'topic'}`;
+                        // Toggle-Logik wie bei Buttons: wenn bereits aktiv, entfernen; sonst setzen
+                        const isActive = btn.getAttribute('data-active') === '1';
+                        if(isActive){
+                          setSnippetForButton(topicId || topicLabel, optId, null);
+                          btn.setAttribute('data-active', '0');
+                          btn.style.backgroundColor = '#6366f1';
+                          btn.style.opacity = '1';
+                        } else {
+                          setSnippetForButton(topicId || topicLabel, optId, snippet);
+                          btn.setAttribute('data-active', '1');
+                          btn.style.backgroundColor = '#16a34a';
+                          btn.style.opacity = '1';
+                        }
+                      }
+                    } catch(e){
+                      alert('Fehler bei manueller Formulierung: ' + e);
+                    } finally {
+                      btn.disabled = false;
+                      btn.textContent = oldText;
                     }
                   });
                 });

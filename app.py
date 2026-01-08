@@ -3828,6 +3828,62 @@ def api_email_reply_prep(current_user, email_id):
         return jsonify({'__ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/reply-prep/manual-draft', methods=['POST'])
+@require_auth
+def api_reply_prep_manual_draft(current_user):
+    """Formuliert aus Stichworten eine kurze Antwort zu einem Thema."""
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        topic_label = (data.get('topic_label') or '').strip()
+        topic_expl = (data.get('topic_explanation') or '').strip()
+        note = (data.get('note') or '').strip()
+        contact_name = (data.get('contact_name') or '').strip() or 'der Kontakt'
+
+        if not note:
+            return jsonify({'__ok': False, 'error': 'note fehlt'}), 400
+
+        try:
+            prompt = (
+                "Du hilfst beim Schreiben von E-Mail-Antworten in einem CRM. "
+                "Formuliere aus den Stichworten eine kurze, freundliche Antwort nur zu DIESEM EINEN Thema. "
+                "Schreibe konsequent in der Wir-Form (wir), nicht als KI, und mache keine Meta-Kommentare. "
+                "Wenn möglich, gib eine realistische Einschätzung, wann wir uns darum kümmern (z.B. heute, in den nächsten Tagen, bis Ende nächster Woche). "
+                "Maximal 3-4 Sätze. Kein Smalltalk, direkt auf den Punkt.\n\n"
+                f"Kontakt: {contact_name}\n"
+                f"Thema: {topic_label or 'aktuelles Anliegen'}\n"
+            )
+            if topic_expl:
+                prompt += f"Kurze Beschreibung des Themas: {topic_expl}\n"
+            prompt += f"Stichworte zur gewünschten Antwort: {note}"
+
+            resp = openai_client.chat.completions.create(
+                model="gpt-4.1-mini",
+                messages=[
+                    {"role": "system", "content": "Du formulierst prägnante, freundliche E-Mail-Antworten auf Deutsch."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=220,
+            )
+            snippet = resp.choices[0].message.content.strip() if resp.choices else ''
+            if not snippet:
+                return jsonify({'__ok': False, 'error': 'Kein Text vom Modell erhalten'}), 500
+            return jsonify({'__ok': True, 'snippet': snippet}), 200
+        except Exception as e_llm:
+            try:
+                app.logger.error(f"[Reply Prep Manual] LLM error: {e_llm}")
+            except Exception:
+                pass
+            return jsonify({'__ok': False, 'error': str(e_llm)}), 500
+
+    except Exception as e:
+        try:
+            app.logger.error(f"[Reply Prep Manual] Error: {e}")
+        except Exception:
+            pass
+        return jsonify({'__ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/emails/smtp-debug')
 def api_emails_smtp_debug():
     """Diagnose SMTP-Erreichbarkeit (DNS, TCP, SSL/STARTTLS) mit kurzen Timeouts."""
