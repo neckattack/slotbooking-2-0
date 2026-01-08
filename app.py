@@ -3804,14 +3804,16 @@ def api_email_reply_prep(current_user, email_id):
             # Immer (auch bei kurzen Mails) 1-5 Themen der aktuellen E-Mail extrahieren
             if body_for_topics:
                 prompt_topics = (
-                    "Analysiere die folgende E-Mail. Identifiziere 1-5 getrennte fachliche Themen oder Anliegen. "
-                    "Antwort NUR als JSON-Liste. Jedes Objekt hat die Felder "
-                    "title (kurzer Titel), explanation (1-2 Sätze Erklärung) und reply_options "
-                    "(Liste von 2-5 Antwortoptionen). Jede reply_option hat die Felder id (kurzer maschinenlesbarer String, z.B. 'ack' oder 'detail_nachfragen'), "
+                    "Teile den folgenden E-Mail-Text in mehrere fachliche Themen auf. "
+                    "Jedes Thema soll eine sehr kurze Überschrift (Headline) mit 3-4 Wörtern haben, "
+                    "und eine ein- bis zweisätzige Erklärung, was inhaltlich zu diesem Thema gehört. "
+                    "Formatiere deine Antwort NUR als JSON-Liste von Objekten. Kein Fließtext außerhalb des JSON. "
+                    "Jedes Objekt hat die Felder title, explanation und reply_options. "
+                    "title: die kurze Headline (3-4 Wörter), präzise Beschreibung des fachlichen Anliegens, keine Anrede. "
+                    "explanation: 1-2 Sätze, die den gesamten fachlichen Inhalt dieses Themas zusammenfassen (z.B. Rechnung, Betrag, Steuer, Währung, Termin, To-Do). "
+                    "reply_options: Liste von 2-5 Antwortoptionen mit den Feldern id (kurzer maschinenlesbarer String, z.B. 'ack' oder 'detail_nachfragen'), "
                     "label (Button-Text, z.B. 'Zusagen', 'Nachfragen', 'Delegieren') und snippet (kurzer deutscher Beispiel-Text, der direkt als Antwortbaustein eingefügt werden kann). "
                     "Beispiel: [{\"title\":\"kurzer Titel\",\"explanation\":\"1-2 Sätze Erklärung\",\"reply_options\":[{\"id\":\"ack\",\"label\":\"Zusagen\",\"snippet\":\"Zum Thema ...\"}]}]. "
-                    "title: maximal 8-10 Wörter, sehr präzise und soll das fachliche Anliegen beschreiben (z.B. '7%-Steuersatz für Masseur hinzufügen'), nicht die Anrede. "
-                    "explanation: 1-2 kurze Sätze, die den gesamten fachlichen Inhalt des Themas zusammenfassen (z.B. Rechnung, Betrag, Steuer, Währung, Termin, To-Do). "
                     "Verwende KEINE inhaltsleeren Sätze wie 'Ja, ich weiß.' oder 'Alles klar.' als explanation. "
                     "Ignoriere Begrüßungen und Schlussformeln wie 'Hi Chris', 'Hallo Gerd', 'Bussi Johanna' oder 'Viele Grüße' sowie kurze Bestätigungen ohne Fachinhalt. "
                     "Wenn die E-Mail eine Aufzählung oder Meeting-Zusammenfassung mit mehreren Bullet-Points oder nummerierten Punkten enthält, behandle jeden inhaltlich eigenständigen Punkt als eigenes Thema, sofern er eine eigene Aufgabe oder Fragestellung beschreibt (z.B. 'non-factured jobs Ordner aufräumen', 'steuerpflichtige Masseure in Job einfügen', 'Nachfass-E-Mail erstellen', 'LinkedIn-Posts/Capcut-Videos', 'Preiserhöhung + neue AGBs'). "
