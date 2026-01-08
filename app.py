@@ -3688,6 +3688,7 @@ def api_emails_imap_debug():
 def api_email_reply_prep(current_user, email_id):
     """Bereitet Infos für eine KI-Antwort vor (Zusammenfassung, Themen, Antwortoptionen)."""
     user_email = current_user.get('user_email')
+    debug_raw = request.args.get('debug_raw') == '1'
 
     try:
         conn = get_settings_db_connection()
@@ -3775,6 +3776,7 @@ def api_email_reply_prep(current_user, email_id):
         # LLM: Kurz-Zusammenfassung in Bulletpoints (optional) und E-Mail-Themen (title + explanation)
         summary_points = []
         current_email_topics = []
+        raw_topics_llm = None
         try:
             import json as _json
 
@@ -3831,6 +3833,7 @@ def api_email_reply_prep(current_user, email_id):
                     max_tokens=260,
                 )
                 t_txt = resp_topics.choices[0].message.content if resp_topics.choices else ''
+                raw_topics_llm = t_txt or ''
                 if t_txt:
                     try:
                         parsed = _json.loads(t_txt)
@@ -3864,9 +3867,13 @@ def api_email_reply_prep(current_user, email_id):
                                     "explanation": expl,
                                     "reply_options": ro_list,
                                 })
-                    except Exception:
-                        # Wenn das Modell kein valides JSON geliefert hat, ignorieren wir die Themen
-                        pass
+                    except Exception as e_json:
+                        # Wenn das Modell kein valides JSON geliefert hat, loggen wir den Fehler und fallen auf Fallback zurück
+                        try:
+                            snippet = (t_txt or '')[:400].replace('\n', ' ')
+                            app.logger.warning(f"[Reply Prep] Topics JSON parse failed: {e_json} | raw_snippet={snippet}")
+                        except Exception:
+                            pass
 
         except Exception as e_llm:
             try:
