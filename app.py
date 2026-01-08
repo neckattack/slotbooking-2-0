@@ -3733,7 +3733,7 @@ def api_email_reply_prep(current_user, email_id):
         # Hart auf z.B. 4000 Zeichen kappen
         body_for_summary = (body_text or '')[:4000]
 
-        # Für die Themen-Extraktion Begrüßung, Kontaktkopf und Schlussformeln entfernen
+        # Für die Themen-Extraktion Begrüßung und Schlussformeln entfernen
         body_for_topics = body_for_summary
         if body_for_topics:
             try:
@@ -3754,34 +3754,10 @@ def api_email_reply_prep(current_user, email_id):
                     else:
                         break
 
-                # 2) Kontakt-Kopfblöcke wie "Folgender Masseur:" + Name/Email/Phone entfernen
-                cleaned = []
-                i = start_idx
-                while i < len(lines):
-                    raw = lines[i]
-                    l = raw.strip()
-                    lower = l.lower()
-                    # Block beginnt z.B. mit "Folgender Masseur:" oder "Kontakt:" usw.
-                    if lower.startswith("folgender masseur") or lower.startswith("kontakt:"):
-                        i += 1
-                        # Folgende Zeilen mit typischen Feldpräfixen (N:, UN:, Email:, Phone:) überspringen
-                        while i < len(lines):
-                            l2 = lines[i].strip()
-                            if not l2:
-                                i += 1
-                                break
-                            if _re.match(r"^(n:|un:|name:|email:|mail:|phone:|tel:)", l2, _re.IGNORECASE):
-                                i += 1
-                                continue
-                            break
-                        continue
-                    cleaned.append(raw)
-                    i += 1
-
-                # 3) Schlussblock mit "Danke", Grüßen etc. abschneiden
-                end_idx = len(cleaned)
-                for i in range(len(cleaned) - 1, -1, -1):
-                    line = cleaned[i].strip().lower()
+                # 2) Schlussblock mit "Danke", Grüßen etc. abschneiden
+                end_idx = len(lines)
+                for i in range(len(lines) - 1, -1, -1):
+                    line = lines[i].strip().lower()
                     if not line:
                         continue
                     if any(kw in line for kw in ["danke", "viele grüße", "vielen dank", "lg ", "liebe grüße", "best regards", "kind regards"]):
@@ -3791,7 +3767,7 @@ def api_email_reply_prep(current_user, email_id):
                     if len(line) > 40:
                         break
 
-                core_lines = cleaned[:end_idx] if end_idx > 0 else cleaned
+                core_lines = lines[start_idx:end_idx] if start_idx < end_idx else lines
                 body_for_topics = '\n'.join(core_lines).strip() or body_for_summary
             except Exception:
                 body_for_topics = body_for_summary
