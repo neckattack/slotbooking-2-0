@@ -3158,7 +3158,7 @@ def api_contacts_quick_card(current_user, contact_id):
         # Basis-Kontaktdaten laden
         cursor.execute(
             """
-            SELECT id, name, contact_email, category, salutation, sentiment
+            SELECT id, name, contact_email, category, salutation, sentiment, profile_summary_full
             FROM contacts
             WHERE id = %s AND user_email = %s
             """,
@@ -3199,11 +3199,41 @@ def api_contacts_quick_card(current_user, contact_id):
         conn.close()
 
         # WHO: Wer ist das?
-        name = contact.get('name') or contact.get('contact_email') or ''
+        raw_name = (contact.get('name') or '').strip()
+        contact_email_raw = (contact.get('contact_email') or '').strip()
+        display_name = raw_name
+
+        # Wenn name leer ist oder wie eine E-Mail aussieht, versuche ihn aus dem Gesamtprofil zu extrahieren
+        if (not display_name) or ('@' in display_name):
+            full_profile = (contact.get('profile_summary_full') or '').strip()
+            if full_profile:
+                first_line = full_profile.split('\n', 1)[0].strip()
+                # Erwartetes Muster: "Gesamtprofil: Johanna Pizzeria | neckattack (johanna@...)"
+                try:
+                    import re as _re
+                    m = _re.search(r"Gesamtprofil:\s*(.+?)\s*\|", first_line)
+                    if m:
+                        candidate = m.group(1).strip()
+                        if candidate and '@' not in candidate:
+                            display_name = candidate
+                except Exception:
+                    pass
+
+        # Fallbacks: Wenn immer noch kein brauchbarer Name da ist, nimm E-Mail oder Localpart
+        if (not display_name) or ('@' in display_name):
+            if contact_email_raw:
+                if '@' in contact_email_raw:
+                    local = contact_email_raw.split('@', 1)[0]
+                    display_name = local[:1].upper() + local[1:]
+                else:
+                    display_name = contact_email_raw
+            else:
+                display_name = ''
+
         cat = contact.get('category') or ''
         # Falls Kategorie fehlt/unklar, aber gleiche Domain wie Nutzer: als Kollege/Mitarbeiter interpretieren
         try:
-            contact_email = (contact.get('contact_email') or '').lower()
+            contact_email = contact_email_raw.lower()
             user_domain = (user_email or '').split('@', 1)[1].lower() if (user_email and '@' in user_email) else ''
             contact_domain = contact_email.split('@', 1)[1] if ('@' in contact_email) else ''
         except Exception:
@@ -3213,9 +3243,9 @@ def api_contacts_quick_card(current_user, contact_id):
             cat = 'Kollege/Mitarbeiter'
         # Wenn Kategorie immer noch leer/unklar ist, zeige nur den Namen ohne Suffix
         if not cat or cat == 'Unklar':
-            who_line = name
+            who_line = display_name
         else:
-            who_line = f"{name} – {cat}"
+            who_line = f"{display_name} – {cat}"
 
         # Timeline (max 5 Touchpoints) primär Topic-basiert (1 Zeile pro Topic)
         timeline = []
