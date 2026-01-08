@@ -1350,17 +1350,28 @@
                 }
 
                 const editor = document.getElementById('compose_editor');
-                function appendSnippet(snippet){
-                  if(!editor || !snippet) return;
-                  const current = editor.innerText === 'Hier erscheint der Vorschlag …' ? '' : editor.innerHTML;
+                function setSnippetForButton(topicId, optId, snippet){
+                  if(!editor) return;
+                  const tId = topicId || '';
+                  const oId = optId || '';
+                  const selector = `.reply-snippet[data-topic-id="${tId}"][data-opt-id="${oId}"]`;
+                  const existing = editor.querySelector(selector);
+                  if(existing){
+                    existing.remove();
+                  }
+                  if(!snippet) return;
+                  const isPlaceholder = editor.innerText === 'Hier erscheint der Vorschlag …';
+                  const currentHtml = isPlaceholder ? '' : editor.innerHTML;
                   const esc = snippet.replace(/\n/g, '<br>');
-                  editor.innerHTML = (current ? current + '<br><br>' : '') + esc;
+                  const wrapped = `<span class="reply-snippet" data-topic-id="${tId}" data-opt-id="${oId}">${esc}</span>`;
+                  editor.innerHTML = (currentHtml ? currentHtml + '<br><br>' : '') + wrapped;
                 }
 
                 let topicsHtml = '';
 
                 // 1) Aktuelle E-Mail-Themen zuerst anzeigen (ohne Historien-Meta, optional mit Erklärung)
                 if(currentTopics.length){
+                  topicsHtml += '<div class="sub" style="font-size:10px; text-transform:uppercase; letter-spacing:0.03em; margin-top:2px;">Aktuelle Themen aus dieser E-Mail</div>';
                   topicsHtml += currentTopics.map(ct => {
                     const optHtml = (ct.reply_options || [
                       { id: 'ack', label: 'Ja / Zusagen', snippet: `Zum Thema '${ct.label || 'dieses Thema'}': Ja, das können wir so machen.` },
@@ -1372,7 +1383,8 @@
                     }).join('');
                     const expl = ct.explanation ? `<div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(ct.explanation)}</div>` : '';
                     return `
-                      <div class="reply-prep-topic" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb;">
+                      <div class="reply-prep-topic" data-kind="current" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb; position:relative;">
+                        <span class="reply-prep-close" data-kind="current" style="position:absolute; right:6px; top:4px; color:#b91c1c; font-weight:bold; cursor:pointer;">×</span>
                         <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(ct.label || '(ohne Titel)')}</div>
                         ${expl}
                         <div style="margin-bottom:4px;">${optHtml}</div>
@@ -1383,6 +1395,7 @@
 
                 // 2) Historische offene Themen darunter anzeigen
                 if(topics.length){
+                  topicsHtml += '<div class="sub" style="font-size:10px; text-transform:uppercase; letter-spacing:0.03em; margin-top:8px;">Offene Themen aus bisherigen E-Mails</div>';
                   topicsHtml += topics.map(tp => {
                     const ageTxt = (tp.age_days != null) ? ` · seit ${tp.age_days} Tagen` : '';
                     const meta = `${tp.email_count || 0} E-Mails${ageTxt}`;
@@ -1394,7 +1407,8 @@
                       return `<div style="font-size:11px; cursor:pointer; text-decoration:underline;" data-email-id="${em.id}" class="reply-prep-email-link">${escapeHtml(text)}</div>`;
                     }).join('');
                     return `
-                      <div class="reply-prep-topic" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb;">
+                      <div class="reply-prep-topic" data-kind="historical" data-topic-id="${tp.id}" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb; position:relative;">
+                        <span class="reply-prep-close" data-kind="historical" data-topic-id="${tp.id}" style="position:absolute; right:6px; top:4px; color:#b91c1c; font-weight:bold; cursor:pointer;">×</span>
                         <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(tp.label || '(ohne Titel)')}</div>
                         <div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(meta)}</div>
                         <div style="margin-bottom:4px;">${optHtml}</div>
@@ -1410,15 +1424,27 @@
                 prepTopics.querySelectorAll('.reply-opt-btn').forEach(btn => {
                   btn.addEventListener('click', async () => {
                     const snippetEnc = btn.getAttribute('data-snippet') || '';
+                    const topicId = btn.getAttribute('data-topic-id') || '';
+                    const optId = btn.getAttribute('data-opt-id') || '';
+
+                    const isActive = btn.getAttribute('data-active') === '1';
+                    if(isActive){
+                      // Toggle aus: Snippet wieder entfernen und Button zurücksetzen
+                      setSnippetForButton(topicId, optId, null);
+                      btn.setAttribute('data-active', '0');
+                      btn.style.backgroundColor = '#e5e7eb';
+                      btn.style.color = '#374151';
+                      return;
+                    }
+
                     const snippet = decodeURIComponent(snippetEnc);
-                    appendSnippet(snippet);
+                    setSnippetForButton(topicId, optId, snippet);
                     // Button optisch als ausgewählt markieren
+                    btn.setAttribute('data-active', '1');
                     btn.style.backgroundColor = '#16a34a';
                     btn.style.color = '#ffffff';
 
                     // Wenn es sich um die Option "Thema schließen" handelt, Topic im Backend schließen
-                    const optId = btn.getAttribute('data-opt-id');
-                    const topicId = btn.getAttribute('data-topic-id');
                     if(optId === 'close' && topicId && t.contact_id){
                       try{
                         const resSt = await fetch(`/api/contacts/${t.contact_id}/topics/${topicId}/status`, {
@@ -1466,8 +1492,21 @@
                               prepTopics.querySelectorAll('.reply-opt-btn').forEach(btn2 => {
                                 btn2.addEventListener('click', async () => {
                                   const snippetEnc2 = btn2.getAttribute('data-snippet') || '';
+                                  const topicId2 = btn2.getAttribute('data-topic-id') || '';
+                                  const optId2 = btn2.getAttribute('data-opt-id') || '';
+
+                                  const isActive2 = btn2.getAttribute('data-active') === '1';
+                                  if(isActive2){
+                                    setSnippetForButton(topicId2, optId2, null);
+                                    btn2.setAttribute('data-active', '0');
+                                    btn2.style.backgroundColor = '#e5e7eb';
+                                    btn2.style.color = '#374151';
+                                    return;
+                                  }
+
                                   const snippet2 = decodeURIComponent(snippetEnc2);
-                                  appendSnippet(snippet2);
+                                  setSnippetForButton(topicId2, optId2, snippet2);
+                                  btn2.setAttribute('data-active', '1');
                                   btn2.style.backgroundColor = '#16a34a';
                                   btn2.style.color = '#ffffff';
                                 });
@@ -1491,6 +1530,37 @@
                         }
                       } catch(e){
                         console.error('Fehler beim Schließen des Themas aus Reply-Prep:', e);
+                      }
+                    }
+                  });
+                });
+
+                // Rote X-Schaltflächen in Themenblöcken
+                prepTopics.querySelectorAll('.reply-prep-close').forEach(closeBtn => {
+                  closeBtn.addEventListener('click', async (ev) => {
+                    ev.stopPropagation();
+                    const kind = closeBtn.getAttribute('data-kind');
+                    const topicId = closeBtn.getAttribute('data-topic-id');
+                    const block = closeBtn.closest('.reply-prep-topic');
+                    if(kind === 'current'){
+                      if(block){ block.remove(); }
+                      return;
+                    }
+                    if(kind === 'historical' && topicId && t.contact_id){
+                      try{
+                        const resSt = await fetch(`/api/contacts/${t.contact_id}/topics/${topicId}/status`, {
+                          method: 'POST',
+                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'done' })
+                        });
+                        const stData = await parseJsonSafe(resSt);
+                        if(!stData.__ok){
+                          console.error('Status konnte nicht geändert werden', stData.error);
+                        } else if(block){
+                          block.remove();
+                        }
+                      } catch(e){
+                        console.error('Fehler beim Schließen des Themas über X:', e);
                       }
                     }
                   });
