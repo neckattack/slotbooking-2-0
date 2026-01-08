@@ -3801,20 +3801,22 @@ def api_email_reply_prep(current_user, email_id):
                         if line:
                             summary_points.append(line)
 
-            # Immer (auch bei kurzen Mails) 1-3 Themen der aktuellen E-Mail extrahieren
+            # Immer (auch bei kurzen Mails) 1-5 Themen der aktuellen E-Mail extrahieren
             if body_for_topics:
                 prompt_topics = (
-                    "Analysiere die folgende E-Mail. Identifiziere 1-3 getrennte fachliche Themen oder Anliegen. "
+                    "Analysiere die folgende E-Mail. Identifiziere 1-5 getrennte fachliche Themen oder Anliegen. "
                     "Antwort NUR als JSON-Liste. Jedes Objekt hat die Felder "
                     "title (kurzer Titel), explanation (1-2 Sätze Erklärung) und reply_options "
                     "(Liste von 2-5 Antwortoptionen). Jede reply_option hat die Felder id (kurzer maschinenlesbarer String, z.B. 'ack' oder 'detail_nachfragen'), "
                     "label (Button-Text, z.B. 'Zusagen', 'Nachfragen', 'Delegieren') und snippet (kurzer deutscher Beispiel-Text, der direkt als Antwortbaustein eingefügt werden kann). "
                     "Beispiel: [{\"title\":\"kurzer Titel\",\"explanation\":\"1-2 Sätze Erklärung\",\"reply_options\":[{\"id\":\"ack\",\"label\":\"Zusagen\",\"snippet\":\"Zum Thema ...\"}]}]. "
                     "title: maximal 8-10 Wörter, sehr präzise und soll das fachliche Anliegen beschreiben (z.B. '7%-Steuersatz für Masseur hinzufügen'), nicht die Anrede. "
-                    "explanation: 1-2 kurze Sätze, die den gesamten fachlichen Inhalt des Themas zusammenfassen (z.B. Rechnung, Betrag, Steuer, Währung, Termin). "
+                    "explanation: 1-2 kurze Sätze, die den gesamten fachlichen Inhalt des Themas zusammenfassen (z.B. Rechnung, Betrag, Steuer, Währung, Termin, To-Do). "
                     "Verwende KEINE inhaltsleeren Sätze wie 'Ja, ich weiß.' oder 'Alles klar.' als explanation. "
                     "Ignoriere Begrüßungen und Schlussformeln wie 'Hi Chris', 'Hallo Gerd', 'Bussi Johanna' oder 'Viele Grüße' sowie kurze Bestätigungen ohne Fachinhalt. "
-                    "Fokussiere dich bei title und explanation auf die eigentlichen Sachverhalte und Probleme der Nachricht.\n\n"
+                    "Wenn die E-Mail eine Aufzählung oder Meeting-Zusammenfassung mit mehreren Bullet-Points oder nummerierten Punkten enthält, behandle jeden inhaltlich eigenständigen Punkt als eigenes Thema, sofern er eine eigene Aufgabe oder Fragestellung beschreibt (z.B. 'non-factured jobs Ordner aufräumen', 'steuerpflichtige Masseure in Job einfügen', 'Nachfass-E-Mail erstellen', 'LinkedIn-Posts/Capcut-Videos', 'Preiserhöhung + neue AGBs'). "
+                    "Fasse höchstens eng zusammengehörige Punkte zu einem Thema zusammen, aber verliere keine klar getrennten To-Dos. "
+                    "Fokussiere dich bei title und explanation auf die eigentlichen Sachverhalte und Aufgaben der Nachricht.\n\n"
                     + body_for_topics
                 )
                 resp_topics = openai_client.chat.completions.create(
