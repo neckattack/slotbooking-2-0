@@ -3678,6 +3678,24 @@ def api_email_reply_prep(current_user, email_id):
             except Exception:
                 pass
 
+        # Fallback: Wenn aus dem LLM keine Topics kamen, heuristisch 1 aktuelles Thema aus Betreff + Mailanfang bauen
+        if not current_email_topics and body_for_summary:
+            subj = (email_row.get('subject') or '').strip() or ''
+            # Ersten sinnvollen Ausschnitt aus dem Body nehmen
+            preview = body_for_summary.strip().split('\n')[0][:200]
+            if not subj and not preview:
+                fallback_label = "Aktuelle Anfrage"
+                fallback_expl = "Es liegt eine neue E-Mail vor, die beantwortet werden soll."
+            else:
+                fallback_label = subj or "Aktuelle Anfrage"
+                fallback_expl = preview or "Es liegt eine neue E-Mail vor, die beantwortet werden soll."
+            current_email_topics.append({
+                "id": f"mailtopic_{email_id}_fallback",
+                "label": fallback_label,
+                "explanation": fallback_expl,
+                "reply_options": [],
+            })
+
         # Themen & offene Threads für den Kontakt (letzte 6 Monate)
         topics_payload = []
         if contact_id:
