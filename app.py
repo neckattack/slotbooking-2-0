@@ -3749,7 +3749,7 @@ def api_email_reply_prep(current_user, email_id):
                         'direction': direction,
                     })
 
-                # Basis-Antwortoptionen pro Topic (Fallback)
+                # Basis-Antwortoptionen pro Topic (statische Fallback-Variante, um den Endpoint schnell zu halten)
                 base_label = label or 'dieses Thema'
                 reply_options = [
                     {
@@ -3778,51 +3778,6 @@ def api_email_reply_prep(current_user, email_id):
                         'snippet': f"Zum Thema '{base_label}': Ich leite das intern an die zuständige Person weiter."
                     },
                 ]
-
-                # Optional: LLM fragt dynamische Antwortoptionen speziell für dieses Topic an
-                try:
-                    import json as _json
-                    topic_prompt = (
-                        "Du hilfst in einem E-Mail-CRM. Für folgendes offenes Thema soll der Nutzer schnelle Antwort-Buttons bekommen. "
-                        "Schlage 2-5 sinnvolle Antwortoptionen vor, die zu diesem Thema passen. "
-                        "Antwort NUR als JSON-Liste von Objekten mit den Feldern id (kurzer maschinenlesbarer String), "
-                        "label (knapper Button-Text) und snippet (kurzer deutscher Beispiel-Text, der direkt in eine Antwortmail kopiert werden kann).\n\n"
-                        f"Thema: {base_label}"
-                    )
-                    resp_opts = openai_client.chat.completions.create(
-                        model="gpt-4.1-mini",
-                        messages=[
-                            {"role": "system", "content": "Du schreibst nur JSON ohne Erklärtext und schlägst passende Antwortoptionen für CRM-Themen vor."},
-                            {"role": "user", "content": topic_prompt},
-                        ],
-                        temperature=0.2,
-                        max_tokens=260,
-                    )
-                    o_txt = resp_opts.choices[0].message.content if resp_opts.choices else ''
-                    if o_txt:
-                        try:
-                            parsed_opts = _json.loads(o_txt)
-                            if isinstance(parsed_opts, list) and parsed_opts:
-                                dyn = []
-                                for o in parsed_opts[:5]:
-                                    if not isinstance(o, dict):
-                                        continue
-                                    oid = str(o.get('id') or '').strip() or 'opt'
-                                    lbl = str(o.get('label') or '').strip()
-                                    snip = str(o.get('snippet') or '').strip()
-                                    if lbl and snip:
-                                        dyn.append({
-                                            'id': oid,
-                                            'label': lbl,
-                                            'snippet': snip,
-                                        })
-                                if dyn:
-                                    reply_options = dyn
-                        except Exception:
-                            pass
-                except Exception:
-                    # Wenn der LLM-Call fehlschlägt, bleiben wir bei den statischen Optionen
-                    pass
 
                 topics_payload.append({
                     'id': topic_id,
