@@ -3833,12 +3833,12 @@ def api_email_reply_prep(current_user, email_id):
                     "title (kurzer Titel), explanation (1-2 Sätze Erklärung) und reply_options "
                     "(Liste von 2-5 Antwortoptionen). Jede reply_option hat die Felder id (kurzer maschinenlesbarer String, z.B. 'ack' oder 'detail_nachfragen'), "
                     "label (Button-Text, z.B. 'Zusagen', 'Nachfragen', 'Delegieren') und snippet (kurzer deutscher Beispiel-Text, der direkt als Antwortbaustein eingefügt werden kann). "
-                    "Beispiel: [{\"title\":\"kurzer Titel\",\"explanation\":\"1-2 Sätze Erklärung\","
-                    "\"reply_options\":[{\"id\":\"ack\",\"label\":\"Zusagen\",\"snippet\":\"Zum Thema ...\"}]}]. "
+                    "Beispiel: [{\"title\":\"kurzer Titel\",\"explanation\":\"1-2 Sätze Erklärung\",\"reply_options\":[{\"id\":\"ack\",\"label\":\"Zusagen\",\"snippet\":\"Zum Thema ...\"}]}]. "
                     "title: maximal 8-10 Wörter, sehr präzise und soll das fachliche Anliegen beschreiben (z.B. '7%-Steuersatz für Masseur hinzufügen'), nicht die Anrede. "
-                    "explanation: 1-2 kurze Sätze, kein Smalltalk. "
-                    "GANZ WICHTIG: Begrüßungen wie 'Hi Chris', 'Hallo', 'Guten Morgen' und Schlusszeilen wie 'Danke! Johanna' oder Signaturen dürfen NICHT als Titel oder explanation verwendet werden. "
-                    "Ignoriere solche Höflichkeitsfloskeln und fokussiere nur den inhaltlichen Teil der Nachricht.\n\n"
+                    "explanation: 1-2 kurze Sätze, die den gesamten fachlichen Inhalt des Themas zusammenfassen (z.B. Rechnung, Betrag, Steuer, Währung, Termin). "
+                    "Verwende KEINE inhaltsleeren Sätze wie 'Ja, ich weiß.' oder 'Alles klar.' als explanation. "
+                    "Ignoriere Begrüßungen und Schlussformeln wie 'Hi Chris', 'Hallo Gerd', 'Bussi Johanna' oder 'Viele Grüße' sowie kurze Bestätigungen ohne Fachinhalt. "
+                    "Fokussiere dich bei title und explanation auf die eigentlichen Sachverhalte und Probleme der Nachricht.\n\n"
                     + body_for_topics
                 )
                 resp_topics = openai_client.chat.completions.create(
