@@ -3847,9 +3847,11 @@ def api_reply_prep_manual_draft(current_user):
                 "Du hilfst beim Schreiben von E-Mail-Antworten in einem CRM. "
                 "Formuliere aus den Stichworten eine kurze, freundliche Antwort nur zu DIESEM EINEN Thema. "
                 "Schreibe konsequent in der Wir-Form (wir), nicht als KI, und mache keine Meta-Kommentare. "
+                "GANZ WICHTIG: KEINE Anrede (kein 'Hallo', 'Hi', 'Liebe Johanna' etc.) und KEINE Schlussformel oder Grüße. "
+                "Nur der eigentliche Antwortabschnitt zum Thema. "
                 "Wenn möglich, gib eine realistische Einschätzung, wann wir uns darum kümmern (z.B. heute, in den nächsten Tagen, bis Ende nächster Woche). "
                 "Maximal 3-4 Sätze. Kein Smalltalk, direkt auf den Punkt.\n\n"
-                f"Kontakt: {contact_name}\n"
+                f"Kontakt (nur Kontext, nicht direkt ansprechen): {contact_name}\n"
                 f"Thema: {topic_label or 'aktuelles Anliegen'}\n"
             )
             if topic_expl:
