@@ -1195,6 +1195,7 @@
               <div id="reply_prep_status" class="sub" style="margin-bottom:4px;">Analysiere E-Mail…</div>
               <div id="reply_prep_summary" style="margin-bottom:4px;"></div>
               <div id="reply_prep_topics"></div>
+              <div id="reply_prep_debug" style="margin-top:4px;"></div>
             </div>
           </div>
           <div class="detail-splitter" id="detail_splitter"></div>
@@ -1326,12 +1327,14 @@
           const prepStatus = document.getElementById('reply_prep_status');
           const prepSummary = document.getElementById('reply_prep_summary');
           const prepTopics = document.getElementById('reply_prep_topics');
+          const prepDebug = document.getElementById('reply_prep_debug');
           if(prepBlock && prepStatus && prepSummary && prepTopics){
             prepStatus.textContent = 'Analysiere E-Mail…';
             // Zusammenfassung aktuell nicht anzeigen – Fokus auf Themenblöcke
             prepSummary.innerHTML = '';
             prepTopics.innerHTML = '';
-            fetch(`/api/emails/${t.id}/reply-prep`, { headers: getAuthHeaders() })
+            if(prepDebug){ prepDebug.innerHTML = ''; }
+            fetch(`/api/emails/${t.id}/reply-prep?debug_raw=1`, { headers: getAuthHeaders() })
               .then(res => parseJsonSafe(res))
               .then(data => {
                 if(!data.__ok){
@@ -1437,6 +1440,18 @@
                 }
 
                 prepTopics.innerHTML = topicsHtml;
+
+                // Optionaler Debug-Block direkt unterhalb des Reply-Prep-Blocks
+                if(prepDebug && (data.debug_body_for_topics || data.debug_raw_topics_llm)){
+                  let dbgHtml = '<div style="font-size:10px; text-transform:uppercase; letter-spacing:0.03em; margin-top:8px; color:#6b7280;">Debug: GPT-Topics-Input & Ausgabe</div>';
+                  if(data.debug_body_for_topics){
+                    dbgHtml += `<div style="margin-top:4px;"><div class="sub" style="font-size:10px; margin-bottom:2px;">Body fr Topics (an GPT gesendet):</div><pre style="white-space:pre-wrap; font-size:10px; background:#f3f4f6; padding:6px 8px; border-radius:4px; max-height:160px; overflow:auto; border:1px dashed #e5e7eb;">${escapeHtml(data.debug_body_for_topics)}</pre></div>`;
+                  }
+                  if(data.debug_raw_topics_llm){
+                    dbgHtml += `<div style="margin-top:4px;"><div class="sub" style="font-size:10px; margin-bottom:2px;">Rohe GPT-Topics-Antwort:</div><pre style="white-space:pre-wrap; font-size:10px; background:#f3f4f6; padding:6px 8px; border-radius:4px; max-height:160px; overflow:auto; border:1px dashed #e5e7eb;">${escapeHtml(data.debug_raw_topics_llm)}</pre></div>`;
+                  }
+                  prepDebug.innerHTML = dbgHtml;
+                }
 
                 // Buttons verkabeln
                 prepTopics.querySelectorAll('.reply-opt-btn').forEach(btn => {
