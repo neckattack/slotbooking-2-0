@@ -1373,12 +1373,14 @@
                 if(currentTopics.length){
                   topicsHtml += '<div class="sub" style="font-size:10px; text-transform:uppercase; letter-spacing:0.03em; margin-top:2px;">Aktuelle Themen aus dieser E-Mail</div>';
                   topicsHtml += currentTopics.map(ct => {
-                    const optHtml = (ct.reply_options || [
+                    const fallbackOpts = [
                       { id: 'ack', label: 'Ja / Zusagen', snippet: `Zum Thema '${ct.label || 'dieses Thema'}': Ja, das können wir so machen.` },
                       { id: 'decline', label: 'Nein / Absagen', snippet: `Zum Thema '${ct.label || 'dieses Thema'}': Leider können wir das aktuell nicht anbieten.` },
                       { id: 'later', label: 'Später kümmern', snippet: `Zum Thema '${ct.label || 'dieses Thema'}': Ich komme darauf später noch einmal ausführlicher zurück.` },
                       { id: 'delegate', label: 'Delegieren', snippet: `Zum Thema '${ct.label || 'dieses Thema'}': Ich leite das intern an die zuständige Person weiter.` },
-                    ]).map(opt => {
+                    ];
+                    const opts = (Array.isArray(ct.reply_options) && ct.reply_options.length) ? ct.reply_options : fallbackOpts;
+                    const optHtml = opts.map(opt => {
                       return `<button class="reply-opt-btn" data-topic-id="" data-opt-id="${opt.id}" data-snippet="${encodeURIComponent(opt.snippet || '')}" style="border:0; padding:3px 6px; border-radius:4px; font-size:11px; margin:2px 4px 2px 0; cursor:pointer; background:#e5e7eb; color:#374151;">${escapeHtml(opt.label || '')}</button>`;
                     }).join('');
                     const expl = ct.explanation ? `<div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(ct.explanation)}</div>` : '';
