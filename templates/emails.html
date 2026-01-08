@@ -1759,8 +1759,11 @@
           loadContactTopics(t.contact_id);
         }
         
-        // Quick Card (Überblick) laden
+        // Quick Card (Überblick) laden (mit einfachem Frontend-Cache pro Kontakt)
         if(t.contact_id){
+          const contactIdStr = String(t.contact_id);
+          window.quickCardCache = window.quickCardCache || {};
+
           const qcBox = document.getElementById('contact_quick_card');
           const qcName = document.getElementById('qc_name');
           const qcNow = document.getElementById('qc_now');
@@ -1980,26 +1983,36 @@
 
           if(qcBox && qcName && qcNow && qcTopics && qcReply && qcTone && qcTimeline){
             qcBox.style.display = 'block';
-            qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Lade...</span>';
-            qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span>';
-            qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span>';
-            qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span>';
-            qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Lade...</span>';
-            qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span>';
-            qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span>';
-            fetch(`/api/contacts/${t.contact_id}/quick-card`, { headers: getAuthHeaders() })
-              .then(res => parseJsonSafe(res))
-              .then(data => {
-                renderQuickCard(data);
-              })
-              .catch(err => {
-                qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Fehler</span>';
-                qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Fehler</span>';
-                qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Fehler</span>';
-                qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Fehler</span>';
-                qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Fehler</span>';
-                qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Fehler</span>';
-              });
+
+            const cached = window.quickCardCache[contactIdStr];
+            if(cached){
+              // Sofort aus Cache rendern, ohne erneuten API-Call
+              renderQuickCard(cached);
+            } else {
+              // Erstladen: Platzhalter anzeigen und Quick-Card vom Server holen
+              qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Lade...</span>';
+              qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span>';
+              qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span>';
+              qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span>';
+              qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Lade...</span>';
+              qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span>';
+              qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span>';
+              fetch(`/api/contacts/${t.contact_id}/quick-card`, { headers: getAuthHeaders() })
+                .then(res => parseJsonSafe(res))
+                .then(data => {
+                  // Im Cache speichern und rendern
+                  window.quickCardCache[contactIdStr] = data;
+                  renderQuickCard(data);
+                })
+                .catch(err => {
+                  qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Fehler</span>';
+                  qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Fehler</span>';
+                  qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Fehler</span>';
+                  qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Fehler</span>';
+                  qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Fehler</span>';
+                  qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Fehler</span>';
+                });
+            }
           }
         }
         
