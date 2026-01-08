@@ -3592,15 +3592,17 @@ def api_email_reply_prep(current_user, email_id):
             # Immer (auch bei kurzen Mails) 1-3 Themen der aktuellen E-Mail extrahieren
             if body_for_summary:
                 prompt_topics = (
-                    "Analysiere die folgende E-Mail. Identifiziere 1-3 getrennte Themen oder Anliegen. "
+                    "Analysiere die folgende E-Mail. Identifiziere 1-3 getrennte fachliche Themen oder Anliegen. "
                     "Antwort NUR als JSON-Liste. Jedes Objekt hat die Felder "
                     "title (kurzer Titel), explanation (1-2 Sätze Erklärung) und reply_options "
                     "(Liste von 2-5 Antwortoptionen). Jede reply_option hat die Felder id (kurzer maschinenlesbarer String, z.B. 'ack' oder 'detail_nachfragen'), "
                     "label (Button-Text, z.B. 'Zusagen', 'Nachfragen', 'Delegieren') und snippet (kurzer deutscher Beispiel-Text, der direkt als Antwortbaustein eingefügt werden kann). "
                     "Beispiel: [{\"title\":\"kurzer Titel\",\"explanation\":\"1-2 Sätze Erklärung\","
                     "\"reply_options\":[{\"id\":\"ack\",\"label\":\"Zusagen\",\"snippet\":\"Zum Thema ...\"}]}]. "
-                    "title: maximal 8-10 Wörter, sehr präzise. explanation: 1-2 kurze Sätze, kein Smalltalk. "
-                    "Die reply_options sollen sinnvoll zu diesem Thema passen und nicht immer nur Ja/Nein sein.\n\n"
+                    "title: maximal 8-10 Wörter, sehr präzise und soll das fachliche Anliegen beschreiben (z.B. '7%-Steuersatz für Masseur hinzufügen'), nicht die Anrede. "
+                    "explanation: 1-2 kurze Sätze, kein Smalltalk. "
+                    "GANZ WICHTIG: Begrüßungen wie 'Hi Chris', 'Hallo', 'Guten Morgen' und Schlusszeilen wie 'Danke! Johanna' oder Signaturen dürfen NICHT als Titel oder explanation verwendet werden. "
+                    "Ignoriere solche Höflichkeitsfloskeln und fokussiere nur den inhaltlichen Teil der Nachricht.\n\n"
                     + body_for_summary
                 )
                 resp_topics = openai_client.chat.completions.create(
