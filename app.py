@@ -3560,6 +3560,45 @@ def api_email_reply_prep(current_user, email_id):
         # Hart auf z.B. 4000 Zeichen kappen
         body_for_summary = (body_text or '')[:4000]
 
+        # Für die Themen-Extraktion Begrüßung und Schlussformeln entfernen
+        body_for_topics = body_for_summary
+        if body_for_topics:
+            try:
+                import re as _re
+                lines = body_for_topics.split('\n')
+
+                # 1) Begrüßungsblock am Anfang bis erste Leerzeile entfernen
+                start_idx = 0
+                while start_idx < len(lines):
+                    line = lines[start_idx].strip()
+                    if not line:
+                        start_idx += 1
+                        break
+                    # typische Begrüßungen
+                    if _re.search(r"^(hi|hallo|hey|guten\s+(morgen|tag|abend)|liebe?r?\s+)", line, _re.IGNORECASE):
+                        start_idx += 1
+                        continue
+                    else:
+                        break
+
+                # 2) Schlussblock mit "Danke", Grüßen etc. abschneiden
+                end_idx = len(lines)
+                for i in range(len(lines) - 1, -1, -1):
+                    line = lines[i].strip().lower()
+                    if not line:
+                        continue
+                    if any(kw in line for kw in ["danke", "viele grüße", "vielen dank", "lg ", "liebe grüße", "best regards", "kind regards"]):
+                        end_idx = i
+                        break
+                    # Wenn wir schon im inhaltlichen Block sind, abbrechen
+                    if len(line) > 40:
+                        break
+
+                core_lines = lines[start_idx:end_idx] if start_idx < end_idx else lines
+                body_for_topics = '\n'.join(core_lines).strip() or body_for_summary
+            except Exception:
+                body_for_topics = body_for_summary
+
         # LLM: Kurz-Zusammenfassung in Bulletpoints (optional) und E-Mail-Themen (title + explanation)
         summary_points = []
         current_email_topics = []
@@ -3590,7 +3629,7 @@ def api_email_reply_prep(current_user, email_id):
                             summary_points.append(line)
 
             # Immer (auch bei kurzen Mails) 1-3 Themen der aktuellen E-Mail extrahieren
-            if body_for_summary:
+            if body_for_topics:
                 prompt_topics = (
                     "Analysiere die folgende E-Mail. Identifiziere 1-3 getrennte fachliche Themen oder Anliegen. "
                     "Antwort NUR als JSON-Liste. Jedes Objekt hat die Felder "
@@ -3603,7 +3642,7 @@ def api_email_reply_prep(current_user, email_id):
                     "explanation: 1-2 kurze Sätze, kein Smalltalk. "
                     "GANZ WICHTIG: Begrüßungen wie 'Hi Chris', 'Hallo', 'Guten Morgen' und Schlusszeilen wie 'Danke! Johanna' oder Signaturen dürfen NICHT als Titel oder explanation verwendet werden. "
                     "Ignoriere solche Höflichkeitsfloskeln und fokussiere nur den inhaltlichen Teil der Nachricht.\n\n"
-                    + body_for_summary
+                    + body_for_topics
                 )
                 resp_topics = openai_client.chat.completions.create(
                     model="gpt-4.1-mini",
@@ -3659,10 +3698,10 @@ def api_email_reply_prep(current_user, email_id):
                 pass
 
         # Fallback: Wenn aus dem LLM keine Topics kamen, heuristisch 1 aktuelles Thema aus Betreff + Mailanfang bauen
-        if not current_email_topics and body_for_summary:
+        if not current_email_topics and body_for_topics:
             subj = (email_row.get('subject') or '').strip() or ''
             # Ersten sinnvollen Ausschnitt aus dem Body nehmen
-            preview = body_for_summary.strip().split('\n')[0][:200]
+            preview = body_for_topics.strip().split('\n')[0][:200]
             if not subj and not preview:
                 fallback_label = "Aktuelle Anfrage"
                 fallback_expl = "Es liegt eine neue E-Mail vor, die beantwortet werden soll."
