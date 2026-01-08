@@ -3881,42 +3881,23 @@ def api_email_reply_prep(current_user, email_id):
             except Exception:
                 pass
 
-        # Heuristik: Wenn wir nur 0-1 Topics haben, aber mehrere Aufgaben im Text,
+        # Heuristik: Wenn wir nur 0-1 Topics haben, aber mehrere Bullet-Points im Text,
         # Meeting-Listen in mehrere Themen aufteilen.
         try:
             if body_for_topics and len(current_email_topics) <= 1:
-                lines_all = [(raw or '').strip() for raw in body_for_topics.split('\n')]
-
-                # 1) Echte Bullets mit - / • / * erkennen
                 bullet_lines = []
-                for line in lines_all:
+                for raw in body_for_topics.split('\n'):
+                    line = (raw or '').strip()
                     if not line:
                         continue
                     if line.startswith(('- ', '• ', '* ')):
+                        # Bullet-Marker entfernen
                         cleaned = line[2:].strip()
                         if cleaned:
                             bullet_lines.append(cleaned)
-
-                # 2) Falls kaum echte Bullets gefunden wurden, explizit Meeting-Zusammenfassung parsen
-                if len(bullet_lines) < 2:
-                    idx_meeting = None
-                    for i, line in enumerate(lines_all):
-                        if 'zusammenfassung vom meeting' in line.lower():
-                            idx_meeting = i
-                            break
-                    if idx_meeting is not None:
-                        pseudo = []
-                        for j in range(idx_meeting + 1, len(lines_all)):
-                            l2 = lines_all[j]
-                            if not l2:
-                                break
-                            pseudo.append(l2)
-                        if len(pseudo) >= 2:
-                            bullet_lines = pseudo
-
                 if len(bullet_lines) >= 2:
                     topics_from_bullets = []
-                    for idx, bl in enumerate(bullet_lines[:8]):
+                    for idx, bl in enumerate(bullet_lines[:5]):
                         words = bl.split()
                         title_words = words[:10]
                         title = ' '.join(title_words)
@@ -4073,13 +4054,20 @@ def api_email_reply_prep(current_user, email_id):
         cursor.close()
         conn.close()
 
-        return jsonify({
+        payload = {
             '__ok': True,
             'email_id': email_id,
             'summary': summary_points,
             'topics': topics_payload,
             'current_email_topics': current_email_topics,
-        }), 200
+        }
+
+        # Optionaler Debug-Block: zeigt den exakt an GPT übergebenen Text und die rohe Topics-Antwort
+        if debug_raw:
+            payload['debug_body_for_topics'] = body_for_topics
+            payload['debug_raw_topics_llm'] = raw_topics_llm
+
+        return jsonify(payload), 200
 
     except Exception as e:
         try:
