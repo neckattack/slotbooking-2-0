@@ -3872,6 +3872,45 @@ def api_email_reply_prep(current_user, email_id):
             except Exception:
                 pass
 
+        # Heuristik: Wenn wir nur 0-1 Topics haben, aber mehrere Bullet-Points im Text,
+        # Meeting-Listen in mehrere Themen aufteilen.
+        try:
+            if body_for_topics and len(current_email_topics) <= 1:
+                bullet_lines = []
+                for raw in body_for_topics.split('\n'):
+                    line = (raw or '').strip()
+                    if not line:
+                        continue
+                    if line.startswith(('- ', '• ', '* ')):
+                        # Bullet-Marker entfernen
+                        cleaned = line[2:].strip()
+                        if cleaned:
+                            bullet_lines.append(cleaned)
+                if len(bullet_lines) >= 2:
+                    topics_from_bullets = []
+                    for idx, bl in enumerate(bullet_lines[:5]):
+                        words = bl.split()
+                        title_words = words[:10]
+                        title = ' '.join(title_words)
+                        if len(title) > 60:
+                            title = title[:57].rstrip() + '...'
+                        expl = bl.strip()
+                        if len(expl) > 220:
+                            expl = expl[:217].rstrip() + '...'
+                        topics_from_bullets.append({
+                            "id": f"mailtopic_bullet_{email_id}_{idx}",
+                            "label": title or f"Punkt {idx+1}",
+                            "explanation": expl,
+                            "reply_options": [],
+                        })
+                    if topics_from_bullets:
+                        current_email_topics = topics_from_bullets
+        except Exception as e_bullets:
+            try:
+                app.logger.warning(f"[Reply Prep] Bullet heuristic failed: {e_bullets}")
+            except Exception:
+                pass
+
         # Fallback: Wenn aus dem LLM keine Topics kamen, heuristisch 1 aktuelles Thema aus Betreff + Mailanfang bauen
         if not current_email_topics and body_for_topics:
             subj = (email_row.get('subject') or '').strip() or ''
