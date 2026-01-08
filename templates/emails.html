@@ -1447,7 +1447,7 @@
 
                     const isActive = btn.getAttribute('data-active') === '1';
                     if(isActive){
-                      // Toggle aus: Snippet wieder entfernen und Button zurücksetzen
+                      // Toggle aus
                       setSnippetForButton(topicId, optId, null);
                       btn.setAttribute('data-active', '0');
                       btn.style.backgroundColor = '#e5e7eb';
@@ -1456,8 +1456,8 @@
                       return;
                     }
 
-                    // Historische Themen nutzen weiterhin feste Snippets aus data-snippet
                     if(kind === 'historical'){
+                      // Historische Themen: feste Snippets + ggf. Thema schließen
                       const snippetEnc = btn.getAttribute('data-snippet') || '';
                       const snippet = decodeURIComponent(snippetEnc);
                       setSnippetForButton(topicId, optId, snippet);
@@ -1465,143 +1465,70 @@
                       btn.style.backgroundColor = '#16a34a';
                       btn.style.color = '#ffffff';
                       btn.style.opacity = '1';
-                      // Option "Thema schließen" wie bisher behandeln
+
                       if(optId === 'close' && topicId && t.contact_id){
                         try{
                           const resSt = await fetch(`/api/contacts/${t.contact_id}/topics/${topicId}/status`, {
-                          method: 'POST',
-                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ status: 'done' })
-                        });
-                        const stData = await parseJsonSafe(resSt);
-                        if(!stData.__ok){
-                          console.error('Status konnte nicht geändert werden', stData.error);
-                        } else {
-                          // Reply-Prep-Block nach Schließen des Themas neu laden, damit es verschwindet
-                          prepStatus.textContent = 'Aktualisiere Themen…';
-                          fetch(`/api/emails/${t.id}/reply-prep`, { headers: getAuthHeaders() })
-                            .then(res2 => parseJsonSafe(res2))
-                            .then(data2 => {
-                              prepStatus.textContent = '';
-                              // Rekursiver einfacher Re-Render: nur Topics neu zeichnen
-                              const topics2 = data2.topics || [];
-                              if(!topics2.length){
-                                prepTopics.innerHTML = '<div class="sub">Keine offenen Themen mehr.</div>';
-                                return;
-                              }
-                              prepTopics.innerHTML = topics2.map(tp2 => {
-                                const ageTxt2 = (tp2.age_days != null) ? ` · seit ${tp2.age_days} Tagen` : '';
-                                const meta2 = `${tp2.email_count || 0} E-Mails${ageTxt2}`;
-                                const optHtml2 = (tp2.reply_options || []).map((opt, idx) => {
-                                  return `<button class="reply-opt-btn" data-topic-id="${tp2.id}" data-opt-id="${opt.id}" data-snippet="${encodeURIComponent(opt.snippet || '')}" style="border:0; padding:3px 6px; border-radius:4px; font-size:11px; margin:2px 4px 2px 0; cursor:pointer; background:#e5e7eb; color:#374151;">${escapeHtml(opt.label || '')}</button>`;
-                                }).join('');
-                                const mailsHtml2 = (tp2.emails || []).slice(0,5).map(em2 => {
-                                  const text2 = `${em2.received_at || ''} – ${em2.subject || ''}`;
-                                  return `<div style="font-size:11px; cursor:pointer; text-decoration:underline;" data-email-id="${em2.id}" class="reply-prep-email-link">${escapeHtml(text2)}</div>`;
-                                }).join('');
-                                return `
-                                  <div class="reply-prep-topic" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb;">
-                                    <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(tp2.label || '(ohne Titel)')}</div>
-                                    <div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(meta2)}</div>
-                                    <div style="margin-bottom:4px;">${optHtml2}</div>
-                                    ${mailsHtml2 ? `<div style="font-size:11px; margin-top:2px;"><span class="muted">Relevante E-Mails:</span></div>${mailsHtml2}` : ''}
-                                  </div>
-                                `;
-                              }).join('');
-
-                              // Neue Buttons und Links erneut verkabeln
-                              prepTopics.querySelectorAll('.reply-opt-btn').forEach(btn2 => {
-                                btn2.addEventListener('click', async () => {
-                                  const snippetEnc2 = btn2.getAttribute('data-snippet') || '';
-                                  const topicId2 = btn2.getAttribute('data-topic-id') || '';
-                                  const optId2 = btn2.getAttribute('data-opt-id') || '';
-
-                                  const isActive2 = btn2.getAttribute('data-active') === '1';
-                                  if(isActive2){
-                                    setSnippetForButton(topicId2, optId2, null);
-                                    btn2.setAttribute('data-active', '0');
-                                    btn2.style.backgroundColor = '#e5e7eb';
-                                    btn2.style.color = '#374151';
-                                    btn2.style.opacity = '1';
-                                  } else {
-                                    const snippet2 = decodeURIComponent(snippetEnc2);
-                                    setSnippetForButton(topicId2, optId2, snippet2);
-                                    btn2.setAttribute('data-active', '1');
-                                    btn2.style.backgroundColor = '#16a34a';
-                                    btn2.style.color = '#ffffff';
-                                    btn2.style.opacity = '1';
-                                  }
-                                });
-                              });
-                              prepTopics.querySelectorAll('.reply-prep-email-link').forEach(link2 => {
-                                link2.addEventListener('click', () => {
-                                  const eid2 = link2.getAttribute('data-email-id');
-                                  if(!eid2) return;
-                                  const listEl2 = document.getElementById('list');
-                                  if(!listEl2) return;
-                                  const row2 = listEl2.querySelector(`.item[data-uid="${eid2}"]`);
-                                  if(row2){
-                                    try{ row2.scrollIntoView({ behavior: 'smooth', block: 'center' }); }catch(_){ }
-                                    selectItem(eid2, row2);
-                                  } else {
-                                    alert('Diese E-Mail ist nicht in der aktuellen Liste sichtbar.');
-                                  }
-                                });
-                              });
-                            });
+                            method: 'POST',
+                            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: 'done' })
+                          });
+                          const stData = await parseJsonSafe(resSt);
+                          if(!stData.__ok){
+                            console.error('Status konnte nicht geändert werden', stData.error);
+                          } else if(btn.closest('.reply-prep-topic')){
+                            // einfach den Block entfernen
+                            btn.closest('.reply-prep-topic').remove();
+                          }
+                        } catch(e){
+                          console.error('Fehler beim Schließen des Themas aus Reply-Prep:', e);
                         }
-                      } catch(e){
-                        console.error('Fehler beim Schließen des Themas aus Reply-Prep:', e);
                       }
-                    }
-                    return;
-                  }
-
-                  // Aktuelles E-Mail-Thema: dynamische KI-Antwort pro Kategorie erzeugen
-                  const mode = btn.getAttribute('data-mode') || '';
-                  const topicLabel = btn.getAttribute('data-topic-label') || '';
-                  const topicExpl = btn.getAttribute('data-topic-expl') || '';
-
-                  btn.disabled = true;
-                  btn.style.opacity = '0.6';
-                  try {
-                    const res = await fetch('/api/reply-prep/category-draft', {
-                      method: 'POST',
-                      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        mode,
-                        topic_label: topicLabel,
-                        topic_explanation: topicExpl,
-                        email_id: t.id,
-                        contact_id: t.contact_id || null,
-                        topic_id: null
-                      })
-                    });
-                    const dataCat = await parseJsonSafe(res);
-                    if(!dataCat.__ok){
-                      alert('Konnte keine Antwort für diese Kategorie erzeugen: ' + (dataCat.error || 'Unbekannter Fehler'));
-                      btn.disabled = false;
-                      btn.style.opacity = '1';
                       return;
                     }
-                    const snippet = dataCat.snippet || '';
-                    if(!snippet){
-                      alert('Die KI hat keinen Text zurückgeliefert.');
-                      btn.disabled = false;
+
+                    // Aktuelle Themen: dynamische KI-Antwort
+                    const mode = btn.getAttribute('data-mode') || '';
+                    const topicLabel = btn.getAttribute('data-topic-label') || '';
+                    const topicExpl = btn.getAttribute('data-topic-expl') || '';
+
+                    btn.disabled = true;
+                    btn.style.opacity = '0.6';
+                    try {
+                      const res = await fetch('/api/reply-prep/category-draft', {
+                        method: 'POST',
+                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          mode,
+                          topic_label: topicLabel,
+                          topic_explanation: topicExpl,
+                          email_id: t.id,
+                          contact_id: t.contact_id || null,
+                          topic_id: null
+                        })
+                      });
+                      const dataCat = await parseJsonSafe(res);
+                      if(!dataCat.__ok){
+                        alert('Konnte keine Antwort für diese Kategorie erzeugen: ' + (dataCat.error || 'Unbekannter Fehler'));
+                        return;
+                      }
+                      const snippet = dataCat.snippet || '';
+                      if(!snippet){
+                        alert('Die KI hat keinen Text zurückgeliefert.');
+                        return;
+                      }
+                      setSnippetForButton(topicId, optId, snippet);
+                      btn.setAttribute('data-active', '1');
+                      btn.style.backgroundColor = '#16a34a';
+                      btn.style.color = '#ffffff';
                       btn.style.opacity = '1';
-                      return;
+                    } catch(e){
+                      alert('Fehler bei der Kategorie-Antwort: ' + e);
+                    } finally {
+                      btn.disabled = false;
+                      if(btn.style.opacity === '0.6') btn.style.opacity = '1';
                     }
-                    setSnippetForButton(topicId, optId, snippet);
-                    btn.setAttribute('data-active', '1');
-                    btn.style.backgroundColor = '#16a34a';
-                    btn.style.color = '#ffffff';
-                    btn.style.opacity = '1';
-                  } catch(e){
-                    alert('Fehler bei der Kategorie-Antwort: ' + e);
-                    btn.style.opacity = '1';
-                  } finally {
-                    btn.disabled = false;
-                  }
+                  });
                 });
 
                 // Manuelle Antwortkategorie: Stichworte -> LLM-Formulierung
