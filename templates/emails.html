@@ -1372,33 +1372,18 @@
                 // 1) Aktuelle E-Mail-Themen zuerst anzeigen (ohne Historien-Meta, optional mit Erklärung)
                 if(currentTopics.length){
                   topicsHtml += '<div class="sub" style="font-size:10px; text-transform:uppercase; letter-spacing:0.03em; margin-top:2px;">Aktuelle Themen aus dieser E-Mail</div>';
-                  topicsHtml += currentTopics.map(ct => {
+                  topicsHtml += currentTopics.map((ct, idx) => {
                     const baseLabel = ct.label || 'dieses Thema';
-                    // Fünf Kategorien: FAQ, To-Do, Historie, Delegieren (plus Manuell unten)
+                    const topicKey = `mailtopic_${t.id}_${idx}`;
+                    // Vier Kategorien: FAQ, To-Do, Historie, Delegieren (plus Manuell unten)
                     const categoryOpts = [
-                      {
-                        id: 'faq',
-                        label: 'FAQ-Antwort',
-                        snippet: `Zum Thema "${baseLabel}": Wir prüfen, ob wir dir hierzu eine Antwort aus unserer Wissensdatenbank/FAQ geben können und fassen die wichtigsten Infos kurz zusammen.`,
-                      },
-                      {
-                        id: 'todo',
-                        label: 'To-Do',
-                        snippet: `Zum Thema "${baseLabel}": Wir nehmen das auf unsere To-Do-Liste und kümmern uns voraussichtlich in den nächsten Tagen darum.`,
-                      },
-                      {
-                        id: 'history',
-                        label: 'Historie',
-                        snippet: `Zum Thema "${baseLabel}": Bisherige E-Mails und Absprachen zu diesem Punkt fassen wir kurz zusammen und stellen den aktuellen Stand dar.`,
-                      },
-                      {
-                        id: 'delegate',
-                        label: 'Weiterleiten',
-                        snippet: `Zum Thema "${baseLabel}": Wir leiten dein Anliegen intern an die zuständige Person weiter und melden uns, sobald es Neuigkeiten gibt.`,
-                      },
+                      { id: 'faq', label: 'FAQ-Antwort', mode: 'faq' },
+                      { id: 'todo', label: 'To-Do', mode: 'todo' },
+                      { id: 'history', label: 'Historie', mode: 'history' },
+                      { id: 'delegate', label: 'Weiterleiten', mode: 'delegate' },
                     ];
                     const optHtml = categoryOpts.map(opt => {
-                      return `<button class="reply-opt-btn" data-topic-id="" data-opt-id="${opt.id}" data-snippet="${encodeURIComponent(opt.snippet || '')}" style="border:0; padding:3px 6px; border-radius:4px; font-size:11px; margin:2px 4px 2px 0; cursor:pointer; background:#e5e7eb; color:#374151;">${escapeHtml(opt.label || '')}</button>`;
+                      return `<button class="reply-opt-btn" data-kind="current" data-topic-id="${topicKey}" data-topic-label="${escapeHtml(baseLabel)}" data-topic-expl="${ct.explanation ? escapeHtml(ct.explanation) : ''}" data-mode="${opt.mode}" data-opt-id="${opt.id}" style="border:0; padding:3px 6px; border-radius:4px; font-size:11px; margin:2px 4px 2px 0; cursor:pointer; background:#e5e7eb; color:#374151;">${escapeHtml(opt.label || '')}</button>`;
                     }).join('');
                     const expl = ct.explanation ? `<div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(ct.explanation)}</div>` : '';
                     return `
@@ -1419,7 +1404,7 @@
                   }).join('');
                 }
 
-                // 2) Historische offene Themen darunter anzeigen
+                // 2) Historische offene Themen darunter anzeigen (vorerst mit bestehenden statischen Optionen)
                 if(topics.length){
                   topicsHtml += '<div class="sub" style="font-size:10px; text-transform:uppercase; letter-spacing:0.03em; margin-top:8px;">Offene Themen aus bisherigen E-Mails</div>';
                   topicsHtml += topics.map(tp => {
@@ -1456,9 +1441,9 @@
                 // Buttons verkabeln
                 prepTopics.querySelectorAll('.reply-opt-btn').forEach(btn => {
                   btn.addEventListener('click', async () => {
-                    const snippetEnc = btn.getAttribute('data-snippet') || '';
                     const topicId = btn.getAttribute('data-topic-id') || '';
                     const optId = btn.getAttribute('data-opt-id') || '';
+                    const kind = btn.getAttribute('data-kind') || 'historical';
 
                     const isActive = btn.getAttribute('data-active') === '1';
                     if(isActive){
@@ -1467,20 +1452,23 @@
                       btn.setAttribute('data-active', '0');
                       btn.style.backgroundColor = '#e5e7eb';
                       btn.style.color = '#374151';
+                      btn.style.opacity = '1';
                       return;
                     }
 
-                    const snippet = decodeURIComponent(snippetEnc);
-                    setSnippetForButton(topicId, optId, snippet);
-                    // Button optisch als ausgewählt markieren
-                    btn.setAttribute('data-active', '1');
-                    btn.style.backgroundColor = '#16a34a';
-                    btn.style.color = '#ffffff';
-
-                    // Wenn es sich um die Option "Thema schließen" handelt, Topic im Backend schließen
-                    if(optId === 'close' && topicId && t.contact_id){
-                      try{
-                        const resSt = await fetch(`/api/contacts/${t.contact_id}/topics/${topicId}/status`, {
+                    // Historische Themen nutzen weiterhin feste Snippets aus data-snippet
+                    if(kind === 'historical'){
+                      const snippetEnc = btn.getAttribute('data-snippet') || '';
+                      const snippet = decodeURIComponent(snippetEnc);
+                      setSnippetForButton(topicId, optId, snippet);
+                      btn.setAttribute('data-active', '1');
+                      btn.style.backgroundColor = '#16a34a';
+                      btn.style.color = '#ffffff';
+                      btn.style.opacity = '1';
+                      // Option "Thema schließen" wie bisher behandeln
+                      if(optId === 'close' && topicId && t.contact_id){
+                        try{
+                          const resSt = await fetch(`/api/contacts/${t.contact_id}/topics/${topicId}/status`, {
                           method: 'POST',
                           headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: 'done' })
@@ -1534,14 +1522,15 @@
                                     btn2.setAttribute('data-active', '0');
                                     btn2.style.backgroundColor = '#e5e7eb';
                                     btn2.style.color = '#374151';
-                                    return;
+                                    btn2.style.opacity = '1';
+                                  } else {
+                                    const snippet2 = decodeURIComponent(snippetEnc2);
+                                    setSnippetForButton(topicId2, optId2, snippet2);
+                                    btn2.setAttribute('data-active', '1');
+                                    btn2.style.backgroundColor = '#16a34a';
+                                    btn2.style.color = '#ffffff';
+                                    btn2.style.opacity = '1';
                                   }
-
-                                  const snippet2 = decodeURIComponent(snippetEnc2);
-                                  setSnippetForButton(topicId2, optId2, snippet2);
-                                  btn2.setAttribute('data-active', '1');
-                                  btn2.style.backgroundColor = '#16a34a';
-                                  btn2.style.color = '#ffffff';
                                 });
                               });
                               prepTopics.querySelectorAll('.reply-prep-email-link').forEach(link2 => {
@@ -1565,7 +1554,54 @@
                         console.error('Fehler beim Schließen des Themas aus Reply-Prep:', e);
                       }
                     }
-                  });
+                    return;
+                  }
+
+                  // Aktuelles E-Mail-Thema: dynamische KI-Antwort pro Kategorie erzeugen
+                  const mode = btn.getAttribute('data-mode') || '';
+                  const topicLabel = btn.getAttribute('data-topic-label') || '';
+                  const topicExpl = btn.getAttribute('data-topic-expl') || '';
+
+                  btn.disabled = true;
+                  btn.style.opacity = '0.6';
+                  try {
+                    const res = await fetch('/api/reply-prep/category-draft', {
+                      method: 'POST',
+                      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        mode,
+                        topic_label: topicLabel,
+                        topic_explanation: topicExpl,
+                        email_id: t.id,
+                        contact_id: t.contact_id || null,
+                        topic_id: null
+                      })
+                    });
+                    const dataCat = await parseJsonSafe(res);
+                    if(!dataCat.__ok){
+                      alert('Konnte keine Antwort für diese Kategorie erzeugen: ' + (dataCat.error || 'Unbekannter Fehler'));
+                      btn.disabled = false;
+                      btn.style.opacity = '1';
+                      return;
+                    }
+                    const snippet = dataCat.snippet || '';
+                    if(!snippet){
+                      alert('Die KI hat keinen Text zurückgeliefert.');
+                      btn.disabled = false;
+                      btn.style.opacity = '1';
+                      return;
+                    }
+                    setSnippetForButton(topicId, optId, snippet);
+                    btn.setAttribute('data-active', '1');
+                    btn.style.backgroundColor = '#16a34a';
+                    btn.style.color = '#ffffff';
+                    btn.style.opacity = '1';
+                  } catch(e){
+                    alert('Fehler bei der Kategorie-Antwort: ' + e);
+                    btn.style.opacity = '1';
+                  } finally {
+                    btn.disabled = false;
+                  }
                 });
 
                 // Manuelle Antwortkategorie: Stichworte -> LLM-Formulierung

@@ -675,6 +675,179 @@ def api_contact_topic_set_status(current_user, contact_id, topic_id):
         return jsonify({'__ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/reply-prep/category-draft', methods=['POST'])
+@require_auth
+def api_reply_prep_category_draft(current_user):
+    """Erzeugt eine Antwort für ein Thema je nach Kategorie (FAQ, To-Do, Historie, Delegieren).
+
+    Request-JSON:
+      - mode: "faq" | "todo" | "history" | "delegate"
+      - topic_label: kurzer Titel des Themas
+      - topic_explanation: 1-2 Sätze Erklärung
+      - email_id: optionale aktuelle E-Mail-ID (int)
+      - contact_id: optionale Kontakt-ID (int)
+      - topic_id: optionale Topic-ID (für Historien-Modus)
+    """
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        mode = (data.get('mode') or '').strip().lower()
+        topic_label = (data.get('topic_label') or '').strip() or 'aktuelles Anliegen'
+        topic_expl = (data.get('topic_explanation') or '').strip()
+        email_id = data.get('email_id')
+        contact_id = data.get('contact_id')
+        topic_id = data.get('topic_id')
+        user_email = current_user.get('user_email')
+
+        if mode not in {'faq', 'todo', 'history', 'delegate'}:
+            return jsonify({'__ok': False, 'error': 'Ungültiger mode'}), 400
+
+        # Agent-/FAQ-Settings des Users laden
+        faq_text = ''
+        document_links = ''
+        try:
+            conn = get_settings_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT faq_text, document_links FROM user_agent_settings WHERE user_email=%s",
+                (user_email,),
+            )
+            row = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            if row:
+                faq_text = (row.get('faq_text') or '').strip()
+                document_links = (row.get('document_links') or '').strip()
+        except Exception as e_db:
+            try:
+                app.logger.warning(f"[Reply Prep Category] Konnte Agent-Settings nicht laden: {e_db}")
+            except Exception:
+                pass
+
+        # E-Mail-/Historienkontext laden (für history-Mode, optional auch für andere Modi)
+        history_block = ''
+        try:
+            if contact_id:
+                conn_h = get_settings_db_connection()
+                cursor_h = conn_h.cursor(dictionary=True)
+                if topic_id:
+                    # E-Mails zu einem konkreten Topic
+                    cursor_h.execute(
+                        """
+                        SELECT e.subject, e.body_text, e.body_html, e.received_at
+                        FROM contact_topic_emails cte
+                        JOIN emails e ON e.id = cte.email_id
+                        WHERE cte.user_email = %s AND cte.contact_id = %s AND cte.topic_id = %s
+                        ORDER BY e.received_at DESC
+                        LIMIT 20
+                        """,
+                        (user_email, contact_id, topic_id),
+                    )
+                else:
+                    # Letzte E-Mails dieses Kontakts allgemein
+                    cursor_h.execute(
+                        """
+                        SELECT subject, body_text, body_html, received_at
+                        FROM emails
+                        WHERE user_email = %s AND contact_id = %s
+                        ORDER BY received_at DESC
+                        LIMIT 20
+                        """,
+                        (user_email, contact_id),
+                    )
+                rows_h = cursor_h.fetchall() or []
+                cursor_h.close()
+                conn_h.close()
+
+                if rows_h:
+                    parts = []
+                    for r in rows_h:
+                        dt = r.get('received_at')
+                        dt_str = dt.strftime('%d.%m.%Y %H:%M') if dt else ''
+                        body = (r.get('body_text') or '') or (r.get('body_html') or '')
+                        body_short = (body or '')[:400]
+                        parts.append(f"- {dt_str} | {r.get('subject') or '(ohne Betreff)'}\n{body_short}")
+                    history_block = "\n".join(parts)
+        except Exception as e_hist:
+            try:
+                app.logger.warning(f"[Reply Prep Category] Konnte Historie nicht laden: {e_hist}")
+            except Exception:
+                pass
+
+        # Prompt je Modus zusammenbauen
+        base_ctx = (
+            "Du hilfst beim Schreiben von E-Mail-Antworten in einem CRM. "
+            "Formuliere eine kurze, natürliche Antwort nur zu DIESEM EINEN Thema. "
+            "Schreibe konsequent in der Wir-Form (wir), nicht als KI, und mache keine Meta-Kommentare. "
+            "GANZ WICHTIG: KEINE Anrede (kein 'Hallo', 'Hi' etc.) und KEINE Schlussformel oder Grüße. "
+            "Nur der eigentliche Antwortabschnitt zum Thema, maximal 3-5 Sätze, direkt auf den Punkt.\n\n"
+            f"Thema: {topic_label}\n"
+        )
+        if topic_expl:
+            base_ctx += f"Kurze Beschreibung des Themas: {topic_expl}\n"
+
+        if mode == 'faq':
+            mode_instr = (
+                "Nutze die folgende Wissensbasis (FAQs und Dokument-Hinweise), um das Anliegen so gut wie möglich zu beantworten. "
+                "Wenn etwas klar aus den FAQs hervorgeht, erkläre es in eigenen Worten. "
+                "Wenn nichts Passendes in der Wissensbasis steht, formuliere eine ehrliche, kurze Antwort und sage, dass wir dazu aktuell keine feste Regel in den FAQs haben. "
+                "Erwähne keine Links explizit, sondern nur Inhalte.\n\n"
+            )
+            kb_block = "FAQ-Wissensbasis (Rohtext kann Fragen/Antworten enthalten):\n" + (faq_text or 'Keine FAQs hinterlegt.')
+            if document_links:
+                kb_block += "\n\nDokument-Links (nur Kontext, nicht direkt nennen):\n" + document_links
+            full_prompt = base_ctx + mode_instr + kb_block
+        elif mode == 'history':
+            mode_instr = (
+                "Fasse die bisherige Historie zu diesem Thema aus den folgenden E-Mails zusammen und formuliere daraus einen kurzen Absatz, der den aktuellen Stand beschreibt. "
+                "Beschreibe, was bisher vereinbart oder diskutiert wurde und was jetzt noch offen ist. "
+                "Wenn die Historie unklar ist oder kaum Infos enthält, schreibe einen kurzen Satz, der das transparent macht.\n\n"
+            )
+            hist_block = history_block or 'Keine frühere Historie gefunden.'
+            full_prompt = base_ctx + mode_instr + "Bisherige E-Mails (neueste zuerst):\n" + hist_block
+        elif mode == 'todo':
+            mode_instr = (
+                "Formuliere eine Antwort, in der wir klar sagen, dass wir das Anliegen aufnehmen und bearbeiten. "
+                "Gib eine realistische, aber knappe Zeiteinschätzung (z.B. in den nächsten Tagen, bis Ende nächster Woche). "
+                "Kein "
+                "'wir prüfen erst' oder 'wir überlegen', sondern so, als hätten wir die To-Do bereits eingeplant.\n\n"
+            )
+            full_prompt = base_ctx + mode_instr
+        else:  # delegate
+            mode_instr = (
+                "Formuliere eine Antwort, in der wir transparent machen, dass das Anliegen intern an eine zuständige Person oder Abteilung weitergegeben wird. "
+                "Erkläre kurz, wer sich ungefähr darum kümmern wird (z.B. Technik-Team, Buchhaltung) und dass wir uns wieder melden, sobald es Neuigkeiten gibt.\n\n"
+            )
+            full_prompt = base_ctx + mode_instr
+
+        try:
+            resp = openai_client.chat.completions.create(
+                model="gpt-4.1-mini",
+                messages=[
+                    {"role": "system", "content": "Du formulierst prägnante, freundliche E-Mail-Antworten auf Deutsch."},
+                    {"role": "user", "content": full_prompt},
+                ],
+                temperature=0.4,
+                max_tokens=260,
+            )
+            snippet = resp.choices[0].message.content.strip() if resp.choices else ''
+            if not snippet:
+                return jsonify({'__ok': False, 'error': 'Kein Text vom Modell erhalten'}), 500
+            return jsonify({'__ok': True, 'snippet': snippet}), 200
+        except Exception as e_llm:
+            try:
+                app.logger.error(f"[Reply Prep Category] LLM error: {e_llm}")
+            except Exception:
+                pass
+            return jsonify({'__ok': False, 'error': str(e_llm)}), 500
+
+    except Exception as e:
+        try:
+            app.logger.error(f"[Reply Prep Category] Error: {e}")
+        except Exception:
+            pass
+        return jsonify({'__ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/emails/agent-compose', methods=['POST'])
 @require_auth
 def api_emails_agent_compose(current_user):
