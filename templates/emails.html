@@ -609,6 +609,40 @@
       return 'normal';
     }
 
+    // Datumsformatierung für die Inbox-Liste
+    // - Heute: HH:MM
+    // - Gestern: 'gestern'
+    // - Vorgestern: 'vorgestern'
+    // - Älter: dd.MM. (ohne Jahr)
+    function formatListDate(raw){
+      if(!raw) return '';
+      const d = new Date(raw);
+      if(isNaN(d.getTime())){
+        return raw;
+      }
+      const now = new Date();
+      const dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const nDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const diffDays = Math.round((nDate - dDate) / (1000 * 60 * 60 * 24));
+
+      if(diffDays === 0){
+        // Heute -> Uhrzeit HH:MM
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+      }
+      if(diffDays === 1){
+        return 'gestern';
+      }
+      if(diffDays === 2){
+        return 'vorgestern';
+      }
+
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      return `${dd}.${mm}.`;
+    }
+
     function setupInboxFilterToggle(){
       const list = document.getElementById('list');
       if(!list) return;
@@ -968,7 +1002,7 @@
         const bucket = getImportanceBucket(it);
 
         const fromLabel = escapeHtml(it.from || '');
-        const dateLabel = escapeHtml(it.date || '');
+        const dateLabel = escapeHtml(formatListDate(it.date || ''));
 
         // In der Ansicht "normal" immer beide Pfeile anzeigen,
         // in den Extremansichten nur Up bzw. Down.
