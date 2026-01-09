@@ -3167,28 +3167,63 @@
           ev.stopPropagation();
         }
       };
+
+      // Autosave-Handler nur einmal registrieren
+      if(faqEl && !faqEl.dataset.autosaveAttached){
+        faqEl.addEventListener('input', () => {
+          try {
+            localStorage.setItem('knowledge_faq_draft', faqEl.value || '');
+          } catch(_e) {}
+        });
+        faqEl.dataset.autosaveAttached = '1';
+      }
+      if(linksEl && !linksEl.dataset.autosaveAttached){
+        linksEl.addEventListener('input', () => {
+          try {
+            localStorage.setItem('knowledge_links_draft', linksEl.value || '');
+          } catch(_e) {}
+        });
+        linksEl.dataset.autosaveAttached = '1';
+      }
     }
     
     function openKnowledgeModal(){
       closeAllModals();
       const modal = document.getElementById('knowledge_modal');
       const msg = document.getElementById('knowledge_msg');
+      const faqEl = document.getElementById('knowledge_faq');
+      const linksEl = document.getElementById('knowledge_links');
       const user = getCurrentUser();
       if(!user){ alert('Bitte erst einloggen'); return; }
       
       modal.style.display = 'flex';
       msg.textContent = 'Lade Wissensdatenbank...';
       
-      // Reset fields
-      document.getElementById('knowledge_faq').value = '';
-      document.getElementById('knowledge_links').value = '';
+      // Autosave-Drafts aus localStorage laden (sofortige Anzeige)
+      const draftFaq = localStorage.getItem('knowledge_faq_draft') || '';
+      const draftLinks = localStorage.getItem('knowledge_links_draft') || '';
+      if(faqEl && draftFaq){ faqEl.value = draftFaq; }
+      if(linksEl && draftLinks){ linksEl.value = draftLinks; }
       
       // Load knowledge base
       fetch('/api/user/agent-settings', {
         headers: getAuthHeaders()
       }).then(res => res.json()).then(data => {
-        if(data.faq_text) document.getElementById('knowledge_faq').value = data.faq_text;
-        if(data.document_links) document.getElementById('knowledge_links').value = data.document_links;
+        // DB-Werte haben Vorrang vor Drafts; nur wenn leer, Draft übernehmen
+        if(faqEl){
+          if(data.faq_text){
+            faqEl.value = data.faq_text;
+          } else if(!faqEl.value && draftFaq){
+            faqEl.value = draftFaq;
+          }
+        }
+        if(linksEl){
+          if(data.document_links){
+            linksEl.value = data.document_links;
+          } else if(!linksEl.value && draftLinks){
+            linksEl.value = draftLinks;
+          }
+        }
         msg.textContent = '';
       }).catch((e) => {
         msg.textContent = 'Fehler beim Laden: ' + e;
@@ -3197,8 +3232,8 @@
       const cleanup = () => { modal.style.display = 'none'; };
       document.getElementById('knowledge_cancel').onclick = cleanup;
       document.getElementById('knowledge_save').onclick = async () => {
-        const faqText = document.getElementById('knowledge_faq').value.trim();
-        const docLinks = document.getElementById('knowledge_links').value.trim();
+        const faqText = (faqEl && faqEl.value ? faqEl.value.trim() : '');
+        const docLinks = (linksEl && linksEl.value ? linksEl.value.trim() : '');
         
         msg.textContent = 'Speichere...';
         
@@ -3214,6 +3249,11 @@
           const data = await parseJsonSafe(res);
           if(data.__ok){
             msg.textContent = '✅ Gespeichert!';
+            // Erfolgreich gespeichert -> Drafts löschen
+            try {
+              localStorage.removeItem('knowledge_faq_draft');
+              localStorage.removeItem('knowledge_links_draft');
+            } catch(_e) {}
             setTimeout(cleanup, 1500);
           } else {
             msg.textContent = 'Fehler: ' + (data.error || 'Unbekannt');
@@ -3222,7 +3262,6 @@
           msg.textContent = 'Fehler: ' + e;
         }
       };
-      modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
     }
     
     function openContactsModal(){
