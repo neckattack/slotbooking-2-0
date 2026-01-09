@@ -2256,12 +2256,13 @@
                   renderQuickCard(data);
                 })
                 .catch(err => {
-                  qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Fehler</span>';
-                  qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Fehler</span>';
-                  qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Fehler</span>';
-                  qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Fehler</span>';
-                  qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Fehler</span>';
-                  qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Fehler</span>';
+                  console.error('Quick-Card konnte nicht geladen werden:', err);
+                  qcName.innerHTML = '<span class="muted">Keine Profildaten verfügbar</span>';
+                  qcNow.innerHTML = '<span class="muted">Keine aktuellen Hinweise</span>';
+                  qcTopics.innerHTML = '<span class="muted">Keine offenen Themen</span>';
+                  qcReply.innerHTML = '';
+                  qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Unbekannt</span>';
+                  qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Einträge</span>';
                 });
             }
           }
