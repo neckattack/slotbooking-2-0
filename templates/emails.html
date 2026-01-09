@@ -25,8 +25,15 @@
     .detail h2 { margin:0 0 8px; font-size:18px; }
     .detail .meta { color: var(--sub); font-size:12px; margin-bottom:14px; }
     .detail .content { background:#fff; border:1px solid var(--border); border-radius:8px; padding:16px; }
-    /* E-Mail-Inhalt: eingebettete Bilder responsiv anzeigen */
-    .detail .content img { max-width:100%; height:auto; display:block; }
+    /* E-Mail-Inhalt: eingebettete Bilder responsiv anzeigen.
+       width/height aus dem HTML (z.B. 38x34) nicht erzwingen, sondern
+       natürliche Größe nutzen und nur bei Bedarf herunterskalieren. */
+    .detail .content img {
+      display:block;
+      max-width:100%;
+      height:auto !important;
+      width:auto !important;
+    }
     .profile { margin-top:8px; background:#fff; border:1px solid var(--border); border-radius:8px; padding:12px; }
     .profile h3 { margin:0 0 10px; font-size:16px; }
     .profile .grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
