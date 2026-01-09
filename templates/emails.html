@@ -217,6 +217,16 @@
       <button id="user_badge" style="background:#111827; display:none;">👤 Lade...</button>
       <button id="menu_btn" style="background:#111827; font-size:20px; padding:8px 14px;">☰</button>
     </div>
+
+  <!-- Simple Image Lightbox for inline email images -->
+  <div id="image_lightbox" class="modal" style="z-index:300;">
+    <div class="box" style="width:auto; max-width:90vw; max-height:90vh; padding:0; border:none; background:transparent; box-shadow:none;">
+      <div style="position:relative;">
+        <button id="image_lightbox_close" style="position:absolute; top:-32px; right:-32px; background:#111827; color:#fff; border-radius:999px; width:28px; height:28px; border:0; cursor:pointer; font-size:16px; line-height:1;">✕</button>
+        <img id="image_lightbox_img" src="" alt="Bild" style="display:block; max-width:90vw; max-height:90vh; border-radius:8px; box-shadow:0 10px 40px rgba(0,0,0,0.35);" />
+      </div>
+    </div>
+  </div>
   </header>
   <div class="container">
     <div class="list" id="list">
@@ -1276,7 +1286,7 @@
               <div id="reply_prep_debug" style="margin-top:4px;"></div>
             </div>
           </div>
-          <div class="detail-splitter" id="detail_splitter"></div>
+          <div class="detail-splitter" id="detail_splitter">⋮⋮</div>
           <div class="profile" id="profile_panel" data-contact-id="${t.contact_id || ''}">
             <h3>👤 KONTAKT-PROFIL</h3>
             <div class="grid">
