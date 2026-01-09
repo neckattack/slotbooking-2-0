@@ -22,6 +22,7 @@ app = Flask(__name__)
 INBOX_CACHE = {"data": None, "ts": 0, "key": None}
 THREAD_CACHE = {}   # uid -> {data, ts}  (Mail-Thread-Inhalt)
 COMPOSE_CACHE = {}  # uid -> {html, to, subject, ts} (Antwort-Entwurf)
+EMAIL_DETAIL_CACHE = {}  # (user_email, email_id) -> {data, ts}
 
 # Per-Process TTL-Caches für BLUE-DB und Job-Abfragen (beschleunigt Preface)
 BLUE_USER_CACHE = {}  # email -> {data, ts}
@@ -2282,6 +2283,12 @@ def api_emails_get(current_user, email_id):
     user_email = current_user.get('user_email')
 
     try:
+        # Kurzzeit-Cache (pro Prozess) prüfen, um wiederholte Aufrufe derselben Mail zu beschleunigen
+        cache_key = f"{user_email}:{email_id}"
+        cached = _cache_get(EMAIL_DETAIL_CACHE, cache_key, ttl=10)
+        if cached is not None:
+            return jsonify(cached.get('payload') or {}), 200
+
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
         
@@ -2303,7 +2310,7 @@ def api_emails_get(current_user, email_id):
         if not email_row:
             return jsonify({'error': 'Email not found'}), 404
         
-        return jsonify({
+        payload = {
             'id': email_row['id'],
             'from': email_row['from_name'] or email_row['from_addr'],
             'from_addr': email_row['from_addr'],
@@ -2326,7 +2333,15 @@ def api_emails_get(current_user, email_id):
                 'communication_frequency': email_row.get('communication_frequency'),
                 'category': email_row.get('category')
             }
-        }), 200
+        }
+
+        # In-Memory-Cache aktualisieren (Best Effort)
+        try:
+            _cache_set(EMAIL_DETAIL_CACHE, cache_key, {'payload': payload})
+        except Exception:
+            pass
+
+        return jsonify(payload), 200
         
     except Exception as e:
         app.logger.error(f"[Get Email] Error: {e}")
