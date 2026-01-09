@@ -3753,6 +3753,7 @@ def api_email_reply_prep(current_user, email_id):
     user_email = current_user.get('user_email')
     debug_raw = request.args.get('debug_raw') == '1'
     force = request.args.get('force') == '1'
+    skip_history = request.args.get('skip_history') == '1'
 
     try:
         conn = get_settings_db_connection()
@@ -4068,7 +4069,7 @@ def api_email_reply_prep(current_user, email_id):
 
         # Themen & offene Threads für den Kontakt (letzte 6 Monate)
         topics_payload = []
-        if contact_id:
+        if contact_id and not skip_history:
             import datetime as _dt
             six_months_ago = _dt.datetime.utcnow() - _dt.timedelta(days=180)
 
