@@ -1440,6 +1440,7 @@
                 }
 
                 let topicsHtml = '';
+                let histLoaded = false;
 
                 // 1) Aktuelle E-Mail-Themen zuerst anzeigen (ohne Historien-Meta, optional mit Erklärung)
                 if(currentTopics.length){
@@ -1476,7 +1477,7 @@
                   }).join('');
                 }
 
-                // 2) Historische offene Themen darunter anzeigen (nur wenn im schnellen Call schon geliefert; ansonsten später in eigenem Call)
+                // 2) Historische offene Themen: Platz für Toggle + Container vorbereiten
                 if(topics.length){
                   const historicalHtml = topics.map(tp => {
                     const ageTxt = (tp.age_days != null) ? ` · seit ${tp.age_days} Tagen` : '';
@@ -1516,19 +1517,59 @@
                       ${historicalHtml}
                     </div>
                   `;
+                  histLoaded = true;
                 }
 
                 prepTopics.innerHTML = topicsHtml;
 
-                // Toggle für historische Themen (ein-/ausklappen)
+                // Toggle für historische Themen (ein-/ausklappen und ggf. lazy load)
                 try {
                   const histToggle = prepTopics.querySelector('#historical_topics_toggle');
                   const histContainer = prepTopics.querySelector('#historical_topics_container');
                   if(histToggle && histContainer){
                     histToggle.addEventListener('click', () => {
-                      const isHidden = histContainer.style.display === 'none' || !histContainer.style.display;
-                      histContainer.style.display = isHidden ? 'block' : 'none';
-                      histToggle.textContent = isHidden ? 'ausblenden' : 'anzeigen';
+                      const doShow = histContainer.style.display === 'none' || !histContainer.style.display;
+                      if(doShow && !histLoaded){
+                        // Beim ersten Öffnen historische Themen lazy nachladen
+                        fetch(`/api/emails/${t.id}/reply-prep?debug_raw=1`, { headers: getAuthHeaders() })
+                          .then(res => parseJsonSafe(res))
+                          .then(histData => {
+                            const histTopics = (histData && histData.topics) || [];
+                            if(!histTopics.length) return;
+                            const historicalHtmlLazy = histTopics.map(tp => {
+                              const ageTxt = (tp.age_days != null) ? ` · seit ${tp.age_days} Tagen` : '';
+                              const meta = `${tp.email_count || 0} E-Mails${ageTxt}`;
+                              const optHtml = (tp.reply_options || []).map((opt, idx) => {
+                                return `<button class="reply-opt-btn" data-topic-id="${tp.id}" data-opt-id="${opt.id}" data-snippet="${encodeURIComponent(opt.snippet || '')}" style="border:0; padding:3px 6px; border-radius:4px; font-size:11px; margin:2px 4px 2px 0; cursor:pointer; background:#e5e7eb; color:#374151;">${escapeHtml(opt.label || '')}</button>`;
+                              }).join('');
+                              const mailsHtml = (tp.emails || []).slice(0,5).map(em => {
+                                const text = `${em.received_at || ''} – ${em.subject || ''}`;
+                                return `<div style="font-size:11px; cursor:pointer; text-decoration:underline;" data-email-id="${em.id}" class="reply-prep-email-link">${escapeHtml(text)}</div>`;
+                              }).join('');
+                              return `
+                                <div class="reply-prep-topic" data-kind="historical" data-topic-id="${tp.id}" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb; position:relative;">
+                                  <span class="reply-prep-close" data-kind="historical" data-topic-id="${tp.id}" style="position:absolute; right:6px; top:4px; color:#b91c1c; font-weight:bold; cursor:pointer;">×</span>
+                                  <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(tp.label || '(ohne Titel)')}</div>
+                                  <div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(meta)}</div>
+                                  <div style="margin-bottom:4px;">${optHtml}</div>
+                                  ${mailsHtml ? `<div style="font-size:11px; margin-top:2px;"><span class="muted">Relevante E-Mails:</span></div>${mailsHtml}` : ''}
+                                  <div style="margin-top:4px; border-top:1px dashed #e57eb; padding-top:4px;">
+                                    <div class="sub" style="font-size:10px; margin-bottom:2px;">Manuelle Antwort (Stichworte):</div>
+                                    <div style="display:flex; gap:4px; align-items:flex-start;">
+                                      <textarea class="reply-manual-note" data-topic-label="${escapeHtml(tp.label || '')}" data-topic-expl="" rows="2" placeholder="Eigene Stichworte zur Antwort..." style="flex:1; font-size:11px; padding:4px 6px; border-radius:4px; border:1px solid #e5e7eb; resize:vertical;"></textarea>
+                                      <button class="reply-manual-btn" data-kind="historical" data-topic-id="${tp.id}" style="border:0; padding:4px 6px; border-radius:4px; font-size:11px; cursor:pointer; background:#6366f1; color:#ffffff; white-space:nowrap;">Manuell formulieren</button>
+                                    </div>
+                                  </div>
+                                </div>
+                              `;
+                            }).join('');
+                            histContainer.innerHTML = historicalHtmlLazy;
+                            histLoaded = true;
+                          })
+                          .catch(() => {/* Komfort-Feature */});
+                      }
+                      histContainer.style.display = doShow ? 'block' : 'none';
+                      histToggle.textContent = doShow ? 'ausblenden' : 'anzeigen';
                     });
                   }
                 } catch(_e){ /* nur Komfort-Feature */ }
