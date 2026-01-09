@@ -3836,7 +3836,7 @@ def api_email_reply_prep(current_user, email_id):
                     try:
                         parsed = _json.loads(t_txt)
                         if isinstance(parsed, list):
-                            for idx, item in enumerate(parsed[:3]):
+                            for idx, item in enumerate(parsed):
                                 if not isinstance(item, dict):
                                     continue
                                 title = str(item.get("title") or "").strip()
