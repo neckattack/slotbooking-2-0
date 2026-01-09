@@ -3050,7 +3050,8 @@
           msg.textContent = 'Fehler: ' + e;
         }
       };
-      modal.onclick = (ev) => { if(ev.target === modal) cleanup(); };
+      // Wichtig: Modal NICHT beim Klick auf den Hintergrund schließen,
+      // damit eingegebener FAQ-Text nicht versehentlich verloren geht.
     }
     
     // Sidebar Menu
