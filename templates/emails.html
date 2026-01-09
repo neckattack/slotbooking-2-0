@@ -1762,11 +1762,7 @@
                     }
                   });
                 });
-              })
-              .catch(err => {
-                prepStatus.textContent = 'Fehler bei der Analyse.';
-              });
-          }
+              }
 
           // Initial Reply-Prep laden und Reload-Button verkabeln
           if(prepBlock && prepStatus && prepSummary && prepTopics){
