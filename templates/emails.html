@@ -1338,9 +1338,6 @@
                 ${kpis.salutation || kpis.sentiment || kpis.communication_frequency || kpis.category ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#fee2e2; color:#b91c1c; border-radius:4px; font-size:11px; font-weight:500;">🏷 Typ: ${kpis.category || 'Unklar'}</span>` : ''}
               </div>
               <div id="contact_topic_detail_panel" class="sub" style="font-size:11px; margin-bottom:8px; display:none; padding:6px 8px; border-radius:4px; background:#eff6ff; border:1px solid #bfdbfe;"></div>
-              <div id="prof_summary" class="sub" style="padding:10px; background:${profileSummary ? '#f0fdf4' : '#f9fafb'}; border-radius:6px; line-height:1.5; display:none;">
-                ${profileSummary ? formatCustomerProfile(profileSummary) : ''}
-              </div>
               <div id="prof_summary_full" class="sub" style="margin-top:8px; padding:10px; background:#f9fafb; border-radius:6px; line-height:1.5; display:${profileSummaryFull ? 'block' : 'none'};">
                 ${profileSummaryFull ? formatCustomerProfile(profileSummaryFull) : ''}
               </div>
