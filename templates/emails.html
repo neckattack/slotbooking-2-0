@@ -520,8 +520,8 @@
     // E-Mail-Accounts für Einstellungen (Verwaltung im Modal)
     let emailAccounts = [];
     let currentSettingsAccountId = null;
-    // Inbox filtering: 'relevant' (default) vs 'other'
-    let inboxFilter = 'relevant';
+    // Inbox filtering: 'focus' (wichtig), 'normal' (Standard) vs 'unwichtig' (Newsletter etc.)
+    let inboxFilter = 'focus';
     let inboxEmails = [];
     let inboxSearchQuery = '';
     // Aktueller Ordner (DB-Key, z.B. 'inbox', 'archive', 'all')
@@ -575,18 +575,28 @@
       return html;
     }
     
-    function isRelevantEmail(it){
+    // Einfache Wichtigkeits-Heuristik pro E-Mail
+    // Rückgabe: 'focus' | 'normal' | 'unwichtig'
+    function getImportanceBucket(it){
       const fromAddr = (it.from_addr || it.from || '').toLowerCase();
       const subject = (it.subject || '').toLowerCase();
-      // Heuristik: Newsletter / No-Reply / Massenmails als "Sonstige" markieren
+      const emailCount = it.contact_email_count || 0;
+
       const newsletterLike = /(no-?reply|newsletter|news@|mailer@|noreply)/.test(fromAddr) ||
                              subject.includes('newsletter') || subject.includes('angebote') || subject.includes('sale');
-      // Wenn Kontakt bereits mehrere E-Mails hat, eher wichtig
-      const count = it.contact_email_count || 0;
-      if (count >= 3) return true;
-      // Eigene Domain-Kontakte immer als relevant
-      if (fromAddr.includes('@neckattack.')) return true;
-      return !newsletterLike;
+
+      // Sehr unwichtig: klare Newsletter / No-Reply / Massenmails
+      if(newsletterLike){
+        return 'unwichtig';
+      }
+
+      // Fokus: eigene Domain oder viele Nachrichten von diesem Kontakt
+      if(fromAddr.includes('@neckattack.') || emailCount >= 3){
+        return 'focus';
+      }
+
+      // Rest: normal
+      return 'normal';
     }
 
     function setupInboxFilterToggle(){
@@ -599,8 +609,9 @@
       toggle.style.cssText = 'display:flex; justify-content:space-between; gap:8px; align-items:center; margin:4px 0 8px 0; font-size:12px;';
       toggle.innerHTML = `
         <div style="display:inline-flex; background:#e5e7eb; border-radius:999px; padding:2px;">
-          <button id="filter_relevant" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#fff; color:#111827; font-weight:600;">Relevant</button>
-          <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Sonstige</button>
+          <button id="filter_focus" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#fff; color:#111827; font-weight:600;">Fokus</button>
+          <button id="filter_normal" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Normal</button>
+          <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Unwichtig</button>
         </div>
         <div>
           <select id="folder_select" style="padding:4px 8px; border-radius:6px; border:1px solid var(--border); font-size:12px;"></select>
@@ -608,28 +619,45 @@
       `;
       // In die Listenspalte einfügen, direkt vor dem ersten Inhalt
       list.insertBefore(toggle, list.firstChild);
-      const btnRel = document.getElementById('filter_relevant');
+      const btnFocus = document.getElementById('filter_focus');
+      const btnNormal = document.getElementById('filter_normal');
       const btnOther = document.getElementById('filter_other');
       const folderSelect = document.getElementById('folder_select');
       const updateButtons = () => {
-        if(inboxFilter === 'relevant'){
-          btnRel.style.background = '#fff';
-          btnRel.style.color = '#111827';
-          btnRel.style.fontWeight = '600';
-          btnOther.style.background = 'transparent';
-          btnOther.style.color = '#4b5563';
-          btnOther.style.fontWeight = '400';
+        // Fokus
+        if(inboxFilter === 'focus'){
+          btnFocus.style.background = '#fff';
+          btnFocus.style.color = '#111827';
+          btnFocus.style.fontWeight = '600';
         } else {
+          btnFocus.style.background = 'transparent';
+          btnFocus.style.color = '#4b5563';
+          btnFocus.style.fontWeight = '400';
+        }
+        // Normal
+        if(inboxFilter === 'normal'){
+          btnNormal.style.background = '#fff';
+          btnNormal.style.color = '#111827';
+          btnNormal.style.fontWeight = '600';
+        } else {
+          btnNormal.style.background = 'transparent';
+          btnNormal.style.color = '#4b5563';
+          btnNormal.style.fontWeight = '400';
+        }
+        // Unwichtig
+        if(inboxFilter === 'unwichtig'){
           btnOther.style.background = '#fff';
           btnOther.style.color = '#111827';
           btnOther.style.fontWeight = '600';
-          btnRel.style.background = 'transparent';
-          btnRel.style.color = '#4b5563';
-          btnRel.style.fontWeight = '400';
+        } else {
+          btnOther.style.background = 'transparent';
+          btnOther.style.color = '#4b5563';
+          btnOther.style.fontWeight = '400';
         }
       };
-      btnRel.addEventListener('click', () => { inboxFilter = 'relevant'; updateButtons(); renderInboxList(); });
-      btnOther.addEventListener('click', () => { inboxFilter = 'other'; updateButtons(); renderInboxList(); });
+      btnFocus.addEventListener('click', () => { inboxFilter = 'focus'; updateButtons(); renderInboxList(); });
+      btnNormal.addEventListener('click', () => { inboxFilter = 'normal'; updateButtons(); renderInboxList(); });
+      btnOther.addEventListener('click', () => { inboxFilter = 'unwichtig'; updateButtons(); renderInboxList(); });
 
       // Folder-Select mit verfügbaren Ordnern füllen
       if(folderSelect){
@@ -904,9 +932,13 @@
         if(status) status.textContent = '';
         return;
       }
+      
       const baseFiltered = inboxEmails.filter(it => {
-        const rel = isRelevantEmail(it);
-        return inboxFilter === 'relevant' ? rel : !rel;
+        const bucket = getImportanceBucket(it);
+        if(inboxFilter === 'focus') return bucket === 'focus';
+        if(inboxFilter === 'unwichtig') return bucket === 'unwichtig';
+        // normal: alles außer ganz unwichtig, damit Sammel-Newsletter ausgeblendet bleiben
+        return bucket === 'focus' || bucket === 'normal';
       });
 
       const q = (inboxSearchQuery || '').trim().toLowerCase();
