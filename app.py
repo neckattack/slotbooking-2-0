@@ -724,6 +724,77 @@ def api_reply_prep_category_draft(current_user):
             except Exception:
                 pass
 
+        # Kontakt-Kategorie & Absender-Typ für rollenbasiertes FAQ-Routing bestimmen
+        contact_email = ''
+        contact_category = ''
+        if contact_id:
+            try:
+                conn_c = get_settings_db_connection()
+                cursor_c = conn_c.cursor(dictionary=True)
+                cursor_c.execute(
+                    "SELECT contact_email, category FROM contacts WHERE id=%s AND user_email=%s",
+                    (contact_id, user_email),
+                )
+                c_row = cursor_c.fetchone()
+                cursor_c.close()
+                conn_c.close()
+                if c_row:
+                    contact_email = (c_row.get('contact_email') or '').strip().lower()
+                    contact_category = (c_row.get('category') or '').strip()
+            except Exception as e_cat:
+                try:
+                    app.logger.warning(f"[Reply Prep Category] Konnte Kontakt-Kategorie nicht laden: {e_cat}")
+                except Exception:
+                    pass
+
+        # Audience-Heuristik (customer / internal / therapist)
+        audience = 'customer'
+        try:
+            cat_lower = (contact_category or '').lower()
+            user_domain = (user_email.split('@', 1)[1].lower() if user_email and '@' in user_email else '')
+            contact_domain = (contact_email.split('@', 1)[1].lower() if contact_email and '@' in contact_email else '')
+            if 'kollege' in cat_lower or 'mitarbeiter' in cat_lower or (user_domain and contact_domain and user_domain == contact_domain):
+                audience = 'internal'
+            elif 'masseur' in cat_lower or 'therapeut' in cat_lower:
+                audience = 'therapist'
+            elif 'kunde' in cat_lower:
+                audience = 'customer'
+        except Exception:
+            # Fällt auf customer zurück
+            audience = 'customer'
+
+        def _extract_faq_for_audience(full_text: str, aud: str) -> str:
+            """Gibt den relevanten FAQ-Abschnitt für die Audience zurück.
+
+            Erwartete Struktur im faq_text (Markdown), z.B.:
+
+            ## FAQ für Kunden
+            ...
+
+            ## FAQ für Masseure
+            ...
+
+            ## FAQ für internes Team
+            ...
+            """
+            if not full_text:
+                return ''
+            try:
+                import re as _re
+                patterns = {
+                    'customer': [r"##\s*FAQ\s*f[üu]r\s*Kunden", r"##\s*Kunden-FAQ"],
+                    'therapist': [r"##\s*FAQ\s*f[üu]r\s*Masseure", r"##\s*FAQ\s*f[üu]r\s*Therapeuten"],
+                    'internal': [r"##\s*FAQ\s*f[üu]r\s*internes\s*Team", r"##\s*Interne[n]?\s*FAQ"],
+                }
+                for pat in patterns.get(aud, []):
+                    m = _re.search(pat + r"[\s\S]*?(?=\n##\s+|\Z)", full_text)
+                    if m:
+                        return m.group(0).strip()
+            except Exception:
+                pass
+            # Fallback: gesamter Text
+            return full_text
+
         # E-Mail-/Historienkontext laden (für history-Mode, optional auch für andere Modi)
         history_block = ''
         try:
@@ -793,7 +864,8 @@ def api_reply_prep_category_draft(current_user):
                 "Wenn nichts Passendes in der Wissensbasis steht, formuliere eine ehrliche, kurze Antwort und sage, dass wir dazu aktuell keine feste Regel in den FAQs haben. "
                 "Erwähne keine Links explizit, sondern nur Inhalte.\n\n"
             )
-            kb_block = "FAQ-Wissensbasis (Rohtext kann Fragen/Antworten enthalten):\n" + (faq_text or 'Keine FAQs hinterlegt.')
+            role_faq = _extract_faq_for_audience(faq_text, audience)
+            kb_block = "FAQ-Wissensbasis (Rohtext kann Fragen/Antworten enthalten, ggf. nach Rollen getrennt):\n" + (role_faq or faq_text or 'Keine FAQs hinterlegt.')
             if document_links:
                 kb_block += "\n\nDokument-Links (nur Kontext, nicht direkt nennen):\n" + document_links
             full_prompt = base_ctx + mode_instr + kb_block
