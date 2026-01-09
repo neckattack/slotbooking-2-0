@@ -3999,6 +3999,14 @@ def api_email_reply_prep(current_user, email_id):
                             except Exception:
                                 pass
 
+                # Wenn der inhaltliche Text sehr kurz ist, maximal 1 Thema behalten
+                try:
+                    short_len = len(body_for_topics or "")
+                    if short_len <= 400 and len(current_email_topics) > 1:
+                        current_email_topics = current_email_topics[:1]
+                except Exception:
+                    pass
+
                 # Ergebnis in Cache schreiben (best effort)
                 try:
                     cursor_cache = conn.cursor()
