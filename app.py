@@ -1909,10 +1909,15 @@ def api_emails_sync(current_user):
                 body_text = ''
                 body_html = ''
                 has_attachments = False
+                # Mapping von Content-ID -> data:-URL für kleine Inline-Bilder
+                inline_images = {}
 
                 if msg.is_multipart():
                     for part in msg.walk():
                         ctype = part.get_content_type()
+                        disp = (part.get("Content-Disposition") or "").lower()
+                        cid = (part.get("Content-ID") or "").strip().strip("<>")
+
                         if ctype == 'text/plain' and not body_text:
                             try:
                                 payload = part.get_payload(decode=True)
@@ -1925,6 +1930,20 @@ def api_emails_sync(current_user):
                                 body_html = payload.decode(part.get_content_charset() or 'utf-8', errors='ignore')
                             except Exception:
                                 pass
+                        # Kleine Inline-Bilder (cid) als data:-URL vorbereiten
+                        elif ctype.startswith('image/') and cid and ('attachment' not in disp):
+                            try:
+                                payload = part.get_payload(decode=True) or b''
+                                # Größen-Limit ~1 MB
+                                if len(payload) <= 1_000_000:
+                                    import base64
+                                    b64 = base64.b64encode(payload).decode('ascii')
+                                    # Nur ausgewählte Typen explizit zulassen
+                                    if ctype in ('image/png', 'image/jpeg', 'image/jpg', 'image/gif'):
+                                        inline_images[cid] = f"data:{ctype};base64,{b64}"
+                            except Exception:
+                                # Inline-Bild ist optional – Fehler hier sollen den Import nicht blockieren
+                                pass
                         elif part.get_filename():
                             has_attachments = True
                 else:
@@ -1935,6 +1954,29 @@ def api_emails_sync(current_user):
                         else:
                             body_text = payload.decode(msg.get_content_charset() or 'utf-8', errors='ignore')
                     except Exception:
+                        pass
+
+                # Falls HTML vorhanden ist und wir Inline-Bilder haben, ersetze cid:-Verweise durch data:-URLs
+                if body_html and inline_images:
+                    try:
+                        import re as _re
+
+                        def _replace_cid(m):
+                            cid_val = (m.group(1) or '').strip()
+                            # src="cid:xyz" oder src='cid:xyz'
+                            cid_key = cid_val.split(':', 1)[1] if ':' in cid_val else cid_val
+                            cid_key = cid_key.strip().strip('<>')
+                            data_url = inline_images.get(cid_key)
+                            if not data_url:
+                                return m.group(0)
+                            return m.group(0).replace(m.group(1), data_url)
+
+                        # src="cid:..." / src='cid:...'
+                        body_html = _re.sub(r'src=("|\')(cid:[^"\']+)("|\')',
+                                             lambda m: f"src=\"{inline_images.get(m.group(2).split(':',1)[1].strip('<>'), m.group(2))}\"",
+                                             body_html)
+                    except Exception:
+                        # Wenn Ersetzung fehlschlägt, lieber Original-HTML behalten
                         pass
 
                 # Get or create contact
