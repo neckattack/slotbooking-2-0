@@ -1341,7 +1341,12 @@
                   prepStatus.textContent = 'Analyse nicht verfügbar.';
                   return;
                 }
-                prepStatus.textContent = '';
+                // Anzeige je nachdem, ob wir aus dem Cache laden oder frisch analysiert haben
+                if(data.from_cache){
+                  prepStatus.textContent = 'Geladene Themen (Cache).';
+                } else {
+                  prepStatus.textContent = '';
+                }
                 // Zusammenfassung aus Backend wird derzeit im UI nicht angezeigt,
                 // um die Ansicht schlank zu halten. Daten bleiben dennoch verfügbar.
 

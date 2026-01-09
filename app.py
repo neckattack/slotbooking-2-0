@@ -3321,12 +3321,51 @@ def api_contacts_quick_card(current_user, contact_id):
 
     Diese Ansicht ist für den schnellen Scan gedacht (10–20 Sekunden) und basiert auf
     bestehenden Daten: Kontaktdaten, Topics und den letzten E-Mails.
+
+    Neu: Das gerenderte KI-Kundenprofil (Kurzprofil) wird zusätzlich in
+    contact_profile_cache.short_profile_json pro Kontakt/Benutzer gespeichert und bei
+    erneutem Aufruf wiederverwendet, sofern nicht explizit force=1 gesetzt wird.
     """
     user_email = current_user.get('user_email')
+    force = request.args.get('force') == '1'
 
     try:
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
+
+        # Cache-Tabelle für Kontaktprofile sicherstellen (DDL ggf. schon von generate-profile-full ausgeführt)
+        try:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS contact_profile_cache (
+                    contact_id BIGINT NOT NULL,
+                    user_email VARCHAR(255) NOT NULL,
+                    short_profile_json JSON NULL,
+                    full_profile_json JSON NULL,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (contact_id, user_email)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """
+            )
+        except Exception as _e_prof_ddl:
+            try:
+                app.logger.warning(f"[Quick Card Cache] DDL failed (ignoriert): {_e_prof_ddl}")
+            except Exception:
+                pass
+
+        # Wenn kein force=1 und ein Kurzprofil im Cache existiert, dieses direkt zurückgeben
+        if not force:
+            cursor.execute(
+                "SELECT short_profile_json FROM contact_profile_cache WHERE contact_id=%s AND user_email=%s",
+                (contact_id, user_email),
+            )
+            row_cache = cursor.fetchone()
+            if row_cache and row_cache.get('short_profile_json'):
+                cached = row_cache['short_profile_json']
+                if isinstance(cached, dict) and cached:
+                    cursor.close()
+                    conn.close()
+                    return jsonify({**cached, 'from_cache': True}), 200
 
         # Basis-Kontaktdaten laden
         cursor.execute(
@@ -3599,44 +3638,56 @@ def api_contacts_quick_card(current_user, contact_id):
                 reply_mode = "last_only"
 
         # Wenn es gar keine letzte Mail gibt, aber offene Themen, fokussiere alte Issues
-        if not email_rows and open_topics:
-            reply_mode = "follow_up_old_issue"
 
         # Ton / Stil
         sal = contact.get('salutation') or ''
-        sent = (contact.get('sentiment') or '').lower()
-        tone_parts = []
-        if sal:
-            if sal.lower().startswith('du'):
-                tone_parts.append('duzend')
-            elif sal.lower().startswith('sie'):
-                tone_parts.append('formell (Sie)')
-        if sent == 'positive':
-            tone_parts.append('eher positiv')
-        elif sent == 'negative':
-            tone_parts.append('eher kritisch/angespannt')
-        else:
-            tone_parts.append('neutral')
-        tone = 'Ton: ' + ', '.join(tone_parts)
+        # Jetzt das KI-Kundenprofil zusammensetzen
+        summary_lines = []
+        if who_line:
+            summary_lines.append(who_line)
+        if contact_email_raw:
+            summary_lines.append(contact_email_raw)
+        if now_relevant:
+            summary_lines.extend(now_relevant)
+        if open_topics_formatted:
+            summary_lines.append("Offene Themen:")
+            summary_lines.extend(open_topics_formatted)
 
-        return jsonify({
-            '__ok': True,
+        quick_profile_text = "\n".join(summary_lines)
+
+        payload = {
+            'contact_id': contact_id,
+            'name': display_name,
             'who': who_line,
+            'email': contact_email_raw,
+            'category': cat,
+            'timeline': timeline,
             'now_relevant': now_relevant,
             'open_topics': open_topics_formatted,
-            'reply_strategy': reply_strategy,
-            'reply_mode': reply_mode,
-            'tone': tone,
-            'timeline': timeline,
+            'open_topics_raw': open_topics,
             'timeline_topics': timeline_topics,
-        }), 200
+            'profile_text_raw': quick_profile_text,
+        }
 
-    except Exception as e:
+        # Kurzprofil in contact_profile_cache.short_profile_json cachen (best effort)
         try:
-            app.logger.error(f"[Quick Card] Error: {e}")
-        except Exception:
-            pass
-        return jsonify({'error': str(e)}), 500
+            conn_cache = get_settings_db_connection()
+            cur_cache = conn_cache.cursor()
+            import json as _json
+            cur_cache.execute(
+                "REPLACE INTO contact_profile_cache (contact_id, user_email, short_profile_json) VALUES (%s, %s, %s)",
+                (contact_id, user_email, _json.dumps(payload)),
+            )
+            conn_cache.commit()
+            cur_cache.close()
+            conn_cache.close()
+        except Exception as _e_prof_write:
+            try:
+                app.logger.warning(f"[Quick Card Cache] short_profile write failed: {_e_prof_write}")
+            except Exception:
+                pass
+
+        return jsonify(payload), 200
 
 
 @app.route("/api/emails/imap-debug")
@@ -3686,13 +3737,39 @@ def api_emails_imap_debug():
 @app.route('/api/emails/<int:email_id>/reply-prep', methods=['GET'])
 @require_auth
 def api_email_reply_prep(current_user, email_id):
-    """Bereitet Infos für eine KI-Antwort vor (Zusammenfassung, Themen, Antwortoptionen)."""
+    """Bereitet Infos für eine KI-Antwort vor (Zusammenfassung, Themen, Antwortoptionen).
+
+    Neu: current_email_topics und summary_points werden pro E-Mail in der Settings-DB gecached,
+    damit sie beim erneuten Öffnen nicht jedes Mal neu berechnet werden müssen. Über den
+    Query-Parameter force=1 kann die Neuberechnung explizit angestoßen werden.
+    """
     user_email = current_user.get('user_email')
     debug_raw = request.args.get('debug_raw') == '1'
+    force = request.args.get('force') == '1'
 
     try:
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
+
+        # Cache-Tabelle für Reply-Prep-Themen sicherstellen
+        try:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS email_reply_prep_cache (
+                    email_id BIGINT NOT NULL,
+                    user_email VARCHAR(255) NOT NULL,
+                    topics_json JSON NOT NULL,
+                    summary_json JSON NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (email_id, user_email)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """
+            )
+        except Exception as _e_cache_ddl:
+            try:
+                app.logger.warning(f"[Reply Prep Cache] DDL failed (ignoriert): {_e_cache_ddl}")
+            except Exception:
+                pass
 
         # Aktuelle Mail + Kontakt laden
         cursor.execute(
@@ -3777,101 +3854,147 @@ def api_email_reply_prep(current_user, email_id):
         summary_points = []
         current_email_topics = []
         raw_topics_llm = None
+
+        # Zuerst versuchen, aus dem Cache zu lesen (sofern nicht explizit force=1 gesetzt ist)
+        cache_used = False
         try:
             import json as _json
-
-            # Nur bei längeren E-Mails eine Zusammenfassung erzeugen
-            if body_for_summary and len(body_for_summary) > 500:
-                prompt_sum = (
-                    "Fasse die folgende E-Mail extrem knapp für eine Antwortvorbereitung zusammen. "
-                    "Gib 2-4 sehr kurze Stichworte (max. 6-8 Wörter) auf Deutsch zurück. "
-                    "Kein Fließtext, nur Stichworte. Fokus: Kernanliegen und offene Punkte.\n\n" + body_for_summary
+            if not force:
+                cursor.execute(
+                    "SELECT topics_json, summary_json FROM email_reply_prep_cache WHERE email_id=%s AND user_email=%s",
+                    (email_id, user_email),
                 )
-                resp_sum = openai_client.chat.completions.create(
-                    model="gpt-4.1-mini",
-                    messages=[
-                        {"role": "system", "content": "Du schreibst sehr knappe, stichpunktartige Zusammenfassungen."},
-                        {"role": "user", "content": prompt_sum},
-                    ],
-                    temperature=0.2,
-                    max_tokens=220,
-                )
-                txt = resp_sum.choices[0].message.content if resp_sum.choices else ''
-                if txt:
-                    for line in txt.splitlines():
-                        line = line.strip().lstrip("-•*").strip()
-                        if line:
-                            summary_points.append(line)
-
-            # Immer (auch bei kurzen Mails) 1-5 Themen der aktuellen E-Mail extrahieren
-            if body_for_topics:
-                prompt_topics = (
-                    "Teile den folgenden E-Mail-Text in mehrere fachliche Themen auf. "
-                    "Jedes Thema soll eine sehr kurze Überschrift (Headline) mit 3-4 Wörtern haben, "
-                    "und eine möglichst kurze Erklärung (genau 1 Satz), was inhaltlich zu diesem Thema gehört. "
-                    "Formatiere deine Antwort NUR als JSON-Liste von Objekten. Kein Fließtext außerhalb des JSON. "
-                    "Jedes Objekt hat die Felder title und explanation. Keine weiteren Felder. "
-                    "title: die kurze Headline (3-4 Wörter), präzise Beschreibung des fachlichen Anliegens, keine Anrede. "
-                    "explanation: genau 1 Satz, der den fachlichen Inhalt dieses Themas zusammenfasst (z.B. Rechnung, Betrag, Steuer, Währung, Termin, To-Do). "
-                    "Beispiel: [{\"title\":\"kurzer Titel\",\"explanation\":\"1 Satz Erklärung\"}]. "
-                    "Verwende KEINE inhaltsleeren Sätze wie 'Ja, ich weiß.' oder 'Alles klar.' als explanation. "
-                    "Ignoriere Begrüßungen und Schlussformeln wie 'Hi Chris', 'Hallo Gerd', 'Bussi Johanna' oder 'Viele Grüße' sowie kurze Bestätigungen ohne Fachinhalt. "
-                    "Wenn die E-Mail eine Aufzählung oder Meeting-Zusammenfassung mit mehreren Bullet-Points oder nummerierten Punkten enthält, behandle jeden inhaltlich eigenständigen Punkt als eigenes Thema, sofern er eine eigene Aufgabe oder Fragestellung beschreibt (z.B. 'non-factured jobs Ordner aufräumen', 'steuerpflichtige Masseure in Job einfügen', 'Nachfass-E-Mail erstellen', 'LinkedIn-Posts/Capcut-Videos', 'Preiserhöhung + neue AGBs'). "
-                    "Fasse höchstens eng zusammengehörige Punkte zu einem Thema zusammen, aber verliere keine klar getrennten To-Dos. "
-                    "Fokussiere dich bei title und explanation auf die eigentlichen Sachverhalte und Aufgaben der Nachricht.\n\n"
-                    + body_for_topics
-                )
-                resp_topics = openai_client.chat.completions.create(
-                    model="gpt-4.1-mini",
-                    messages=[
-                        {"role": "system", "content": "Du extrahierst Themen aus E-Mails und lieferst pro Thema passende Antwortoptionen als JSON-Liste."},
-                        {"role": "user", "content": prompt_topics},
-                    ],
-                    temperature=0.2,
-                    max_tokens=600,
-                )
-                t_txt = resp_topics.choices[0].message.content if resp_topics.choices else ''
-                raw_topics_llm = t_txt or ''
-                if t_txt:
+                cache_row = cursor.fetchone()
+                if cache_row:
                     try:
-                        parsed = _json.loads(t_txt)
-                        if isinstance(parsed, list):
-                            for idx, item in enumerate(parsed):
-                                if not isinstance(item, dict):
-                                    continue
-                                title = str(item.get("title") or "").strip()
-                                expl = str(item.get("explanation") or "").strip()
-                                if not title and not expl:
-                                    continue
-                                # Reply-Optionen aus dem JSON übernehmen, falls vorhanden
-                                ro_list = []
-                                raw_opts = item.get("reply_options")
-                                if isinstance(raw_opts, list):
-                                    for o in raw_opts[:5]:
-                                        if not isinstance(o, dict):
-                                            continue
-                                        oid = str(o.get("id") or "").strip() or None
-                                        label = str(o.get("label") or "").strip()
-                                        snippet = str(o.get("snippet") or "").strip()
-                                        if label and snippet:
-                                            ro_list.append({
-                                                "id": oid or "opt",
-                                                "label": label,
-                                                "snippet": snippet,
-                                            })
-                                current_email_topics.append({
-                                    "id": f"mailtopic_{email_id}_{idx}",
-                                    "label": title or "Thema",
-                                    "explanation": expl,
-                                    "reply_options": ro_list,
-                                })
-                    except Exception as e_json:
-                        # Wenn das Modell kein valides JSON geliefert hat, loggen wir den Fehler und fallen auf Fallback zurück
+                        topics_cached = _json.loads(cache_row.get('topics_json') or '[]')
+                    except Exception:
+                        topics_cached = []
+                    try:
+                        summary_cached = _json.loads(cache_row.get('summary_json') or '[]')
+                    except Exception:
+                        summary_cached = []
+                    if isinstance(topics_cached, list):
+                        current_email_topics = topics_cached
+                    if isinstance(summary_cached, list):
+                        summary_points = summary_cached
+                    if current_email_topics or summary_points:
+                        cache_used = True
+
+            # Nur wenn kein Cache vorhanden oder force=1: LLM aufrufen und Ergebnis cachen
+            if not cache_used:
+                # Nur bei längeren E-Mails eine Zusammenfassung erzeugen
+                if body_for_summary and len(body_for_summary) > 500:
+                    prompt_sum = (
+                        "Fasse die folgende E-Mail extrem knapp für eine Antwortvorbereitung zusammen. "
+                        "Gib 2-4 sehr kurze Stichworte (max. 6-8 Wörter) auf Deutsch zurück. "
+                        "Kein Fließtext, nur Stichworte. Fokus: Kernanliegen und offene Punkte.\n\n" + body_for_summary
+                    )
+                    resp_sum = openai_client.chat.completions.create(
+                        model="gpt-4.1-mini",
+                        messages=[
+                            {"role": "system", "content": "Du schreibst sehr knappe, stichpunktartige Zusammenfassungen."},
+                            {"role": "user", "content": prompt_sum},
+                        ],
+                        temperature=0.2,
+                        max_tokens=220,
+                    )
+                    txt = resp_sum.choices[0].message.content if resp_sum.choices else ''
+                    if txt:
+                        for line in txt.splitlines():
+                            line = line.strip().lstrip("-•*").strip()
+                            if line:
+                                summary_points.append(line)
+
+                # Immer (auch bei kurzen Mails) 1-5 Themen der aktuellen E-Mail extrahieren
+                if body_for_topics:
+                    prompt_topics = (
+                        "Teile den folgenden E-Mail-Text in mehrere fachliche Themen auf. "
+                        "Jedes Thema soll eine sehr kurze Überschrift (Headline) mit 3-4 Wörtern haben, "
+                        "und eine möglichst kurze Erklärung (genau 1 Satz), was inhaltlich zu diesem Thema gehört. "
+                        "Formatiere deine Antwort NUR als JSON-Liste von Objekten. Kein Fließtext außerhalb des JSON. "
+                        "Jedes Objekt hat die Felder title und explanation. Keine weiteren Felder. "
+                        "title: die kurze Headline (3-4 Wörter), präzise Beschreibung des fachlichen Anliegens, keine Anrede. "
+                        "explanation: genau 1 Satz, der den fachlichen Inhalt dieses Themas zusammenfasst (z.B. Rechnung, Betrag, Steuer, Währung, Termin, To-Do). "
+                        "Beispiel: [{\"title\":\"kurzer Titel\",\"explanation\":\"1 Satz Erklärung\"}]. "
+                        "Verwende KEINE inhaltsleeren Sätze wie 'Ja, ich weiß.' oder 'Alles klar.' als explanation. "
+                        "Ignoriere Begrüßungen und Schlussformeln wie 'Hi Chris', 'Hallo Gerd', 'Bussi Johanna' oder 'Viele Grüße' sowie kurze Bestätigungen ohne Fachinhalt. "
+                        "Wenn die E-Mail eine Aufzählung oder Meeting-Zusammenfassung mit mehreren Bullet-Points oder nummerierten Punkten enthält, behandle jeden inhaltlich eigenständigen Punkt als eigenes Thema, sofern er eine eigene Aufgabe oder Fragestellung beschreibt (z.B. 'non-factured jobs Ordner aufräumen', 'steuerpflichtige Masseure in Job einfügen', 'Nachfass-E-Mail erstellen', 'LinkedIn-Posts/Capcut-Videos', 'Preiserhöhung + neue AGBs'). "
+                        "Fasse höchstens eng zusammengehörige Punkte zu einem Thema zusammen, aber verliere keine klar getrennten To-Dos. "
+                        "Fokussiere dich bei title und explanation auf die eigentlichen Sachverhalte und Aufgaben der Nachricht.\n\n"
+                        + body_for_topics
+                    )
+                    resp_topics = openai_client.chat.completions.create(
+                        model="gpt-4.1-mini",
+                        messages=[
+                            {"role": "system", "content": "Du extrahierst Themen aus E-Mails und lieferst pro Thema passende Antwortoptionen als JSON-Liste."},
+                            {"role": "user", "content": prompt_topics},
+                        ],
+                        temperature=0.2,
+                        max_tokens=600,
+                    )
+                    t_txt = resp_topics.choices[0].message.content if resp_topics.choices else ''
+                    raw_topics_llm = t_txt or ''
+                    if t_txt:
                         try:
-                            snippet = (t_txt or '')[:400].replace('\n', ' ')
-                            app.logger.warning(f"[Reply Prep] Topics JSON parse failed: {e_json} | raw_snippet={snippet}")
-                        except Exception:
-                            pass
+                            parsed = _json.loads(t_txt)
+                            if isinstance(parsed, list):
+                                for idx, item in enumerate(parsed):
+                                    if not isinstance(item, dict):
+                                        continue
+                                    title = str(item.get("title") or "").strip()
+                                    expl = str(item.get("explanation") or "").strip()
+                                    if not title and not expl:
+                                        continue
+                                    # Reply-Optionen aus dem JSON übernehmen, falls vorhanden
+                                    ro_list = []
+                                    raw_opts = item.get("reply_options")
+                                    if isinstance(raw_opts, list):
+                                        for o in raw_opts[:5]:
+                                            if not isinstance(o, dict):
+                                                continue
+                                            oid = str(o.get("id") or "").strip() or None
+                                            label = str(o.get("label") or "").strip()
+                                            snippet = str(o.get("snippet") or "").strip()
+                                            if label and snippet:
+                                                ro_list.append({
+                                                    "id": oid or "opt",
+                                                    "label": label,
+                                                    "snippet": snippet,
+                                                })
+                                    current_email_topics.append({
+                                        "id": f"mailtopic_{email_id}_{idx}",
+                                        "label": title or "Thema",
+                                        "explanation": expl,
+                                        "reply_options": ro_list,
+                                    })
+                        except Exception as e_json:
+                            # Wenn das Modell kein valides JSON geliefert hat, loggen wir den Fehler und fallen auf Fallback zurück
+                            try:
+                                snippet = (t_txt or '')[:400].replace('\n', ' ')
+                                app.logger.warning(f"[Reply Prep] Topics JSON parse failed: {e_json} | raw_snippet={snippet}")
+                            except Exception:
+                                pass
+
+                # Ergebnis in Cache schreiben (best effort)
+                try:
+                    cursor_cache = conn.cursor()
+                    cursor_cache.execute(
+                        "REPLACE INTO email_reply_prep_cache (email_id, user_email, topics_json, summary_json) VALUES (%s, %s, %s, %s)",
+                        (
+                            email_id,
+                            user_email,
+                            _json.dumps(current_email_topics or []),
+                            _json.dumps(summary_points or []),
+                        ),
+                    )
+                    conn.commit()
+                    cursor_cache.close()
+                except Exception as _e_cache_write:
+                    try:
+                        app.logger.warning(f"[Reply Prep Cache] write failed: {_e_cache_write}")
+                    except Exception:
+                        pass
 
         except Exception as e_llm:
             try:
@@ -4058,6 +4181,7 @@ def api_email_reply_prep(current_user, email_id):
             'summary': summary_points,
             'topics': topics_payload,
             'current_email_topics': current_email_topics,
+            'from_cache': cache_used,
         }
 
         # Optionaler Debug-Block: zeigt den exakt an GPT übergebenen Text und die rohe Topics-Antwort
