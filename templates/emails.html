@@ -1981,19 +1981,20 @@
           const topicDetailPanel = document.getElementById('contact_topic_detail_panel');
 
           function renderQuickCard(data){
-            if(!qcBox || !qcName || !qcNow || !qcTopics || !qcReply || !qcReplyMode || !qcTone || !qcTimeline){
-              return;
-            }
-            if(!data.__ok){
-              qcName.innerHTML = '<span class="muted">Keine Profildaten verfügbar</span>';
-              qcNow.innerHTML = '<span class="muted">Keine aktuellen Hinweise</span>';
-              qcTopics.innerHTML = '<span class="muted">Keine offenen Themen</span>';
-              qcReply.style.display = 'none';
-              qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Unklar</span>';
-              qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Unbekannt</span>';
-              qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline (Kurz):</span> <span class="muted">Keine Einträge</span>';
-              return;
-            }
+            try{
+              if(!qcBox || !qcName || !qcNow || !qcTopics || !qcReply || !qcReplyMode || !qcTone || !qcTimeline){
+                return;
+              }
+              if(!data.__ok){
+                qcName.innerHTML = '<span class="muted">Keine Profildaten verfügbar</span>';
+                qcNow.innerHTML = '<span class="muted">Keine aktuellen Hinweise</span>';
+                qcTopics.innerHTML = '<span class="muted">Keine offenen Themen</span>';
+                qcReply.style.display = 'none';
+                qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Unklar</span>';
+                qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Unbekannt</span>';
+                qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline (Kurz):</span> <span class="muted">Keine Einträge</span>';
+                return;
+              }
             const who = data.who || '';
             const now = data.now_relevant || [];
             const topics = data.open_topics || [];
@@ -2224,9 +2225,6 @@
                   renderQuickCard(data);
                 });
               }
-            } else if(timeline.length){
-              const tl = timeline.map(x => `<div>${escapeHtml(x)}</div>`).join('');
-              qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span> <div>${tl}</div>`;
             } else {
               qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Einträge</span>';
             }
@@ -2256,12 +2254,14 @@
                   renderQuickCard(data);
                 })
                 .catch(err => {
-                  qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Fehler</span>';
-                  qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Fehler</span>';
-                  qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Fehler</span>';
-                  qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Fehler</span>';
-                  qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Fehler</span>';
-                  qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Fehler</span>';
+                  console.error('Quick-Card konnte nicht geladen werden:', err);
+                  qcName.innerHTML = '<span class="muted">Keine Profildaten verfügbar</span>';
+                  qcNow.innerHTML = '<span class="muted">Keine aktuellen Hinweise</span>';
+                  qcTopics.innerHTML = '<span class="muted">Keine offenen Themen</span>';
+                  qcReply.style.display = 'none';
+                  qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Unklar</span>';
+                  qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Unbekannt</span>';
+                  qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Eintr e4ge</span>';
                 });
             }
           }
@@ -2366,9 +2366,10 @@
                 throw new Error(data.error || 'Profil-Generierung fehlgeschlagen');
               }
             }catch(e){
+              console.error('Fehler bei generate-profile', e);
               if(summaryDiv){
-                summaryDiv.textContent = `❌ Fehler: ${e}`;
-                summaryDiv.style.background = '#fee2e2';
+                summaryDiv.textContent = 'Kein KI-Kurzprofil verfügbar (Profil konnte nicht generiert werden).';
+                summaryDiv.style.background = '#f9fafb';
                 summaryDiv.style.display = 'block';
               }
               generateBtn.textContent = originalText;
