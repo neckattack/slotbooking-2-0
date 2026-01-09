@@ -1934,8 +1934,9 @@ def api_emails_sync(current_user):
                         elif ctype.startswith('image/') and cid and ('attachment' not in disp):
                             try:
                                 payload = part.get_payload(decode=True) or b''
-                                # Größen-Limit ~1 MB
-                                if len(payload) <= 1_000_000:
+                                # Größen-Limit ~70 KB, damit die Base64-URL sicher in body_html[:100000] passt
+                                # (Base64 ca. 4/3 der Bytes -> ~93 KB Text)
+                                if len(payload) <= 70_000:
                                     import base64
                                     b64 = base64.b64encode(payload).decode('ascii')
                                     # Nur ausgewählte Typen explizit zulassen
