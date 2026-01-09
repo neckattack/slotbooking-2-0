@@ -2386,12 +2386,16 @@
           });
         }catch(_){ }
         rowEl.classList.remove('unseen');
-        // Prefetch: Draft im Hintergrund erzeugen
+        // Prefetch: Draft im Hintergrund erzeugen (mit Auth-Headern)
         try {
           const toInput = document.getElementById('compose_to');
           const subjInput = document.getElementById('compose_subject');
           const editor = document.getElementById('compose_editor');
-          const res2 = await fetch('/api/emails/agent-compose', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({uid, timeout_s: 8}) });
+          const res2 = await fetch('/api/emails/agent-compose', { 
+            method:'POST', 
+            headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, 
+            body: JSON.stringify({uid, timeout_s: 8}) 
+          });
           const data2 = await parseJsonSafe(res2);
           if(data2 && data2.__ok && currentUid === uid){
             // Nur befüllen, wenn Editor noch leer/Marker enthält
