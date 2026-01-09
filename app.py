@@ -3689,6 +3689,13 @@ def api_contacts_quick_card(current_user, contact_id):
 
         return jsonify(payload), 200
 
+    except Exception as e:
+        try:
+            app.logger.error(f"[Quick Card] Error: {e}")
+        except Exception:
+            pass
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route("/api/emails/imap-debug")
 def api_emails_imap_debug():
