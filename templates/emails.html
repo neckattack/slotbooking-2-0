@@ -616,7 +616,8 @@
       if(document.getElementById('inbox_filter_toggle')) return;
       const toggle = document.createElement('div');
       toggle.id = 'inbox_filter_toggle';
-      toggle.style.cssText = 'display:flex; justify-content:space-between; gap:8px; align-items:center; margin:4px 0 8px 0; font-size:12px;';
+      // Sticky am oberen Rand der Listenspalte halten
+      toggle.style.cssText = 'position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; gap:8px; align-items:center; padding:4px 8px 8px 8px; margin:0 0 4px 0; font-size:12px; background:#ffffff; border-bottom:1px solid var(--border);';
       toggle.innerHTML = `
         <div style="display:inline-flex; background:#e5e7eb; border-radius:999px; padding:2px;">
           <button id="filter_focus" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#fff; color:#111827; font-weight:600;">Fokus</button>
