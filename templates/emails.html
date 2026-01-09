@@ -3161,6 +3161,12 @@
       };
       // Wichtig: Beim Wissensdatenbank-Modal NICHT auf Hintergrund-Klick reagieren,
       // damit eingegebener Text nicht versehentlich verloren geht.
+      modal.onclick = (ev) => {
+        if(ev.target === modal){
+          // bewusst KEIN cleanup();
+          ev.stopPropagation();
+        }
+      };
     }
     
     function openKnowledgeModal(){
