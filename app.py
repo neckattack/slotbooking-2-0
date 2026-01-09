@@ -3312,14 +3312,15 @@ def api_contacts_generate_profile_full(current_user, contact_id):
                 notes_lines.append(f"- ({ts}) {n['note_text']}")
         notes_context = "\n".join(notes_lines) if notes_lines else "(Keine Notizen hinterlegt)"
 
-        # Viele E-Mails laden (Limit und Trunkierung so wählen, dass das LLM-Kontextlimit nicht gesprengt wird)
+        # Viele E-Mails laden, aber Limit und Trunkierung so wählen,
+        # dass das LLM-Kontextlimit nicht gesprengt wird
         cursor.execute(
             """
             SELECT subject, body_text, body_html, received_at, from_addr, to_addrs
             FROM emails
             WHERE contact_id = %s AND user_email = %s
             ORDER BY received_at DESC
-            LIMIT 150
+            LIMIT 120
             """,
             (contact_id, user_email),
         )
@@ -3330,7 +3331,8 @@ def api_contacts_generate_profile_full(current_user, contact_id):
             return jsonify({'error': 'No emails found for this contact'}), 404
 
         email_blocks = []
-        for e in emails:
+        # Für das LLM nur die neuesten ~60 Mails in den Prompt aufnehmen
+        for e in emails[:60]:
             date_str = e['received_at'].strftime('%d.%m.%Y') if e['received_at'] else ''
             subj = e.get('subject') or ''
             sender = e.get('from_addr') or ''
@@ -3339,12 +3341,15 @@ def api_contacts_generate_profile_full(current_user, contact_id):
             if not body:
                 body = (e.get('body_html') or '')
             # Hart kürzen, um Token-Limit einzuhalten
-            body = body[:400]
+            body = body[:320]
             email_blocks.append(
                 f"[{date_str}] Von: {sender} → An: {to_addr}\nBetreff: {subj}\n{body}"
             )
 
         email_context = "\n\n".join(email_blocks)
+        # Zusätzliches Gesamtlängen-Limit als Sicherung
+        if len(email_context) > 14000:
+            email_context = email_context[:14000] + "\n\n(gekürzt – nur Auszug der Historie)"
 
         # Zusätzlichen Kontext aus Qdrant laden (falls konfiguriert), aber stark begrenzt
         qdrant_context = "(Keine zusätzlichen Qdrant-Kontexte verfügbar)"
@@ -3420,17 +3425,27 @@ Schreibe eine strukturierte, längere Zusammenfassung (ca. 600-1200 Wörter) mit
 Nutze eine sachliche, professionelle Sprache. Gliedere mit klaren Überschriften und Abschnitten.
 """
 
-        response = openai_client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[
-                {"role": "system", "content": "Du erstellst ausführliche CRM-Gesamtprofile auf Basis von Notizen und E-Mail-Historien."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.3,
-            max_tokens=1400,
-        )
+        # Vollprofil mit GPT erzeugen und Kontextfehler sauber abfangen
+        try:
+            response = openai_client.chat.completions.create(
+                model="gpt-4.1-mini",
+                messages=[
+                    {"role": "system", "content": "Du erstellst ausführliche CRM-Gesamtprofile auf Basis von Notizen und E-Mail-Historien."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=1400,
+            )
 
-        full_summary = response.choices[0].message.content
+            full_summary = response.choices[0].message.content
+        except Exception as e_llm:
+            msg = str(e_llm)
+            if "context length" in msg or "maximum context length" in msg or "context_length_exceeded" in msg:
+                raise RuntimeError(
+                    "Das ausführliche Gesamtprofil ist aktuell zu lang für das KI-Modell (zu viele alte E-Mails). "
+                    "Bitte einige sehr alte oder sehr umfangreiche E-Mails archivieren/löschen und erneut versuchen."
+                )
+            raise
 
         # Im Kontakt speichern
         cursor.execute(
