@@ -1966,36 +1966,81 @@
               return;
             }
             if(!data.__ok){
-              qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Keine Daten</span>';
-              qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Keine Daten</span>';
-              qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Keine Daten</span>';
-              qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Keine Empfehlung</span>';
+              qcName.innerHTML = '<span class="muted">Keine Profildaten verfügbar</span>';
+              qcNow.innerHTML = '<span class="muted">Keine aktuellen Hinweise</span>';
+              qcTopics.innerHTML = '<span class="muted">Keine offenen Themen</span>';
+              qcReply.style.display = 'none';
               qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Unklar</span>';
               qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Unbekannt</span>';
-              qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Einträge</span>';
+              qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline (Kurz):</span> <span class="muted">Keine Einträge</span>';
               return;
             }
             const who = data.who || '';
             const now = data.now_relevant || [];
             const topics = data.open_topics || [];
-            const reply = data.reply_strategy || '';
             const replyMode = data.reply_mode || '';
             const tone = data.tone || '';
-            const timeline = data.timeline || [];
             const timelineTopics = data.timeline_topics || [];
+            const role = data.role || '';
 
             qcBox.style.display = 'block';
-            qcName.innerHTML = `<span style="font-weight:500;">Name:</span> <span>${escapeHtml(who || (contactName + ' – ' + contactEmail))}</span>`;
-            qcNow.innerHTML = `<span style="font-weight:500;">Jetzt relevant:</span> <span>${now.length ? now.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine Infos</span>'}</span>`;
-            qcTopics.innerHTML = `<span style="font-weight:500;">Offene Themen:</span> <span>${topics.length ? topics.map(x => escapeHtml(x)).join(' · ') : '<span class="muted">Keine offenen Themen</span>'}</span>`;
+
+            // Kopfzeile: Name – Rolle (Kontakt-Typ)
+            const emailLower = (contactEmail || '').toLowerCase();
+            let contactType = '';
+            if(emailLower.includes('@neckattack.')){
+              contactType = 'interner Kontakt';
+            }
+            const displayName = who || contactName || contactEmail || 'Kontakt';
+            const headerParts = [displayName];
+            if(role){ headerParts.push(role); }
+            if(contactType){ headerParts.push(`(${contactType})`); }
+            qcName.innerHTML = `<span>${escapeHtml(headerParts.join(' – '))}</span>`;
+
+            // Jetzt relevant: ein Top-Thema + max. 2 sekundäre Hinweise
+            let primaryNow = '';
+            const secondaryNow = [];
+            if(now && now.length){
+              primaryNow = now[0];
+              secondaryNow.push(...now.slice(1,3));
+            } else if(topics && topics.length){
+              primaryNow = topics[0];
+              secondaryNow.push(...topics.slice(1,3));
+            }
+
+            if(primaryNow){
+              let nowHtml = '<div><span style="font-weight:500;">Jetzt relevant (Priorität):</span></div>';
+              nowHtml += `<div>➡️ ${escapeHtml(primaryNow)}</div>`;
+              if(secondaryNow.length){
+                nowHtml += '<div style="margin-top:4px; font-size:11px;"><span style="font-weight:500;">Sekundär relevant:</span><ul style="margin:2px 0 0 16px; padding:0;">';
+                nowHtml += secondaryNow.map(x => `<li style="margin:0;">${escapeHtml(x)}</li>`).join('');
+                nowHtml += '</ul></div>';
+              }
+              qcNow.innerHTML = nowHtml;
+            } else {
+              qcNow.innerHTML = '<span class="muted">Keine aktuellen Hinweise</span>';
+            }
+
+            // Offene Themen als Bullet-Liste
+            if(topics && topics.length){
+              let topicsHtml = '<div><span style="font-weight:500;">Offene Themen:</span></div><ul style="margin:2px 0 0 16px; padding:0;">';
+              topicsHtml += topics.map(x => `<li style="margin:0;">${escapeHtml(x)}</li>`).join('');
+              topicsHtml += '</ul>';
+              qcTopics.innerHTML = topicsHtml;
+            } else {
+              qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Keine offenen Themen</span>';
+            }
+
+            // Antwortmodus und Ton wie bisher
             let replyModeLabel = 'Unklar';
             if(replyMode === 'last_only') replyModeLabel = 'Nur letzte E-Mail beantworten';
             else if(replyMode === 'last_plus_reminder') replyModeLabel = 'Letzte E-Mail + kurzes Erinnern an ein offenes Thema';
             else if(replyMode === 'follow_up_old_issue') replyModeLabel = 'Altes offenes Thema proaktiv aufgreifen';
             qcReplyMode.innerHTML = `<span style="font-weight:500;">Antwort-Modus:</span> <span>${escapeHtml(replyModeLabel)}</span>`;
-            qcReply.innerHTML = `<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span>${reply ? escapeHtml(reply) : '<span class="muted">Keine Empfehlung</span>'}</span>`;
-            qcTone.innerHTML = `<span style="font-weight:500;">Ton &amp; Stil:</span> <span>${tone ? escapeHtml(tone) : '<span class="muted">Unbekannt</span>'}</span>`;
+            qcReply.style.display = 'none';
+            qcTone.innerHTML = `<span style="font-weight:500;">Ton &amp; Stil:</span> <span>${tone ? escapeHtml(tone) : '<span class=\"muted\">Unbekannt</span>'}</span>`;
 
+            // Timeline (Kurz)
             if(timelineTopics.length){
               // Checkbox-Zustand für geschlossene Themen auslesen (falls bereits vorhanden)
               const existingToggle = document.getElementById('qc_show_closed_topics');
@@ -2023,7 +2068,7 @@
                 </div>`;
               }).join('');
 
-              qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span>
+              qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline (Kurz):</span>
                 <div>${items}</div>
                 <div style="margin-top:4px; font-size:10px; color:#6b7280;">
                   <label><input type="checkbox" id="qc_show_closed_topics" ${showClosed ? 'checked' : ''}> Geschlossene Themen anzeigen</label>
