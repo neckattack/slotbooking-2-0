@@ -1767,6 +1767,17 @@
                 prepStatus.textContent = 'Fehler bei der Analyse.';
               });
           }
+
+          // Initial Reply-Prep laden und Reload-Button verkabeln
+          if(prepBlock && prepStatus && prepSummary && prepTopics){
+            loadReplyPrep(false);
+            if(prepReloadBtn){
+              prepReloadBtn.addEventListener('click', () => {
+                loadReplyPrep(true);
+              });
+            }
+          }
+
         } catch(_) {}
 
         // Kontakt-Notizen laden und speichern
