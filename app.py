@@ -2769,14 +2769,19 @@ def api_contacts_generate_profile(current_user, contact_id):
             conn.close()
             return jsonify({'error': 'No emails found for this contact'}), 404
         
-        # Build email context (limit to avoid token overflow)
+        # Build email context (stark begrenzt, um Token-Limit zu schützen)
+        # Nur die letzten 40 E-Mails und pro Mail max. ~300 Zeichen verwenden
         email_texts = []
-        for e in emails:
+        for e in emails[:40]:
             date_str = e['received_at'].strftime('%d.%m.%Y') if e['received_at'] else ''
-            body = (e['body_text'] or '')[:500]  # Limit each email to 500 chars
-            email_texts.append(f"[{date_str}] Betreff: {e['subject']}\n{body}")
-        
+            subj = (e.get('subject') or '')
+            body = (e.get('body_text') or '')[:300]
+            email_texts.append(f"[{date_str}] Betreff: {subj}\n{body}")
+
         email_context = "\n\n".join(email_texts)
+        # Hartes Längenlimit als zusätzliche Sicherung gegen context_length_exceeded
+        if len(email_context) > 12000:
+            email_context = email_context[:12000] + "\n\n(gekürzt – nur Auszug der Historie)"
         
         # Generate profile with GPT. WICHTIG: Manuelle Notizen haben Priorität.
         prompt = f"""Analysiere die folgenden Informationen zu einem Kontakt und erstelle ein prägnantes, praxisnahes Kontaktprofil.
@@ -2810,17 +2815,28 @@ Formatiere die Antwort mit klarer Struktur:
 
 Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
         
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "Du bist ein CRM-Analyst, der Kundenprofile erstellt."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=400
-        )
-        
-        summary = response.choices[0].message.content
+        # Profil mit GPT erzeugen. Fehler (v.a. Kontext-Limit) in kurze Meldung kapseln.
+        try:
+            response = openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "Du bist ein CRM-Analyst, der Kundenprofile erstellt."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=400
+            )
+            summary = response.choices[0].message.content
+        except Exception as e_llm:
+            msg = str(e_llm)
+            # Häufiger Spezialfall: Kontext-Limit überschritten
+            if "context length" in msg or "maximum context length" in msg or "context_length_exceeded" in msg:
+                raise RuntimeError(
+                    "Das Kontaktprofil ist aktuell zu lang für das KI-Modell (zu viele alte E-Mails). "
+                    "Bitte einige sehr alte oder umfangreiche E-Mails archivieren/löschen und erneut versuchen."
+                )
+            # Sonstige LLM-Fehler neutral weiterreichen
+            raise
 
         # Zweiter KI-Call: konkrete Themen als JSON für contact_topics extrahieren
         import json
