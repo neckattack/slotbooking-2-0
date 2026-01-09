@@ -1256,7 +1256,10 @@
             <div id="reply_prep_block" class="sub" style="margin-top:12px; padding:8px 10px; border-radius:6px; background:#fefce8; border:1px solid #facc15; font-size:12px;">
               <div style="font-weight:600; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
                 <span>🧠 Antwort-Vorbereitung (KI)</span>
-                <span style="font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#6b7280;">Reply-Prep v2</span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#6b7280;">Reply-Prep v2</span>
+                  <button id="reply_prep_reload_btn" type="button" style="border:0; padding:3px 8px; border-radius:999px; font-size:10px; cursor:pointer; background:#e5e7eb; color:#374151; white-space:nowrap;">Neu laden</button>
+                </div>
               </div>
               <div id="reply_prep_status" class="sub" style="margin-bottom:4px;">Analysiere E-Mail…</div>
               <div id="reply_prep_summary" style="margin-bottom:4px;"></div>
@@ -1394,16 +1397,19 @@
           const prepSummary = document.getElementById('reply_prep_summary');
           const prepTopics = document.getElementById('reply_prep_topics');
           const prepDebug = document.getElementById('reply_prep_debug');
-          if(prepBlock && prepStatus && prepSummary && prepTopics){
-            prepStatus.textContent = 'Analysiere E-Mail…';
+          const prepReloadBtn = document.getElementById('reply_prep_reload_btn');
+
+          async function loadReplyPrep(force){
+            if(!prepBlock || !prepStatus || !prepSummary || !prepTopics) return;
+            prepStatus.textContent = force ? 'Lade neu…' : 'Analysiere E-Mail…';
             // Zusammenfassung aktuell nicht anzeigen – Fokus auf Themenblöcke
             prepSummary.innerHTML = '';
             prepTopics.innerHTML = '';
             if(prepDebug){ prepDebug.innerHTML = ''; }
-            // 1. Schneller Call: nur aktuelle Themen (skip_history=1), damit die Kacheln aus dem Cache sofort erscheinen
-            fetch(`/api/emails/${t.id}/reply-prep?debug_raw=1&skip_history=1`, { headers: getAuthHeaders() })
-              .then(res => parseJsonSafe(res))
-              .then(data => {
+
+            const url = `/api/emails/${t.id}/reply-prep?debug_raw=1&skip_history=1${force ? '&force=1' : ''}`;
+            const res = await fetch(url, { headers: getAuthHeaders() });
+            const data = await parseJsonSafe(res);
                 if(!data.__ok){
                   prepStatus.textContent = 'Analyse nicht verfügbar.';
                   return;
@@ -1480,48 +1486,14 @@
                   }).join('');
                 }
 
-                // 2) Historische offene Themen: Platz für Toggle + Container vorbereiten
-                if(topics.length){
-                  const historicalHtml = topics.map(tp => {
-                    const ageTxt = (tp.age_days != null) ? ` · seit ${tp.age_days} Tagen` : '';
-                    const meta = `${tp.email_count || 0} E-Mails${ageTxt}`;
-                    const optHtml = (tp.reply_options || []).map((opt, idx) => {
-                      return `<button class="reply-opt-btn" data-topic-id="${tp.id}" data-opt-id="${opt.id}" data-snippet="${encodeURIComponent(opt.snippet || '')}" style="border:0; padding:3px 6px; border-radius:4px; font-size:11px; margin:2px 4px 2px 0; cursor:pointer; background:#e5e7eb; color:#374151;">${escapeHtml(opt.label || '')}</button>`;
-                    }).join('');
-                    const mailsHtml = (tp.emails || []).slice(0,5).map(em => {
-                      const text = `${em.received_at || ''} – ${em.subject || ''}`;
-                      return `<div style="font-size:11px; cursor:pointer; text-decoration:underline;" data-email-id="${em.id}" class="reply-prep-email-link">${escapeHtml(text)}</div>`;
-                    }).join('');
-                    return `
-                      <div class="reply-prep-topic" data-kind="historical" data-topic-id="${tp.id}" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb; position:relative;">
-                        <span class="reply-prep-close" data-kind="historical" data-topic-id="${tp.id}" style="position:absolute; right:6px; top:4px; color:#b91c1c; font-weight:bold; cursor:pointer;">×</span>
-                        <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(tp.label || '(ohne Titel)')}</div>
-                        <div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(meta)}</div>
-                        <div style="margin-bottom:4px;">${optHtml}</div>
-                        ${mailsHtml ? `<div style="font-size:11px; margin-top:2px;"><span class="muted">Relevante E-Mails:</span></div>${mailsHtml}` : ''}
-                        <div style="margin-top:4px; border-top:1px dashed #e5e7eb; padding-top:4px;">
-                          <div class="sub" style="font-size:10px; margin-bottom:2px;">Manuelle Antwort (Stichworte):</div>
-                          <div style="display:flex; gap:4px; align-items:flex-start;">
-                            <textarea class="reply-manual-note" data-topic-label="${escapeHtml(tp.label || '')}" data-topic-expl="" rows="2" placeholder="Eigene Stichworte zur Antwort..." style="flex:1; font-size:11px; padding:4px 6px; border-radius:4px; border:1px solid #e5e7eb; resize:vertical;"></textarea>
-                            <button class="reply-manual-btn" data-kind="historical" data-topic-id="${tp.id}" style="border:0; padding:4px 6px; border-radius:4px; font-size:11px; cursor:pointer; background:#6366f1; color:#ffffff; white-space:nowrap;">Manuell formulieren</button>
-                          </div>
-                        </div>
-                      </div>
-                    `;
-                  }).join('');
-
-                  // Header + Toggle-Button + einklappbarer Container
-                  topicsHtml += `
-                    <div class="sub" style="font-size:10px; text-transform:uppercase; letter-spacing:0.03em; margin-top:8px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                      <span>Offene Themen aus bisherigen E-Mails</span>
-                      <button id="historical_topics_toggle" type="button" style="border:0; padding:3px 8px; border-radius:999px; font-size:10px; cursor:pointer; background:#e5e7eb; color:#374151; white-space:nowrap;">anzeigen</button>
-                    </div>
-                    <div id="historical_topics_container" style="margin-top:4px; display:none;">
-                      ${historicalHtml}
-                    </div>
-                  `;
-                  histLoaded = true;
-                }
+                // 2) Historische offene Themen: Toggle + leerer Container (Inhalt wird beim ersten Öffnen lazy geladen)
+                topicsHtml += `
+                  <div class="sub" style="font-size:10px; text-transform:uppercase; letter-spacing:0.03em; margin-top:8px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <span>Offene Themen aus bisherigen E-Mails</span>
+                    <button id="historical_topics_toggle" type="button" style="border:0; padding:3px 8px; border-radius:999px; font-size:10px; cursor:pointer; background:#e5e7eb; color:#374151; white-space:nowrap;">anzeigen</button>
+                  </div>
+                  <div id="historical_topics_container" style="margin-top:4px; display:none;"></div>
+                `;
 
                 prepTopics.innerHTML = topicsHtml;
 
