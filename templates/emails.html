@@ -1995,7 +1995,7 @@
             const headerParts = [displayName];
             if(role){ headerParts.push(role); }
             if(contactType){ headerParts.push(`(${contactType})`); }
-            qcName.innerHTML = `<span>${escapeHtml(headerParts.join(' – '))}</span>`;
+            qcName.innerHTML = `<div style="font-size:12px; font-weight:600; margin-bottom:4px;">${escapeHtml(headerParts.join(' – '))}</div>`;
 
             // Jetzt relevant: ein Top-Thema + max. 2 sekundäre Hinweise
             let primaryNow = '';
@@ -2009,10 +2009,10 @@
             }
 
             if(primaryNow){
-              let nowHtml = '<div><span style="font-weight:500;">Jetzt relevant (Priorität):</span></div>';
-              nowHtml += `<div>➡️ ${escapeHtml(primaryNow)}</div>`;
+              let nowHtml = '<div style="margin-top:4px;"><span style="font-weight:600;">Jetzt relevant (Priorität):</span></div>';
+              nowHtml += `<div style="margin-top:2px;">➡️ <span style="font-weight:500;">${escapeHtml(primaryNow)}</span></div>`;
               if(secondaryNow.length){
-                nowHtml += '<div style="margin-top:4px; font-size:11px;"><span style="font-weight:500;">Sekundär relevant:</span><ul style="margin:2px 0 0 16px; padding:0;">';
+                nowHtml += '<div style="margin-top:6px; font-size:11px;"><span style="font-weight:500;">Sekundär relevant:</span><ul style="margin:2px 0 0 16px; padding:0;">';
                 nowHtml += secondaryNow.map(x => `<li style="margin:0;">${escapeHtml(x)}</li>`).join('');
                 nowHtml += '</ul></div>';
               }
@@ -2023,12 +2023,12 @@
 
             // Offene Themen als Bullet-Liste
             if(topics && topics.length){
-              let topicsHtml = '<div><span style="font-weight:500;">Offene Themen:</span></div><ul style="margin:2px 0 0 16px; padding:0;">';
+              let topicsHtml = '<div style="margin-top:8px;"><span style="font-weight:600;">Offene Themen:</span></div><ul style="margin:4px 0 0 16px; padding:0;">';
               topicsHtml += topics.map(x => `<li style="margin:0;">${escapeHtml(x)}</li>`).join('');
               topicsHtml += '</ul>';
               qcTopics.innerHTML = topicsHtml;
             } else {
-              qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Keine offenen Themen</span>';
+              qcTopics.innerHTML = '<div style="margin-top:8px;"><span style="font-weight:600;">Offene Themen:</span> <span class="muted">Keine offenen Themen</span></div>';
             }
 
             // Antwortmodus und Ton wie bisher
@@ -2036,9 +2036,9 @@
             if(replyMode === 'last_only') replyModeLabel = 'Nur letzte E-Mail beantworten';
             else if(replyMode === 'last_plus_reminder') replyModeLabel = 'Letzte E-Mail + kurzes Erinnern an ein offenes Thema';
             else if(replyMode === 'follow_up_old_issue') replyModeLabel = 'Altes offenes Thema proaktiv aufgreifen';
-            qcReplyMode.innerHTML = `<span style="font-weight:500;">Antwort-Modus:</span> <span>${escapeHtml(replyModeLabel)}</span>`;
+            qcReplyMode.innerHTML = `<div style="margin-top:8px;"><span style="font-weight:600;">Antwort-Modus:</span> <span>${escapeHtml(replyModeLabel)}</span></div>`;
             qcReply.style.display = 'none';
-            qcTone.innerHTML = `<span style="font-weight:500;">Ton &amp; Stil:</span> <span>${tone ? escapeHtml(tone) : '<span class=\"muted\">Unbekannt</span>'}</span>`;
+            qcTone.innerHTML = `<div style="margin-top:4px;"><span style="font-weight:600;">Ton &amp; Stil:</span> <span>${tone ? escapeHtml(tone) : '<span class=\"muted\">Unbekannt</span>'}</span></div>`;
 
             // Timeline (Kurz)
             if(timelineTopics.length){
