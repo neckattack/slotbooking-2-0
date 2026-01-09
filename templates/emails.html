@@ -2000,6 +2000,7 @@
             const replyMode = data.reply_mode || '';
             const tone = data.tone || '';
             const timelineTopics = data.timeline_topics || [];
+            const timeline = data.timeline || [];
             const role = data.role || '';
 
             qcBox.style.display = 'block';
@@ -2301,6 +2302,7 @@
                 if(summaryDiv){
                   summaryDiv.innerHTML = formatCustomerProfile(data.summary);
                   summaryDiv.style.background = '#f0fdf4';
+                  summaryDiv.style.display = 'block';
                 }
                 // KPI-Chips (inkl. Kategorie) aktualisieren, falls vom Server geliefert
                 if(data.kpis){
@@ -2339,7 +2341,13 @@
                   // Einfach erneut quick-card laden
                   fetch(`/api/contacts/${t.contact_id}/quick-card`, { headers: getAuthHeaders() })
                     .then(res => parseJsonSafe(res))
-                    .then(() => {})
+                    .then((dataQC) => {
+                      // Quick-Card-Cache aktualisieren und neu rendern
+                      const cid = String(t.contact_id);
+                      window.quickCardCache = window.quickCardCache || {};
+                      window.quickCardCache[cid] = dataQC;
+                      renderQuickCard(dataQC);
+                    })
                     .catch(() => {});
                 }
 
