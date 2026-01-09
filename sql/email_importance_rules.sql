@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS email_importance_rules (
+  user_email VARCHAR(255) NOT NULL,
+  pattern VARCHAR(255) NOT NULL,
+  bucket VARCHAR(20) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_email, pattern)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

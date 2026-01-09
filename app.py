@@ -676,6 +676,81 @@ def api_contact_topic_set_status(current_user, contact_id, topic_id):
         return jsonify({'__ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/emails/importance-rules', methods=['GET', 'POST'])
+@require_auth
+def api_email_importance_rules(current_user):
+    """Verwaltet manuelle Wichtigkeitsregeln pro Absender.
+
+    GET  -> Liste der Regeln [{pattern, bucket}]
+    POST -> {from_addr, bucket} speichert/aktualisiert eine Regel
+    """
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Tabelle sicherstellen
+        try:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS email_importance_rules (
+                    user_email VARCHAR(255) NOT NULL,
+                    pattern VARCHAR(255) NOT NULL,
+                    bucket VARCHAR(20) NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_email, pattern)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """
+            )
+        except Exception as _e_tbl:
+            try:
+                app.logger.warning(f"[ImportanceRules] DDL failed (ignoriert): {_e_tbl}")
+            except Exception:
+                pass
+
+        if request.method == 'GET':
+            cursor.execute(
+                "SELECT pattern, bucket FROM email_importance_rules WHERE user_email=%s",
+                (user_email,),
+            )
+            rows = cursor.fetchall() or []
+            cursor.close()
+            conn.close()
+            return jsonify({
+                '__ok': True,
+                'rules': [{'pattern': r['pattern'], 'bucket': r['bucket']} for r in rows],
+            })
+
+        # POST
+        data = request.get_json(silent=True) or {}
+        from_addr = (data.get('from_addr') or '').strip().lower()
+        bucket = (data.get('bucket') or '').strip().lower()
+        allowed = {'focus', 'normal', 'unwichtig'}
+        if not from_addr or bucket not in allowed:
+            cursor.close()
+            conn.close()
+            return jsonify({'__ok': False, 'error': 'Ungültige Regel'}), 400
+
+        # Upsert der Regel
+        cursor.execute(
+            """
+            REPLACE INTO email_importance_rules (user_email, pattern, bucket)
+            VALUES (%s, %s, %s)
+            """,
+            (user_email, from_addr, bucket),
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'__ok': True}), 200
+
+    except Exception as e:
+        try:
+            app.logger.error(f"[ImportanceRules] Error: {e}")
+        except Exception:
+            pass
+        return jsonify({'__ok': False, 'error': str(e)}), 500
+
 @app.route('/api/reply-prep/category-draft', methods=['POST'])
 @require_auth
 def api_reply_prep_category_draft(current_user):

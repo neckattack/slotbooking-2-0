@@ -523,6 +523,8 @@
     // Inbox filtering: 'focus' (wichtig), 'normal' (Standard) vs 'unwichtig' (Newsletter etc.)
     let inboxFilter = 'focus';
     let inboxEmails = [];
+    // Manuelle Wichtigkeitsregeln pro Absender (vom Server geladen)
+    let importanceRules = [];
     let inboxSearchQuery = '';
     // Aktueller Ordner (DB-Key, z.B. 'inbox', 'archive', 'all')
     let currentFolder = 'inbox';
@@ -581,6 +583,14 @@
       const fromAddr = (it.from_addr || it.from || '').toLowerCase();
       const subject = (it.subject || '').toLowerCase();
       const emailCount = it.contact_email_count || 0;
+
+      // 1) Manuelle Regel wins
+      if(importanceRules && importanceRules.length){
+        const m = importanceRules.find(r => r.pattern === fromAddr);
+        if(m && m.bucket){
+          return m.bucket;
+        }
+      }
 
       const newsletterLike = /(no-?reply|newsletter|news@|mailer@|noreply)/.test(fromAddr) ||
                              subject.includes('newsletter') || subject.includes('angebote') || subject.includes('sale');
@@ -954,11 +964,79 @@
         const div = document.createElement('div');
         div.className = 'item' + (!it.is_read ? ' unseen' : '');
         div.dataset.uid = it.uid;
+        const bucket = getImportanceBucket(it);
+
+        const fromLabel = escapeHtml(it.from || '');
+        const dateLabel = escapeHtml(it.date || '');
+
+        const canUp = bucket !== 'focus';
+        const canDown = bucket !== 'unwichtig';
+
         div.innerHTML = `
-          <div class="subject">${escapeHtml(it.subject || '(ohne Betreff)')}</div>
-          <div class="meta"><span>${escapeHtml(it.from || '')}</span><span>${escapeHtml(it.date || '')}</span></div>
-        `;
-        div.addEventListener('click', () => selectItem(it.uid, div));
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+    <div style="flex:1; min-width:0;">
+      <div class="subject">${escapeHtml(it.subject || '(ohne Betreff)')}</div>
+      <div class="meta"><span>${fromLabel}</span><span>${dateLabel}</span></div>
+    </div>
+    <div class="importance-controls" data-bucket="${bucket}" style="display:flex; flex-direction:column; gap:2px; font-size:10px;">
+      ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="border:0; padding:2px 4px; border-radius:4px; cursor:pointer; background:#e5e7eb;">↑</button>` : ''}
+      ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="border:0; padding:2px 4px; border-radius:4px; cursor:pointer; background:#e5e7eb;">↓</button>` : ''}
+    </div>
+  </div>
+`;
+
+        // Klick auf Zeile öffnet Mail, aber Pfeile sollen nur Wichtigkeit ändern
+        div.addEventListener('click', (ev) => {
+          const target = ev.target;
+          if(target && (target.classList.contains('imp-up') || target.classList.contains('imp-down'))){
+            return; // von Button-Handler behandelt
+          }
+          selectItem(it.uid, div);
+        });
+
+        const controls = div.querySelector('.importance-controls');
+        if(controls){
+          const fromAddr = (it.from_addr || it.from || '').toLowerCase();
+
+          const applyBucketChange = (newBucket) => {
+            if(!newBucket) return;
+            // Lokal updaten
+            importanceRules = (importanceRules || []).filter(r => r.pattern !== fromAddr);
+            importanceRules.push({pattern: fromAddr, bucket: newBucket});
+
+            // Zum Server schicken (fire & forget)
+            try{
+              fetch('/api/emails/importance-rules', {
+                method: 'POST',
+                headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+                body: JSON.stringify({ from_addr: fromAddr, bucket: newBucket })
+              }).catch(() => {});
+            }catch(_){ }
+
+            // Liste mit neuer Wichtigkeit neu rendern
+            renderInboxList();
+          };
+
+          const upBtn = controls.querySelector('.imp-up');
+          const downBtn = controls.querySelector('.imp-down');
+          if(upBtn){
+            upBtn.addEventListener('click', (ev) => {
+              ev.stopPropagation();
+              const b = getImportanceBucket(it);
+              const next = (b === 'unwichtig') ? 'normal' : 'focus';
+              applyBucketChange(next);
+            });
+          }
+          if(downBtn){
+            downBtn.addEventListener('click', (ev) => {
+              ev.stopPropagation();
+              const b = getImportanceBucket(it);
+              const next = (b === 'focus') ? 'normal' : 'unwichtig';
+              applyBucketChange(next);
+            });
+          }
+        }
+
         list.appendChild(div);
       }
     }
