@@ -1254,7 +1254,10 @@
             <div class="meta">Von: ${escapeHtml(t.from||'')} · An: ${escapeHtml(t.to||'')} · ${escapeHtml(t.date||'')}</div>
             <div class="content">${html}</div>
             <div id="reply_prep_block" class="sub" style="margin-top:12px; padding:8px 10px; border-radius:6px; background:#fefce8; border:1px solid #facc15; font-size:12px;">
-              <div style="font-weight:600; margin-bottom:4px;">🧠 Antwort-Vorbereitung (KI)</div>
+              <div style="font-weight:600; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <span>🧠 Antwort-Vorbereitung (KI)</span>
+                <span style="font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#6b7280;">Reply-Prep v2</span>
+              </div>
               <div id="reply_prep_status" class="sub" style="margin-bottom:4px;">Analysiere E-Mail…</div>
               <div id="reply_prep_summary" style="margin-bottom:4px;"></div>
               <div id="reply_prep_topics"></div>
