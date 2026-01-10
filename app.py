@@ -2660,6 +2660,27 @@ def api_contacts_emails(current_user, contact_id):
             conn.close()
             return jsonify({'error': 'Contact not found'}), 404
         
+        # Optional: importance_bucket aus manuellem Regelwerk ermitteln
+        importance_bucket = None
+        try:
+            caddr = (contact.get('contact_email') or '').strip().lower()
+            if caddr:
+                cursor.execute(
+                    """
+                    SELECT bucket FROM email_importance_rules
+                    WHERE user_email=%s AND pattern=%s
+                    """,
+                    (user_email, caddr),
+                )
+                row_imp = cursor.fetchone()
+                if row_imp and row_imp.get('bucket'):
+                    importance_bucket = row_imp['bucket']
+        except Exception as _e_imp_ce:
+            try:
+                app.logger.warning(f"[Contact Emails] importance_bucket lookup failed: {_e_imp_ce}")
+            except Exception:
+                pass
+
         # Get all emails from this contact
         cursor.execute(
             """
@@ -2691,7 +2712,8 @@ def api_contacts_emails(current_user, contact_id):
                 'id': contact['id'],
                 'name': contact['name'],
                 'email': contact['contact_email'],
-                'email_count': contact['email_count']
+                'email_count': contact['email_count'],
+                'importance_bucket': importance_bucket,
             },
             'emails': formatted_emails
         }), 200
@@ -3628,7 +3650,9 @@ def api_contacts_quick_card(current_user, contact_id):
             except Exception:
                 pass
 
-        # Wenn kein force=1 und ein Kurzprofil im Cache existiert, dieses direkt zurückgeben
+        # Wenn kein force=1 und ein Kurzprofil im Cache existiert, dieses direkt zurückgeben.
+        # Ältere Cache-Einträge hatten noch kein importance_bucket; diesen reichern wir
+        # bei Bedarf einmalig an, damit die Relevanz-Badge im Frontend erscheint.
         if not force:
             cursor.execute(
                 "SELECT short_profile_json FROM contact_profile_cache WHERE contact_id=%s AND user_email=%s",
@@ -3638,9 +3662,36 @@ def api_contacts_quick_card(current_user, contact_id):
             if row_cache and row_cache.get('short_profile_json'):
                 cached = row_cache['short_profile_json']
                 if isinstance(cached, dict) and cached:
+                    cached_data = dict(cached)
+                    if 'importance_bucket' not in cached_data:
+                        try:
+                            # Kontakt-E-Mail laden
+                            cursor.execute(
+                                "SELECT contact_email FROM contacts WHERE id=%s AND user_email=%s",
+                                (contact_id, user_email),
+                            )
+                            c_row = cursor.fetchone()
+                            if c_row and c_row.get('contact_email'):
+                                caddr = (c_row['contact_email'] or '').strip().lower()
+                                if caddr:
+                                    cursor.execute(
+                                        """
+                                        SELECT bucket FROM email_importance_rules
+                                        WHERE user_email=%s AND pattern=%s
+                                        """,
+                                        (user_email, caddr),
+                                    )
+                                    row_imp = cursor.fetchone()
+                                    if row_imp and row_imp.get('bucket'):
+                                        cached_data['importance_bucket'] = row_imp['bucket']
+                        except Exception as _e_imp_cache:
+                            try:
+                                app.logger.warning(f"[QuickCard Cache] importance_bucket enrich failed: {_e_imp_cache}")
+                            except Exception:
+                                pass
                     cursor.close()
                     conn.close()
-                    return jsonify({**cached, 'from_cache': True}), 200
+                    return jsonify({**cached_data, 'from_cache': True}), 200
 
         # Basis-Kontaktdaten laden
         cursor.execute(
