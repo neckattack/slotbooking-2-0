@@ -532,6 +532,51 @@
     // Verfügbare Ordner für den aktuellen Account
     let availableFolders = [];
     const accountFolderCache = {};
+
+// Einfaches Kontextmenü für E-Mail-Zeilen (z.B. "Als gelesen/ungelesen markieren")
+let inboxContextMenuEl = null;
+let inboxContextMenuCurrentItem = null; // { email: it, row: div }
+
+function ensureInboxContextMenu(){
+  if(inboxContextMenuEl) return inboxContextMenuEl;
+  const el = document.createElement('div');
+  el.id = 'inbox_context_menu';
+  el.style.cssText = 'position:fixed; z-index:300; background:#fff; border:1px solid var(--border); border-radius:6px; box-shadow:0 10px 30px rgba(0,0,0,0.15); font-size:13px; padding:4px 0; min-width:180px; display:none;';
+  el.innerHTML = '<button type="button" id="ctx_toggle_read" style="width:100%; text-align:left; padding:6px 12px; border:0; background:transparent; cursor:pointer;">Als gelesen markieren</button>';
+  document.body.appendChild(el);
+  // Globaler Klick schließt Menü
+  document.addEventListener('click', (ev) => {
+    if(!el || el.style.display === 'none') return;
+    if(!el.contains(ev.target)){ el.style.display = 'none'; }
+  });
+  // Klick auf Menüeintrag: gelesen/ungelesen umschalten
+  const btn = el.querySelector('#ctx_toggle_read');
+  if(btn){
+    btn.addEventListener('click', async () => {
+      try{
+        const item = inboxContextMenuCurrentItem;
+        if(!item || !item.email || !item.row) return;
+        const it = item.email;
+        const div = item.row;
+        const newSeen = !it.is_read;
+        await fetch('/api/emails/seen', {
+          method: 'POST',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: it.uid, seen: newSeen })
+        });
+        it.is_read = newSeen ? 1 : 0;
+        if(newSeen){
+          div.classList.remove('unseen');
+        } else {
+          div.classList.add('unseen');
+        }
+      }catch(_e){ }
+      el.style.display = 'none';
+    });
+  }
+  inboxContextMenuEl = el;
+  return el;
+}
     async function parseJsonSafe(res){
       const ct = res.headers.get('content-type') || '';
       const txt = await res.text();
@@ -1064,23 +1109,22 @@
           selectItem(it.uid, div);
         });
 
-        // Rechtsklick: gelesen/ungelesen umschalten
-        div.addEventListener('contextmenu', async (ev) => {
+        // Rechtsklick: kleines Kontextmenü öffnen
+        div.addEventListener('contextmenu', (ev) => {
           ev.preventDefault();
-          const newSeen = !it.is_read; // wenn bisher gelesen, dann auf ungelesen setzen usw.
-          try{
-            await fetch('/api/emails/seen', {
-              method: 'POST',
-              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-              body: JSON.stringify({ uid: it.uid, seen: newSeen })
-            });
-            it.is_read = newSeen ? 1 : 0;
-            if(newSeen){
-              div.classList.remove('unseen');
-            } else {
-              div.classList.add('unseen');
-            }
-          }catch(_e_seen){ }
+          const menu = ensureInboxContextMenu();
+          if(!menu) return;
+          inboxContextMenuCurrentItem = { email: it, row: div };
+          const btn = menu.querySelector('#ctx_toggle_read');
+          if(btn){
+            const isRead = !!it.is_read;
+            btn.textContent = isRead ? 'Als ungelesen markieren' : 'Als gelesen markieren';
+          }
+          const x = ev.clientX;
+          const y = ev.clientY;
+          menu.style.left = x + 'px';
+          menu.style.top = y + 'px';
+          menu.style.display = 'block';
         });
 
         const controls = div.querySelector('.importance-controls');
@@ -1137,12 +1181,14 @@
 
     // Suche nach Absendername / -E-Mail initialisieren und Build-Info laden
     document.addEventListener('DOMContentLoaded', () => {
-      // Build-Info aus Backend holen, damit der Header immer den aktuellen Commit zeigt
+      // Build-Info aus Backend holen, damit der Header den aktuellen Commit zeigt.
+      // Wenn das Backend nur "dev" zurückgibt, behalten wir das statische Label bei.
       try{
         fetch('/api/build-info')
           .then(res => res.ok ? res.json() : null)
           .then(data => {
             if(!data || !data.build) return;
+            if((data.build || '').toLowerCase() === 'dev') return;
             const el = document.getElementById('build_info');
             if(el){ el.textContent = `Build ${data.build}`; }
           })
