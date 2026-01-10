@@ -619,12 +619,14 @@
 
       let d = new Date(raw);
       if(isNaN(d.getTime())){
-        // Deutsches Format: 09.01.2026 21:32 oder 09.01.2026
-        const m = /^([0-3]\d)\.([0-1]\d)\.(\d{4})(?:\s+([0-2]\d):([0-5]\d))?/.exec(raw.trim());
+        // Deutsches Format: 09.01.2026 21:32, 09.01.2026, 21:32, 09.01. oder 09.01. 21:32
+        const cleaned = raw.trim().replace(',', '');
+        const m = /^([0-3]\d)\.([0-1]\d)\.(\d{4})?(?:\s+([0-2]\d):([0-5]\d))?/.exec(cleaned);
         if(m){
           const day = parseInt(m[1], 10);
           const month = parseInt(m[2], 10) - 1; // 0-basiert
-          const year = parseInt(m[3], 10);
+          const nowYear = (new Date()).getFullYear();
+          const year = m[3] ? parseInt(m[3], 10) : nowYear;
           const hh = m[4] ? parseInt(m[4], 10) : 0;
           const mm = m[5] ? parseInt(m[5], 10) : 0;
           d = new Date(year, month, day, hh, mm, 0);
