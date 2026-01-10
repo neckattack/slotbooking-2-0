@@ -609,53 +609,50 @@
       return 'normal';
     }
 
-    // Datumsformatierung für die Inbox-Liste
-    // - Heute: HH:MM
+    // Datumsformatierung für die Inbox-Liste rein auf Basis der deutschen Datumsstrings
+    // Erwartete Eingabe z.B.: "09.01.2026 21:32" oder "09.01. 21:32" oder "09.01.2026"
+    // - Heute: HH:MM (aus dem String extrahiert)
     // - Gestern: 'gestern'
-    // - Vorgestern: 'vorgestern'
     // - Älter: dd.MM. (ohne Jahr)
     function formatListDate(raw){
       if(!raw) return '';
+      const cleaned = String(raw).trim();
 
-      let d = new Date(raw);
-      if(isNaN(d.getTime())){
-        // Deutsches Format: 09.01.2026 21:32, 09.01.2026, 21:32, 09.01. oder 09.01. 21:32
-        const cleaned = raw.trim().replace(',', '');
-        const m = /^([0-3]\d)\.([0-1]\d)\.(\d{4})?(?:\s+([0-2]\d):([0-5]\d))?/.exec(cleaned);
-        if(m){
-          const day = parseInt(m[1], 10);
-          const month = parseInt(m[2], 10) - 1; // 0-basiert
-          const nowYear = (new Date()).getFullYear();
-          const year = m[3] ? parseInt(m[3], 10) : nowYear;
-          const hh = m[4] ? parseInt(m[4], 10) : 0;
-          const mm = m[5] ? parseInt(m[5], 10) : 0;
-          d = new Date(year, month, day, hh, mm, 0);
-        }
-      }
-      if(isNaN(d.getTime())){
-        return raw;
-      }
       const now = new Date();
-      const dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      const nDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const diffDays = Math.round((nDate - dDate) / (1000 * 60 * 60 * 24));
+      const ddNow = String(now.getDate()).padStart(2, '0');
+      const mmNow = String(now.getMonth() + 1).padStart(2, '0');
+      const yyyyNow = String(now.getFullYear());
 
-      if(diffDays === 0){
-        // Heute -> Uhrzeit HH:MM
-        const hh = String(d.getHours()).padStart(2, '0');
-        const mm = String(d.getMinutes()).padStart(2, '0');
-        return `${hh}:${mm}`;
+      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      const ddY = String(yesterday.getDate()).padStart(2, '0');
+      const mmY = String(yesterday.getMonth() + 1).padStart(2, '0');
+      const yyyyY = String(yesterday.getFullYear());
+
+      const todayKeyFull = `${ddNow}.${mmNow}.${yyyyNow}`;
+      const todayKeyShort = `${ddNow}.${mmNow}.`;
+      const yKeyFull = `${ddY}.${mmY}.${yyyyY}`;
+      const yKeyShort = `${ddY}.${mmY}.`;
+
+      // Heute: Datumsteil entspricht heute -> Uhrzeit rausziehen
+      if(cleaned.startsWith(todayKeyFull) || cleaned.startsWith(todayKeyShort)){
+        const mTime = /(\d{1,2}:\d{2})$/.exec(cleaned);
+        if(mTime){
+          return mTime[1];
+        }
+        return 'heute';
       }
-      if(diffDays === 1){
+
+      // Gestern: Datumsteil entspricht gestern
+      if(cleaned.startsWith(yKeyFull) || cleaned.startsWith(yKeyShort)){
         return 'gestern';
       }
-      if(diffDays === 2){
-        return 'vorgestern';
-      }
 
-      const dd = String(d.getDate()).padStart(2, '0');
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      return `${dd}.${mm}.`;
+      // Fallback: immer kurzes Datum dd.MM.
+      const mDate = /^([0-3]\d)\.([0-1]\d)\./.exec(cleaned);
+      if(mDate){
+        return `${mDate[1]}.${mDate[2]}.`;
+      }
+      return cleaned;
     }
 
     function setupInboxFilterToggle(){
