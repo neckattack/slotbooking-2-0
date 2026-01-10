@@ -15,10 +15,10 @@
     button:disabled { opacity:.6; cursor:default; }
     .container { display:grid; grid-template-columns: 340px 1fr 460px; height: calc(100vh - 58px); }
     .list { border-right:1px solid var(--border); overflow:auto; background:#fff; }
-    .item { padding:10px 14px; border-bottom:1px solid var(--border); cursor:pointer; }
+    .item { padding:12px 14px; border-bottom:1px solid var(--border); cursor:pointer; }
     .item:hover { background: var(--hover); }
     .item.active { background: var(--active); border-left:3px solid var(--primary); padding-left:11px; }
-    .item .subject { font-size:14px; }
+    .item .subject { font-size:14px; line-height:1.4; }
     .item.unseen .subject { font-weight:700; }
     .item .meta { color: var(--sub); font-size:12px; margin-top:3px; display:flex; justify-content:space-between; gap:8px; }
     .detail { overflow:hidden; padding:16px 24px; background:#f9fafb; }
@@ -577,10 +577,19 @@
       return html;
     }
     
+    // Hilfsfunktion: aus "Name <mail@domain>" nur "mail@domain" extrahieren
+    function normalizeEmailAddress(str){
+      if(!str) return '';
+      const s = String(str).trim().toLowerCase();
+      const m = /<([^>]+)>/.exec(s);
+      if(m) return m[1].trim();
+      return s;
+    }
+
     // Einfache Wichtigkeits-Heuristik pro E-Mail
     // Rückgabe: 'focus' | 'normal' | 'unwichtig'
     function getImportanceBucket(it){
-      const fromAddr = (it.from_addr || it.from || '').toLowerCase();
+      const fromAddr = normalizeEmailAddress(it.from_addr || it.from || '');
       const subject = (it.subject || '').toLowerCase();
       const emailCount = it.contact_email_count || 0;
 
@@ -1056,7 +1065,7 @@
 
         const controls = div.querySelector('.importance-controls');
         if(controls){
-          const fromAddr = (it.from_addr || it.from || '').toLowerCase();
+          const fromAddr = normalizeEmailAddress(it.from_addr || it.from || '');
 
           const applyBucketChange = (newBucket) => {
             if(!newBucket) return;
@@ -2174,6 +2183,7 @@
             const timelineTopics = data.timeline_topics || [];
             const timeline = data.timeline || [];
             const role = data.role || '';
+            const importanceBucket = (data.importance_bucket || '').toLowerCase();
 
             qcBox.style.display = 'block';
 
@@ -2187,7 +2197,29 @@
             const headerParts = [displayName];
             if(role){ headerParts.push(role); }
             if(contactType){ headerParts.push(`(${contactType})`); }
-            qcName.innerHTML = `<div style="font-size:12px; font-weight:600; margin-bottom:4px;">${escapeHtml(headerParts.join(' – '))}</div>`;
+
+            // Badge für Wichtigkeit
+            let badgeLabel = '';
+            let badgeBg = '#e5e7eb';
+            let badgeColor = '#4b5563';
+            if(importanceBucket === 'focus'){
+              badgeLabel = 'Fokus-Kontakt';
+              badgeBg = '#dcfce7';
+              badgeColor = '#166534';
+            } else if(importanceBucket === 'unwichtig'){
+              badgeLabel = 'Unwichtiger Kontakt';
+              badgeBg = '#fee2e2';
+              badgeColor = '#b91c1c';
+            } else if(importanceBucket === 'normal'){
+              badgeLabel = 'Normal';
+            }
+
+            let badgeHtml = '';
+            if(badgeLabel){
+              badgeHtml = `<div style="margin-top:2px;"><span style="display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:500; background:${badgeBg}; color:${badgeColor};">${badgeLabel}</span></div>`;
+            }
+
+            qcName.innerHTML = `<div style="font-size:12px; font-weight:600; margin-bottom:2px;">${escapeHtml(headerParts.join(' – '))}</div>${badgeHtml}`;
 
             // Jetzt relevant: ein Top-Thema + max. 2 sekundäre Hinweise
             let primaryNow = '';
@@ -3541,14 +3573,42 @@
     function openContactDetailModal(contactId, contactName, contactEmail){
       closeAllModals();
       const modal = document.getElementById('contact_detail_modal');
-      const nameEl = document.getElementById('contact_detail_name');
-      const emailEl = document.getElementById('contact_detail_email');
+      const nameEl = document.getElementById('contact_name');
+      const emailEl = document.getElementById('contact_email');
+      const importanceEl = document.getElementById('contact_importance_badge');
       const countEl = document.getElementById('contact_detail_count');
       const emailsEl = document.getElementById('contact_detail_emails');
       
       modal.style.display = 'flex';
-      nameEl.textContent = contactName;
-      emailEl.textContent = contactEmail;
+      if(nameEl) nameEl.textContent = contactName;
+      if(emailEl) emailEl.textContent = contactEmail;
+
+      if(importanceEl){
+        const ib = (data.importance_bucket || '').toLowerCase();
+        let label = '';
+        let bg = '#e5e7eb';
+        let color = '#4b5563';
+        if(ib === 'focus'){
+          label = 'Fokus-Kontakt';
+          bg = '#dcfce7';
+          color = '#166534';
+        } else if(ib === 'unwichtig'){
+          label = 'Unwichtiger Kontakt';
+          bg = '#fee2e2';
+          color = '#b91c1c';
+        } else if(ib === 'normal'){
+          label = 'Normal';
+        }
+        if(label){
+          importanceEl.textContent = label;
+          importanceEl.style.display = 'inline-flex';
+          importanceEl.style.background = bg;
+          importanceEl.style.color = color;
+        } else {
+          importanceEl.textContent = '';
+          importanceEl.style.display = 'none';
+        }
+      }
       emailsEl.innerHTML = '<div class="sub" style="text-align:center; padding:20px;">Lade E-Mails...</div>';
       
       // Load emails from this contact

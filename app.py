@@ -3891,6 +3891,27 @@ def api_contacts_quick_card(current_user, contact_id):
 
         quick_profile_text = "\n".join(summary_lines)
 
+        # Wichtigkeits-Bucket für diesen Kontakt (falls vorhanden) aus Regeln lesen
+        importance_bucket = None
+        try:
+            caddr = (contact.get('contact_email') or '').strip().lower()
+            if caddr:
+                cursor.execute(
+                    """
+                    SELECT bucket FROM email_importance_rules
+                    WHERE user_email=%s AND pattern=%s
+                    """,
+                    (user_email, caddr),
+                )
+                row_imp = cursor.fetchone()
+                if row_imp and row_imp.get('bucket'):
+                    importance_bucket = row_imp['bucket']
+        except Exception as _e_imp:
+            try:
+                app.logger.warning(f"[QuickCard] importance_bucket lookup failed: {_e_imp}")
+            except Exception:
+                pass
+
         payload = {
             'contact_id': contact_id,
             'name': display_name,
@@ -3903,6 +3924,7 @@ def api_contacts_quick_card(current_user, contact_id):
             'open_topics_raw': open_topics,
             'timeline_topics': timeline_topics,
             'profile_text_raw': quick_profile_text,
+            'importance_bucket': importance_bucket,
         }
 
         # Kurzprofil in contact_profile_cache.short_profile_json cachen (best effort)
