@@ -1004,8 +1004,8 @@
         const bucket = getImportanceBucket(it);
         if(inboxFilter === 'focus') return bucket === 'focus';
         if(inboxFilter === 'unwichtig') return bucket === 'unwichtig';
-        // normal: alles außer ganz unwichtig, damit Sammel-Newsletter ausgeblendet bleiben
-        return bucket === 'focus' || bucket === 'normal';
+        // normal: alle Mails zeigen, unabhängig vom Bucket
+        return true;
       });
 
       const q = (inboxSearchQuery || '').trim().toLowerCase();
