@@ -1064,6 +1064,25 @@
           selectItem(it.uid, div);
         });
 
+        // Rechtsklick: gelesen/ungelesen umschalten
+        div.addEventListener('contextmenu', async (ev) => {
+          ev.preventDefault();
+          const newSeen = !it.is_read; // wenn bisher gelesen, dann auf ungelesen setzen usw.
+          try{
+            await fetch('/api/emails/seen', {
+              method: 'POST',
+              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uid: it.uid, seen: newSeen })
+            });
+            it.is_read = newSeen ? 1 : 0;
+            if(newSeen){
+              div.classList.remove('unseen');
+            } else {
+              div.classList.add('unseen');
+            }
+          }catch(_e_seen){ }
+        });
+
         const controls = div.querySelector('.importance-controls');
         if(controls){
           const fromAddr = normalizeEmailAddress(it.from_addr || it.from || '');
@@ -2799,6 +2818,44 @@
         if(data.__ok && data.user){
           localStorage.setItem('current_user', JSON.stringify(data.user));
           updateMenuForUser();
+
+          // Wichtigkeitsregeln laden: zuerst vom Server, dann mit localStorage mergen
+          try{
+            const rRes = await fetch('/api/emails/importance-rules', { headers: getAuthHeaders() });
+            const rData = await parseJsonSafe(rRes);
+            if(rData.__ok && Array.isArray(rData.rules)){
+              importanceRules = rData.rules.map(r => ({
+                pattern: (r.pattern || '').toLowerCase(),
+                bucket: (r.bucket || '').toLowerCase(),
+              }));
+            }
+          }catch(_){ }
+
+          // Zusätzlich lokal gespeicherte Regeln anwenden (Client-Regeln überschreiben Server-Regeln)
+          try{
+            const ls = localStorage.getItem('importance_rules');
+            if(ls){
+              const parsed = JSON.parse(ls);
+              if(Array.isArray(parsed)){
+                parsed.forEach(p => {
+                  const pat = (p.pattern || '').toLowerCase();
+                  const buck = (p.bucket || '').toLowerCase();
+                  if(pat && buck){
+                    importanceRules = (importanceRules || []).filter(r => r.pattern !== pat);
+                    importanceRules.push({pattern: pat, bucket: buck});
+                  }
+                });
+              }
+            }
+          }catch(_e_ls){ }
+
+          // Falls schon E-Mails geladen sind, Liste mit neuen Regeln neu rendern
+          try{
+            if(inboxEmails && inboxEmails.length){
+              renderInboxList();
+            }
+          }catch(_e_r){ }
+
           return true;
         } else {
           localStorage.removeItem('jwt_token');
