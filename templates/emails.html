@@ -210,7 +210,7 @@
   <header>
     <h1 id="account_title">📥 Inbox</h1>
     <div class="toolbar">
-      <span id="build_info" class="sub" style="font-size:11px; margin-right:8px; color:#6b7280; white-space:nowrap;">Build 5ec8030</span>
+      <span id="build_info" class="sub" style="font-size:11px; margin-right:8px; color:#6b7280; white-space:nowrap;">Build …</span>
       <input id="inbox_search" type="text" placeholder="🔍 Absender suchen..." style="padding:6px 10px; border:1px solid var(--border); border-radius:999px; font-size:12px; min-width:180px;" />
       <button id="reload">Aktualisieren</button>
       <button id="load_more_btn" style="background:#0284c7; display:none;">📥 Weitere E-Mails laden</button>
@@ -541,8 +541,8 @@ function ensureInboxContextMenu(){
   if(inboxContextMenuEl) return inboxContextMenuEl;
   const el = document.createElement('div');
   el.id = 'inbox_context_menu';
-  el.style.cssText = 'position:fixed; z-index:300; background:#fff; border:1px solid var(--border); border-radius:6px; box-shadow:0 10px 30px rgba(0,0,0,0.15); font-size:13px; padding:4px 0; min-width:180px; display:none;';
-  el.innerHTML = '<button type="button" id="ctx_toggle_read" style="width:100%; text-align:left; padding:6px 12px; border:0; background:transparent; cursor:pointer;">Als gelesen markieren</button>';
+  el.style.cssText = 'position:fixed; z-index:300; background:#fff; border:1px solid var(--border); border-radius:6px; box-shadow:0 10px 30px rgba(0,0,0,0.15); font-size:13px; padding:4px 0; min-width:200px; display:none;';
+  el.innerHTML = '<button type="button" id="ctx_toggle_read" style="width:100%; text-align:left; padding:8px 14px; border:0; background:#111827; color:#f9fafb; cursor:pointer; font-size:13px;">Als gelesen markieren</button>';
   document.body.appendChild(el);
   // Globaler Klick schließt Menü
   document.addEventListener('click', (ev) => {
@@ -1181,14 +1181,12 @@ function ensureInboxContextMenu(){
 
     // Suche nach Absendername / -E-Mail initialisieren und Build-Info laden
     document.addEventListener('DOMContentLoaded', () => {
-      // Build-Info aus Backend holen, damit der Header den aktuellen Commit zeigt.
-      // Wenn das Backend nur "dev" zurückgibt, behalten wir das statische Label bei.
+      // Build-Info aus Backend holen, damit der Header immer den aktuellen Commit zeigt.
       try{
         fetch('/api/build-info')
           .then(res => res.ok ? res.json() : null)
           .then(data => {
             if(!data || !data.build) return;
-            if((data.build || '').toLowerCase() === 'dev') return;
             const el = document.getElementById('build_info');
             if(el){ el.textContent = `Build ${data.build}`; }
           })

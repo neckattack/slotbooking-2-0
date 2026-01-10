@@ -23,17 +23,38 @@ app = Flask(__name__)
 def api_build_info():
     """Liefert einfache Build-Informationen für das Frontend.
 
-    Bevorzugt einen von Render gesetzten Commit-Hash, fällt sonst auf
-    generische Kennungen zurück. Absichtlich sehr leichtgewichtig.
+    Bevorzugt einen von Render oder der Deploy-Umgebung gesetzten Commit-Hash.
+    Falls nichts gesetzt ist, wird als Fallback der aktuelle Git-Commit
+    aus dem Repository gelesen ("git rev-parse --short HEAD").
     """
     build = (
         os.environ.get('RENDER_GIT_COMMIT')
         or os.environ.get('GIT_COMMIT')
         or os.environ.get('SOURCE_VERSION')
-        or 'dev'
     )
-    # nur die ersten 7 Zeichen wie bei kurzen Git-Hashes anzeigen
-    short = build[:7] if len(build) > 7 else build
+
+    if not build:
+        try:
+            import subprocess
+            # Aktuellen Commit des ausgecheckten Repos ermitteln
+            res = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                text=True,
+            )
+            git_hash = (res.stdout or "").strip()
+            if git_hash:
+                build = git_hash
+        except Exception:
+            build = None
+
+    if not build:
+        build = "unknown"
+
+    # nur die ersten 16 Zeichen anzeigen, um auch längere IDs aufzunehmen
+    short = build[:16]
     return jsonify({'build': short})
 
 # Einfache In-Memory-Caches (kurzer TTL) für Geschwindigkeit
