@@ -1135,8 +1135,20 @@
       }
     }
 
-    // Suche nach Absendername / -E-Mail initialisieren
+    // Suche nach Absendername / -E-Mail initialisieren und Build-Info laden
     document.addEventListener('DOMContentLoaded', () => {
+      // Build-Info aus Backend holen, damit der Header immer den aktuellen Commit zeigt
+      try{
+        fetch('/api/build-info')
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if(!data || !data.build) return;
+            const el = document.getElementById('build_info');
+            if(el){ el.textContent = `Build ${data.build}`; }
+          })
+          .catch(() => {});
+      }catch(_e_build){ }
+
       const searchInput = document.getElementById('inbox_search');
       if(searchInput){
         searchInput.addEventListener('input', () => {

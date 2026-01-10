@@ -18,6 +18,24 @@ openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 # Flask-App muss vor allen @app.route-Dekoratoren existieren
 app = Flask(__name__)
 
+
+@app.route('/api/build-info', methods=['GET'])
+def api_build_info():
+    """Liefert einfache Build-Informationen für das Frontend.
+
+    Bevorzugt einen von Render gesetzten Commit-Hash, fällt sonst auf
+    generische Kennungen zurück. Absichtlich sehr leichtgewichtig.
+    """
+    build = (
+        os.environ.get('RENDER_GIT_COMMIT')
+        or os.environ.get('GIT_COMMIT')
+        or os.environ.get('SOURCE_VERSION')
+        or 'dev'
+    )
+    # nur die ersten 7 Zeichen wie bei kurzen Git-Hashes anzeigen
+    short = build[:7] if len(build) > 7 else build
+    return jsonify({'build': short})
+
 # Einfache In-Memory-Caches (kurzer TTL) für Geschwindigkeit
 INBOX_CACHE = {"data": None, "ts": 0, "key": None}
 THREAD_CACHE = {}   # uid -> {data, ts}  (Mail-Thread-Inhalt)
