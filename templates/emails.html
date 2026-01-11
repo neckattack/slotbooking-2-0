@@ -1739,9 +1739,10 @@ function ensureInboxContextMenu(){
             </div>
           </div>
         `;
-        // Relevanz-Badge im KONTAKT-PROFIL (Header rechts) setzen
+        // Relevanz-Badge und Typ-Badge im KONTAKT-PROFIL (Header rechts) setzen
         try {
           const badgeEl = document.getElementById('contact_importance_badge');
+          const typeEl = document.getElementById('contact_type_badge');
           if (badgeEl) {
             const bucket = getImportanceBucket(t) || '';
             let label = '';
@@ -1768,6 +1769,19 @@ function ensureInboxContextMenu(){
             } else {
               badgeEl.textContent = '';
               badgeEl.style.display = 'none';
+            }
+          }
+
+          // Typ-Badge aus den KPIs (Kategorie) ableiten
+          if(typeEl){
+            const kpis = t.kpis || {};
+            const category = (kpis.category || '').toString().trim();
+            if(category){
+              typeEl.textContent = `Typ: ${category}`;
+              typeEl.style.display = 'inline-flex';
+            } else {
+              typeEl.textContent = '';
+              typeEl.style.display = 'none';
             }
           }
         } catch (_e_badge) {}
