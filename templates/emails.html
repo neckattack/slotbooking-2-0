@@ -1343,7 +1343,7 @@ function ensureInboxContextMenu(){
             };
           }
           if(status){
-            status.textContent = `${totalInDB.toLocaleString('de-DE')} E-Mails in diesem Ordner in DB – Hintergrund-Sync läuft…`;
+            status.textContent = `${totalInDB.toLocaleString('de-DE')} E-Mails in DB – Hintergrund-Sync läuft…`;
           }
           // Auto-Sync bewusst "fire and forget" starten
           autoSyncAllFoldersBackground();
@@ -1352,7 +1352,7 @@ function ensureInboxContextMenu(){
             loadMoreBtn.style.display = 'none';
           }
           if(status){
-            status.textContent = `${totalInDB.toLocaleString('de-DE')} E-Mails in diesem Ordner in DB`;
+            status.textContent = `${totalInDB.toLocaleString('de-DE')} E-Mails in DB`;
           }
         }
       }catch(e){
