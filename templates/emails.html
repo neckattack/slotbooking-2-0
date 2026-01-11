@@ -2899,16 +2899,14 @@ function ensureInboxContextMenu(){
       }
     });
 
-    // Expliziter Schließen-Button im Compose-Header: nur schließen, wenn Editor leer ist
+    // Expliziter Schließen-Button im Compose-Header: immer schließen, unabhängig vom Inhalt
     (function setupComposeClose(){
       const closeBtn = document.getElementById('compose_close_btn');
       if(!closeBtn) return;
       closeBtn.addEventListener('click', () => {
         const panel = document.getElementById('compose');
         if(!panel) return;
-        if(isComposeEmpty()){
-          panel.classList.remove('open');
-        }
+        panel.classList.remove('open');
       });
     })();
 
