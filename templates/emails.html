@@ -1905,11 +1905,11 @@ function ensureInboxContextMenu(){
                     const optHtml = categoryOpts.map(opt => {
                       return `<button class="reply-opt-btn" data-kind="current" data-topic-id="${topicKey}" data-topic-label="${escapeHtml(baseLabel)}" data-topic-expl="${ct.explanation ? escapeHtml(ct.explanation) : ''}" data-mode="${opt.mode}" data-opt-id="${opt.id}" style="border:0; padding:3px 6px; border-radius:4px; font-size:11px; margin:2px 4px 2px 0; cursor:pointer; background:#e5e7eb; color:#374151;">${escapeHtml(opt.label || '')}</button>`;
                     }).join('');
-                    const expl = ct.explanation ? `<div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(ct.explanation)}</div>` : '';
+                    const expl = ct.explanation ? `<div class="sub" style="font-size:16px; margin-bottom:4px;">${escapeHtml(ct.explanation)}</div>` : '';
                     return `
                       <div class="reply-prep-topic" data-kind="current" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb; position:relative;">
                         <span class="reply-prep-close" data-kind="current" style="position:absolute; right:6px; top:4px; color:#b91c1c; font-weight:bold; cursor:pointer;">×</span>
-                        <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(ct.label || '(ohne Titel)')}</div>
+                        <div style="font-size:18px; font-weight:500; margin-bottom:4px;">${escapeHtml(ct.label || '(ohne Titel)')}</div>
                         ${expl}
                         <div style="margin-bottom:4px;">${optHtml}</div>
                         <div style="margin-top:4px; border-top:1px dashed #e5e7eb; padding-top:4px;">
@@ -1962,8 +1962,8 @@ function ensureInboxContextMenu(){
                               return `
                                 <div class="reply-prep-topic" data-kind="historical" data-topic-id="${tp.id}" style="margin-top:6px; padding:6px 8px; border-radius:4px; background:#f9fafb; border:1px solid #e5e7eb; position:relative;">
                                   <span class="reply-prep-close" data-kind="historical" data-topic-id="${tp.id}" style="position:absolute; right:6px; top:4px; color:#b91c1c; font-weight:bold; cursor:pointer;">×</span>
-                                  <div style="font-size:12px; font-weight:500; margin-bottom:2px;">${escapeHtml(tp.label || '(ohne Titel)')}</div>
-                                  <div class="sub" style="font-size:11px; margin-bottom:4px;">${escapeHtml(meta)}</div>
+                                  <div style="font-size:18px; font-weight:500; margin-bottom:4px;">${escapeHtml(tp.label || '(ohne Titel)')}</div>
+                                  <div class="sub" style="font-size:14px; margin-bottom:4px;">${escapeHtml(meta)}</div>
                                   <div style="margin-bottom:4px;">${optHtml}</div>
                                   ${mailsHtml ? `<div style="font-size:11px; margin-top:2px;"><span class="muted">Relevante E-Mails:</span></div>${mailsHtml}` : ''}
                                   <div style="margin-top:4px; border-top:1px dashed #e57eb; padding-top:4px;">
