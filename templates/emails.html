@@ -1441,6 +1441,72 @@ function ensureInboxContextMenu(){
             }
           }
         } catch (_e_badge) {}
+
+        // Relevanz-Badge im KONTAKT-PROFIL (Header rechts) setzen
+        try {
+          const badgeEl = document.getElementById('contact_importance_badge');
+          if (badgeEl) {
+            const bucket = getImportanceBucket(t) || '';
+            let label = '';
+            let bg = '#e5e7eb';
+            let color = '#4b5563';
+
+            if (bucket === 'focus') {
+              label = 'Fokus-Kontakt';
+              bg = '#dcfce7';
+              color = '#166534';
+            } else if (bucket === 'unwichtig') {
+              label = 'Unwichtiger Kontakt';
+              bg = '#fee2e2';
+              color = '#b91c1c';
+            } else if (bucket === 'normal') {
+              label = 'Normal';
+            }
+
+            if (label) {
+              badgeEl.textContent = label;
+              badgeEl.style.display = 'inline-flex';
+              badgeEl.style.background = bg;
+              badgeEl.style.color = color;
+            } else {
+              badgeEl.textContent = '';
+              badgeEl.style.display = 'none';
+            }
+          }
+        } catch (_e_badge) {}
+
+        // Relevanz-Badge im KONTAKT-PROFIL (Header rechts) setzen
+        try {
+          const badgeEl = document.getElementById('contact_importance_badge');
+          if (badgeEl) {
+            const bucket = getImportanceBucket(t) || '';
+            let label = '';
+            let bg = '#e5e7eb';
+            let color = '#4b5563';
+
+            if (bucket === 'focus') {
+              label = 'Fokus-Kontakt';
+              bg = '#dcfce7';
+              color = '#166534';
+            } else if (bucket === 'unwichtig') {
+              label = 'Unwichtiger Kontakt';
+              bg = '#fee2e2';
+              color = '#b91c1c';
+            } else if (bucket === 'normal') {
+              label = 'Normal';
+            }
+
+            if (label) {
+              badgeEl.textContent = label;
+              badgeEl.style.display = 'inline-flex';
+              badgeEl.style.background = bg;
+              badgeEl.style.color = color;
+            } else {
+              badgeEl.textContent = '';
+              badgeEl.style.display = 'none';
+            }
+          }
+        } catch (_e_badge) {}
         
         // Add click handlers
         document.querySelectorAll('.sync-btn').forEach(btn => {
