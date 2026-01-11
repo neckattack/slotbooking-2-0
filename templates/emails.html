@@ -212,7 +212,7 @@
   <header>
     <div class="header-left">
       <h1 id="account_title">📥 Inbox</h1>
-      <select id="folder_select" style="padding:6px 10px; border-radius:8px; border:1px solid var(--border); font-size:13px; min-width:140px;"></select>
+      <select id="folder_select" style="height:34px; padding:4px 14px; border-radius:999px; border:1px solid var(--border); font-size:13px; min-width:140px; background:#ffffff;"></select>
     </div>
     <div class="toolbar">
       <span id="build_info" class="sub" style="font-size:11px; margin-right:8px; color:#6b7280; white-space:nowrap;">Build …</span>
@@ -230,9 +230,7 @@
     </div>
   </header>
   <div class="container">
-    <div class="list" id="list">
-      <div class="sub" style="padding:12px 14px;">Lade …</div>
-    </div>
+    <div class="list" id="list"></div>
     <div class="detail" id="detail">
       <div class="sub">E-Mail auswählen …</div>
     </div>
@@ -1286,6 +1284,10 @@ function ensureInboxContextMenu(){
       const status = document.getElementById('status');
       const list = document.getElementById('list');
       status.textContent = 'lädt …';
+      // Kleine Ladeanzeige nur, wenn noch keine E-Mails gerendert sind
+      if(list && (!inboxEmails || !inboxEmails.length)){
+        list.innerHTML = '<div class="sub" style="padding:8px 12px;">Lade E-Mails …</div>';
+      }
       try{
         if(!currentAccountId){
           // Ohne Account keine Anfragen; versuche Accounts zu laden
@@ -1403,6 +1405,15 @@ function ensureInboxContextMenu(){
           // Nur im Posteingang automatisch nachladen
           if(currentFolder !== 'inbox') return;
           isLoadingMore = true;
+          let loadingMoreEl = document.getElementById('list_loading_more');
+          if(!loadingMoreEl && list){
+            loadingMoreEl = document.createElement('div');
+            loadingMoreEl.id = 'list_loading_more';
+            loadingMoreEl.className = 'sub';
+            loadingMoreEl.style.cssText = 'padding:6px 10px; text-align:left; color:#6b7280;';
+            loadingMoreEl.textContent = 'Lade weitere E-Mails …';
+            list.appendChild(loadingMoreEl);
+          }
           try{
             // Limit schrittweise erhöhen und in localStorage merken
             currentEmailLimit = currentEmailLimit + 100;
@@ -1410,6 +1421,8 @@ function ensureInboxContextMenu(){
             await loadInbox();
           }finally{
             isLoadingMore = false;
+            const el = document.getElementById('list_loading_more');
+            if(el && el.parentNode){ el.parentNode.removeChild(el); }
           }
         }
       });
@@ -2896,7 +2909,7 @@ function ensureInboxContextMenu(){
         if(titleEl && !document.getElementById('account_select')){
           const select = document.createElement('select');
           select.id = 'account_select';
-          select.style.cssText = 'padding:4px 8px; border-radius:6px; border:1px solid var(--border); font-size:14px;';
+          select.style.cssText = 'height:34px; padding:4px 14px; border-radius:999px; border:1px solid var(--border); font-size:14px; background:#ffffff;';
           for(const acc of accounts){
             const opt = document.createElement('option');
             opt.value = acc.id;
