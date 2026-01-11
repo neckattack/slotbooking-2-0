@@ -748,11 +748,11 @@ function ensureInboxContextMenu(){
       // Sticky am oberen Rand der Listenspalte halten
       toggle.style.cssText = 'position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; gap:8px; align-items:center; padding:4px 8px 8px 8px; margin:0 0 4px 0; font-size:12px; background:#ffffff; border-bottom:1px solid var(--border);';
       toggle.innerHTML = `
-        <div style="display:inline-flex; background:#e5e7eb; border-radius:999px; padding:2px;">
-          <button id="filter_focus" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#fff; color:#111827; font-weight:600;">Fokus</button>
-          <button id="filter_normal" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Normal</button>
-          <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Unwichtig</button>
-        </div>
+      <div id="inbox_bucket_group" style="display:inline-flex; background:#e5e7eb; border-radius:999px; padding:2px;">
+        <button id="filter_focus" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#fff; color:#111827; font-weight:600;">Fokus</button>
+        <button id="filter_normal" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Normal</button>
+        <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Unwichtig</button>
+      </div>
         <div>
           <select id="folder_select" style="padding:4px 8px; border-radius:6px; border:1px solid var(--border); font-size:12px;"></select>
         </div>
@@ -1059,9 +1059,11 @@ function ensureInboxContextMenu(){
       const status = document.getElementById('status');
       if(!list) return;
       const toggle = document.getElementById('inbox_filter_toggle');
-      // Bucket-Toggle nur im Posteingang anzeigen
-      if(toggle){
-        toggle.style.display = (currentFolder === 'inbox') ? 'flex' : 'none';
+      const bucketGroup = document.getElementById('inbox_bucket_group');
+      // Bucket-Toggle (Fokus/Normal/Unwichtig) nur im Posteingang anzeigen,
+      // Ordner-Dropdown aber immer sichtbar lassen
+      if(bucketGroup){
+        bucketGroup.style.display = (currentFolder === 'inbox') ? 'inline-flex' : 'none';
       }
       // Nur die E-Mail-Items unterhalb des Toggles leeren
       if(toggle){
