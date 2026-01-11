@@ -223,7 +223,6 @@
           <path d="M12 20a7 7 0 0 1-6.32-4H7.5a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0-.75.75V19.5a.75.75 0 0 0 1.5 0v-1.46A8.5 8.5 0 0 0 12 21.5a8.25 8.25 0 0 0 7.7-4.59.75.75 0 0 0-1.33-.67A6.75 6.75 0 0 1 12 20Z" fill="white"/>
         </svg>
       </button>
-      <button id="toggle_compose_btn" style="background:#111827; padding:8px 16px; border-radius:8px; font-size:14px;">Antwort</button>
       <button id="load_more_btn" style="background:#0284c7; display:none;">📥 Weitere E-Mails laden</button>
       <span id="status" class="sub" style="margin-right:auto;"></span>
       <button id="user_badge" style="background:#111827; display:none;">👤 Lade...</button>
@@ -1647,7 +1646,10 @@ function ensureInboxContextMenu(){
         
         detail.innerHTML = `
           <div class="detail-scroll">
-            <h2>${escapeHtml(t.subject || '')}</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <h2 style="margin:0;">${escapeHtml(t.subject || '')}</h2>
+              <button id="toggle_compose_btn" title="Antwort öffnen" style="background:#111827; color:#ffffff; border:0; padding:6px 10px; border-radius:999px; font-size:13px; white-space:nowrap;">Antwort</button>
+            </div>
             <div class="meta">Von: ${escapeHtml(t.from||'')} · An: ${escapeHtml(t.to||'')} · ${escapeHtml(t.date||'')}</div>
             <div class="content">${html}</div>
             <div id="reply_prep_block" class="sub" style="margin-top:12px; padding:8px 10px; border-radius:6px; background:#fefce8; border:1px solid #facc15; font-size:12px;">
@@ -2865,15 +2867,15 @@ function ensureInboxContextMenu(){
     document.getElementById('btn_propose').addEventListener('click', proposeDraft);
     document.getElementById('btn_send').addEventListener('click', sendDraft);
 
-    // Antwort-Panel manuell ein-/ausblenden, ohne automatisch eine KI-Antwort zu erzeugen
-    (function setupComposeToggle(){
-      const btn = document.getElementById('toggle_compose_btn');
+    // Antwort-Panel manuell ein-/ausblenden, ohne automatisch eine KI-Antwort zu erzeugen.
+    // Event-Delegation, damit es auch für dynamische Buttons im Detailbereich funktioniert.
+    document.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('#toggle_compose_btn');
+      if(!btn) return;
       const panel = document.getElementById('compose');
-      if(!btn || !panel) return;
-      btn.addEventListener('click', () => {
-        panel.classList.toggle('open');
-      });
-    })();
+      if(!panel) return;
+      panel.classList.toggle('open');
+    });
     // Auth: get JWT token and user email
     function getAuthToken(){
       return localStorage.getItem('jwt_token') || '';
