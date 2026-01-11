@@ -212,7 +212,7 @@
   <header>
     <div class="header-left">
       <h1 id="account_title">📥 Inbox</h1>
-      <select id="folder_select" style="height:34px; padding:4px 14px; border-radius:999px; border:1px solid var(--border); font-size:13px; min-width:140px; background:#ffffff;"></select>
+      <select id="folder_select" style="height:36px; padding:8px 16px; border-radius:8px; border:0; font-size:14px; min-width:150px; background:#111827; color:#ffffff;"></select>
     </div>
     <div class="toolbar">
       <span id="build_info" class="sub" style="font-size:11px; margin-right:8px; color:#6b7280; white-space:nowrap;">Build …</span>
@@ -2909,7 +2909,7 @@ function ensureInboxContextMenu(){
         if(titleEl && !document.getElementById('account_select')){
           const select = document.createElement('select');
           select.id = 'account_select';
-          select.style.cssText = 'height:34px; padding:4px 14px; border-radius:999px; border:1px solid var(--border); font-size:14px; background:#ffffff;';
+          select.style.cssText = 'height:36px; padding:8px 16px; border-radius:8px; border:0; font-size:14px; min-width:180px; background:#111827; color:#ffffff;';
           for(const acc of accounts){
             const opt = document.createElement('option');
             opt.value = acc.id;
