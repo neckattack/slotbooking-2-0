@@ -1061,9 +1061,16 @@ function ensureInboxContextMenu(){
       const toggle = document.getElementById('inbox_filter_toggle');
       const bucketGroup = document.getElementById('inbox_bucket_group');
       // Bucket-Toggle (Fokus/Normal/Unwichtig) nur im Posteingang anzeigen,
-      // Ordner-Dropdown aber immer sichtbar lassen
+      // Ordner-Dropdown aber immer sichtbar lassen. Außerhalb des Posteingangs
+      // bleibt der Platz erhalten, damit das Dropdown nicht springt.
       if(bucketGroup){
-        bucketGroup.style.display = (currentFolder === 'inbox') ? 'inline-flex' : 'none';
+        if(currentFolder === 'inbox'){
+          bucketGroup.style.visibility = 'visible';
+          bucketGroup.style.pointerEvents = 'auto';
+        } else {
+          bucketGroup.style.visibility = 'hidden';
+          bucketGroup.style.pointerEvents = 'none';
+        }
       }
       // Nur die E-Mail-Items unterhalb des Toggles leeren
       if(toggle){
