@@ -235,7 +235,10 @@
       <div class="sub">E-Mail auswählen …</div>
     </div>
     <div class="compose" id="compose">
-      <h3>Antwort</h3>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+        <h3 style="margin:0;">Antwort</h3>
+        <button id="compose_close_btn" title="Antwort schließen" style="width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:999px; border:0; cursor:pointer; background:#111827; color:#ffffff; font-size:16px;">✕</button>
+      </div>
       <div class="row"><label>Empf.</label><input id="compose_to" placeholder="Empfänger" /></div>
       <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
       <div id="compose_editor" class="editor" contenteditable="true"><div class="muted">Hier erscheint der Vorschlag …</div></div>
@@ -2893,6 +2896,31 @@ function ensureInboxContextMenu(){
         if(isComposeEmpty()){
           panel.classList.remove('open');
         }
+      }
+    });
+
+    // Expliziter Schließen-Button im Compose-Header: nur schließen, wenn Editor leer ist
+    (function setupComposeClose(){
+      const closeBtn = document.getElementById('compose_close_btn');
+      if(!closeBtn) return;
+      closeBtn.addEventListener('click', () => {
+        const panel = document.getElementById('compose');
+        if(!panel) return;
+        if(isComposeEmpty()){
+          panel.classList.remove('open');
+        }
+      });
+    })();
+
+    // Klick außerhalb des Antwort-Panels: wenn Panel offen und leer, automatisch schließen
+    document.addEventListener('click', (ev) => {
+      const panel = document.getElementById('compose');
+      if(!panel || !panel.classList.contains('open')) return;
+      if(panel.contains(ev.target)) return; // Klick innerhalb des Panels ignorieren
+      // Antwort-Button neben Betreff darf wie bisher toggeln, hier also nicht doppelt schließen
+      if(ev.target.closest('#toggle_compose_btn')) return;
+      if(isComposeEmpty()){
+        panel.classList.remove('open');
       }
     });
     // Auth: get JWT token and user email
