@@ -212,6 +212,7 @@
     <h1 id="account_title">📥 Inbox</h1>
     <div class="toolbar">
       <span id="build_info" class="sub" style="font-size:11px; margin-right:8px; color:#6b7280; white-space:nowrap;">Build …</span>
+      <select id="folder_select" style="padding:6px 10px; border-radius:8px; border:1px solid var(--border); font-size:13px; min-width:140px;"></select>
       <input id="inbox_search" type="text" placeholder="🔍 Absender suchen..." style="padding:6px 10px; border:1px solid var(--border); border-radius:999px; font-size:12px; min-width:180px;" />
       <button id="reload">Aktualisieren</button>
       <button id="load_more_btn" style="background:#0284c7; display:none;">📥 Weitere E-Mails laden</button>
@@ -219,6 +220,26 @@
       <button id="user_badge" style="background:#111827; display:none;">👤 Lade...</button>
       <button id="menu_btn" style="background:#111827; font-size:20px; padding:8px 14px;">☰</button>
     </div>
+  </header>
+  <div class="container">
+    <div class="list" id="list">
+      <div class="sub" style="padding:12px 14px;">Lade …</div>
+    </div>
+    <div class="detail" id="detail">
+      <div class="sub">E-Mail auswählen …</div>
+    </div>
+    <div class="compose" id="compose">
+      <h3>Antwort</h3>
+      <div class="row"><label>Empf.</label><input id="compose_to" placeholder="Empfänger" /></div>
+      <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
+      <div id="compose_editor" class="editor" contenteditable="true"><div class="muted">Hier erscheint der Vorschlag …</div></div>
+      <div class="actions">
+        <button id="btn_propose" disabled>Antwort vorschlagen</button>
+        <button id="btn_send" disabled>Senden</button>
+        <span id="compose_status" class="sub"></span>
+      </div>
+    </div>
+  </div>
 
   <!-- Simple Image Lightbox for inline email images -->
   <div id="image_lightbox" class="modal" style="z-index:300;">
@@ -746,16 +767,13 @@ function ensureInboxContextMenu(){
       const toggle = document.createElement('div');
       toggle.id = 'inbox_filter_toggle';
       // Sticky am oberen Rand der Listenspalte halten
-      toggle.style.cssText = 'position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; gap:8px; align-items:center; padding:4px 8px 8px 8px; margin:0 0 4px 0; font-size:12px; background:#ffffff; border-bottom:1px solid var(--border);';
+      toggle.style.cssText = 'position:sticky; top:0; z-index:5; display:flex; justify-content:flex-start; gap:8px; align-items:center; padding:4px 8px 8px 8px; margin:0 0 4px 0; font-size:12px; background:#ffffff; border-bottom:1px solid var(--border);';
       toggle.innerHTML = `
       <div id="inbox_bucket_group" style="display:inline-flex; background:#e5e7eb; border-radius:999px; padding:2px;">
         <button id="filter_focus" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#fff; color:#111827; font-weight:600;">Fokus</button>
         <button id="filter_normal" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Normal</button>
         <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Unwichtig</button>
       </div>
-        <div>
-          <select id="folder_select" style="padding:4px 8px; border-radius:6px; border:1px solid var(--border); font-size:12px;"></select>
-        </div>
       `;
       // In die Listenspalte einfügen, direkt vor dem ersten Inhalt
       list.insertBefore(toggle, list.firstChild);
