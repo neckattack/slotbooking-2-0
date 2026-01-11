@@ -1059,6 +1059,10 @@ function ensureInboxContextMenu(){
       const status = document.getElementById('status');
       if(!list) return;
       const toggle = document.getElementById('inbox_filter_toggle');
+      // Bucket-Toggle nur im Posteingang anzeigen
+      if(toggle){
+        toggle.style.display = (currentFolder === 'inbox') ? 'flex' : 'none';
+      }
       // Nur die E-Mail-Items unterhalb des Toggles leeren
       if(toggle){
         while(list.lastChild && list.lastChild !== toggle){
@@ -1073,13 +1077,19 @@ function ensureInboxContextMenu(){
         return;
       }
       
-      const baseFiltered = inboxEmails.filter(it => {
-        const bucket = getImportanceBucket(it);
-        if(inboxFilter === 'focus') return bucket === 'focus';
-        if(inboxFilter === 'unwichtig') return bucket === 'unwichtig';
-        // normal: nur Mails mit Bucket "normal" anzeigen
-        return bucket === 'normal';
-      });
+      let baseFiltered;
+      if(currentFolder !== 'inbox'){
+        // In anderen Ordnern (Gesendet, etc.) keine Bucket-Filterung anwenden
+        baseFiltered = inboxEmails.slice();
+      } else {
+        baseFiltered = inboxEmails.filter(it => {
+          const bucket = getImportanceBucket(it);
+          if(inboxFilter === 'focus') return bucket === 'focus';
+          if(inboxFilter === 'unwichtig') return bucket === 'unwichtig';
+          // normal: nur Mails mit Bucket "normal" anzeigen
+          return bucket === 'normal';
+        });
+      }
 
       const q = (inboxSearchQuery || '').trim().toLowerCase();
       const filtered = q ? baseFiltered.filter(it => {
