@@ -9,6 +9,7 @@
     * { box-sizing:border-box; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 0; color: var(--fg); background:#fafafa; font-size:18px; }
     header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); background:#ffffff; position:sticky; top:0; z-index:10; }
+    .header-left { display:flex; align-items:center; gap:10px; }
     h1 { margin: 0; font-size:24px; display:flex; gap:8px; align-items:center; }
     .toolbar { display:flex; align-items:center; gap:12px; }
     button { background:var(--primary); color:#fff; border:0; padding:10px 14px; border-radius:8px; cursor:pointer; font-size:15px; }
@@ -209,12 +210,14 @@
 </head>
 <body>
   <header>
-    <h1 id="account_title">📥 Inbox</h1>
-    <div class="toolbar">
+    <div class="header-left">
+      <h1 id="account_title">📥 Inbox</h1>
       <select id="folder_select" style="padding:6px 10px; border-radius:8px; border:1px solid var(--border); font-size:13px; min-width:140px;"></select>
+    </div>
+    <div class="toolbar">
       <span id="build_info" class="sub" style="font-size:11px; margin-right:8px; color:#6b7280; white-space:nowrap;">Build …</span>
       <input id="inbox_search" type="text" placeholder="🔍 Absender suchen..." style="padding:6px 10px; border:1px solid var(--border); border-radius:999px; font-size:12px; min-width:180px;" />
-      <button id="reload">Aktualisieren</button>
+      <button id="reload" title="Aktualisieren" style="width:36px; padding:6px; display:flex; align-items:center; justify-content:center; font-size:18px; border-radius:999px;">⟳</button>
       <button id="load_more_btn" style="background:#0284c7; display:none;">📥 Weitere E-Mails laden</button>
       <span id="status" class="sub" style="margin-right:auto;"></span>
       <button id="user_badge" style="background:#111827; display:none;">👤 Lade...</button>
