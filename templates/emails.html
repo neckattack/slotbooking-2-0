@@ -1582,15 +1582,16 @@ function ensureInboxContextMenu(){
           <div class="profile" id="profile_panel" data-contact-id="${t.contact_id || ''}">
             <h3>👤 KONTAKT-PROFIL</h3>
             <div class="grid">
+              <!-- Linke Spalte: Stammdaten zum Kontakt -->
               <div>
-                <div class="kv"><span>Name</span>
-                  <div style="display:flex; align-items:center; gap:6px;">
-                    <b>${escapeHtml(contactName)}</b>
-                    <span id="contact_importance_badge" style="display:none; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:500; background:#e5e7eb; color:#4b5563;"></span>
-                  </div>
-                </div>
+                <div class="kv"><span>Name</span><b>${escapeHtml(contactName)}</b></div>
                 <div class="kv"><span>E‑Mail</span><b>${escapeHtml(contactEmail)}</b></div>
                 <div class="kv"><span>E-Mails</span><b>${emailCount} Nachricht${emailCount !== 1 ? 'en' : ''}</b></div>
+              </div>
+              <!-- Rechte Spalte: Relevanz/Prio-Badge -->
+              <div class="kv" style="justify-content:flex-end; text-align:right;">
+                <span style="font-size:11px; color:#6b7280; margin-right:6px;">Relevanz</span>
+                <span id="contact_importance_badge" style="display:none; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:500; background:#e5e7eb; color:#4b5563; white-space:nowrap;"></span>
               </div>
             </div>
             <div style="margin-top:12px;">
