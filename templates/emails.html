@@ -1679,23 +1679,19 @@ function ensureInboxContextMenu(){
                 <div class="kv"><span>E‑Mail</span><b>${escapeHtml(contactEmail)}</b></div>
                 <div class="kv"><span>E-Mails</span><b><a href="#" id="view_all_contact_emails" data-contact-id="${t.contact_id || ''}" style="color:#0369a1; text-decoration:underline;">${emailCount} Nachricht${emailCount !== 1 ? 'en' : ''} anzeigen</a></b></div>
               </div>
-              <!-- Rechte Spalte: Relevanz, Typ, Stimmung, Anrede als Textliste -->
-              <div class="kv" style="justify-content:flex-end; text-align:right; flex-direction:column; align-items:flex-end; gap:2px; font-size:12px;">
-                <div style="display:flex; gap:6px;">
-                  <span style="color:#6b7280;">Relevanz</span>
-                  <span id="contact_importance_badge" style="font-weight:600; color:#111827;">–</span>
+              <!-- Rechte Spalte: Relevanz, Typ, Stimmung, Anrede als Textliste (gleiches Muster wie links) -->
+              <div class="kv" style="justify-content:flex-end; text-align:right; flex-direction:column; align-items:flex-end; gap:2px;">
+                <div>
+                  <span>Relevanz</span><b id="contact_importance_badge">–</b>
                 </div>
-                <div style="display:flex; gap:6px;">
-                  <span style="color:#6b7280;">Typ</span>
-                  <span id="contact_type_badge" style="font-weight:600; color:#111827;">–</span>
+                <div>
+                  <span>Typ</span><b id="contact_type_badge">–</b>
                 </div>
-                <div style="display:flex; gap:6px;">
-                  <span style="color:#6b7280;">Stimmung</span>
-                  <span id="contact_sentiment_text" style="font-weight:600; color:#111827;">–</span>
+                <div>
+                  <span>Stimmung</span><b id="contact_sentiment_text">–</b>
                 </div>
-                <div style="display:flex; gap:6px;">
-                  <span style="color:#6b7280;">Anrede</span>
-                  <span id="contact_salutation_text" style="font-weight:600; color:#111827;">–</span>
+                <div>
+                  <span>Anrede</span><b id="contact_salutation_text">–</b>
                 </div>
               </div>
             </div>
