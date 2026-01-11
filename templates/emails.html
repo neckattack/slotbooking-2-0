@@ -1679,28 +1679,23 @@ function ensureInboxContextMenu(){
                 <div class="kv"><span>E‑Mail</span><b>${escapeHtml(contactEmail)}</b></div>
                 <div class="kv"><span>E-Mails</span><b><a href="#" id="view_all_contact_emails" data-contact-id="${t.contact_id || ''}" style="color:#0369a1; text-decoration:underline;">${emailCount} Nachricht${emailCount !== 1 ? 'en' : ''} anzeigen</a></b></div>
               </div>
-              <!-- Rechte Spalte: Relevanz/Prio-Badge + Typ-Badge + KPI-Chips -->
-              <div class="kv" style="justify-content:flex-end; text-align:right; flex-direction:column; align-items:flex-end; gap:4px;">
-                <div>
-                  <span style="font-size:11px; color:#6b7280; margin-right:6px;">Relevanz</span>
-                  <span id="contact_importance_badge" style="display:none; padding:4px 12px; border-radius:999px; font-size:12px; font-weight:500; background:#e5e7eb; color:#4b5563; white-space:nowrap;"></span>
+              <!-- Rechte Spalte: Relevanz, Typ, Stimmung, Anrede als Textliste -->
+              <div class="kv" style="justify-content:flex-end; text-align:right; flex-direction:column; align-items:flex-end; gap:2px; font-size:12px;">
+                <div style="display:flex; gap:6px;">
+                  <span style="color:#6b7280;">Relevanz</span>
+                  <span id="contact_importance_badge" style="font-weight:500;">–</span>
                 </div>
-                <div id="contact_type_badge" style="display:none; padding:4px 12px; border-radius:999px; font-size:12px; font-weight:500; background:#fee2e2; color:#b91c1c; white-space:nowrap;"></div>
-                <div id="contact_kpi_chips" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:2px; justify-content:flex-end;">
-                  ${kpis.salutation ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 12px; background:#dbeafe; color:#1e40af; border-radius:999px; font-size:12px; font-weight:500;">
-                    👋 Anrede: ${kpis.salutation}
-                  </span>` : ''}
-                  ${kpis.sentiment ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 12px; background:${
-                    kpis.sentiment === 'positive' ? '#d1fae5;color:#065f46' : 
-                    kpis.sentiment === 'negative' ? '#fee2e2;color:#991b1b' : 
-                    '#f3f4f6;color:#374151'
-                  }; border-radius:999px; font-size:12px; font-weight:500;">
-                    ${kpis.sentiment === 'positive' ? '😊' : kpis.sentiment === 'negative' ? '😟' : '😐'} Stimmung: ${
-                      kpis.sentiment === 'positive' ? 'Positiv' : 
-                      kpis.sentiment === 'negative' ? 'Negativ' : 
-                      'Neutral'
-                    }
-                  </span>` : ''}
+                <div style="display:flex; gap:6px;">
+                  <span style="color:#6b7280;">Typ</span>
+                  <span id="contact_type_badge" style="font-weight:500;">–</span>
+                </div>
+                <div style="display:flex; gap:6px;">
+                  <span style="color:#6b7280;">Stimmung</span>
+                  <span id="contact_sentiment_text" style="font-weight:500;">–</span>
+                </div>
+                <div style="display:flex; gap:6px;">
+                  <span style="color:#6b7280;">Anrede</span>
+                  <span id="contact_salutation_text" style="font-weight:500;">–</span>
                 </div>
               </div>
             </div>
@@ -1740,50 +1735,49 @@ function ensureInboxContextMenu(){
             </div>
           </div>
         `;
-        // Relevanz-Badge und Typ-Badge im KONTAKT-PROFIL (Header rechts) setzen
+        // Kopfzeile im KONTAKT-PROFIL (Relevanz, Typ, Stimmung, Anrede) als Text setzen
         try {
-          const badgeEl = document.getElementById('contact_importance_badge');
+          const importanceEl = document.getElementById('contact_importance_badge');
           const typeEl = document.getElementById('contact_type_badge');
-          if (badgeEl) {
+          const sentimentEl = document.getElementById('contact_sentiment_text');
+          const salutationEl = document.getElementById('contact_salutation_text');
+
+          // Relevanz aus Bucket ableiten
+          if (importanceEl) {
             const bucket = getImportanceBucket(t) || '';
             let label = '';
-            let bg = '#e5e7eb';
-            let color = '#4b5563';
-
             if (bucket === 'focus') {
               label = 'Fokus-Kontakt';
-              bg = '#dcfce7';
-              color = '#166534';
             } else if (bucket === 'unwichtig') {
               label = 'Unwichtiger Kontakt';
-              bg = '#fee2e2';
-              color = '#b91c1c';
             } else if (bucket === 'normal') {
               label = 'Normal';
             }
-
-            if (label) {
-              badgeEl.textContent = label;
-              badgeEl.style.display = 'inline-flex';
-              badgeEl.style.background = bg;
-              badgeEl.style.color = color;
-            } else {
-              badgeEl.textContent = '';
-              badgeEl.style.display = 'none';
-            }
+            importanceEl.textContent = label || '–';
           }
 
-          // Typ-Badge aus den KPIs (Kategorie) ableiten
-          if(typeEl){
-            const kpis = t.kpis || {};
+          const kpis = t.kpis || {};
+
+          // Typ aus Kategorie
+          if (typeEl) {
             const category = (kpis.category || '').toString().trim();
-            if(category){
-              typeEl.textContent = `Typ: ${category}`;
-              typeEl.style.display = 'inline-flex';
-            } else {
-              typeEl.textContent = '';
-              typeEl.style.display = 'none';
-            }
+            typeEl.textContent = category || '–';
+          }
+
+          // Stimmungstext
+          if (sentimentEl) {
+            const s = (kpis.sentiment || '').toString().trim();
+            let label = '–';
+            if (s === 'positive') label = 'Positiv';
+            else if (s === 'negative') label = 'Negativ';
+            else if (s) label = s;
+            sentimentEl.textContent = label;
+          }
+
+          // Anrede
+          if (salutationEl) {
+            const sal = (kpis.salutation || '').toString().trim();
+            salutationEl.textContent = sal || 'Unklar';
           }
         } catch (_e_badge) {}
 
