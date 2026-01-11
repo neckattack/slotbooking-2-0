@@ -1280,6 +1280,8 @@ function ensureInboxContextMenu(){
       }
     });
 
+    let isLoadingMore = false;
+
     async function loadInbox(){
       const status = document.getElementById('status');
       const list = document.getElementById('list');
@@ -1388,6 +1390,30 @@ function ensureInboxContextMenu(){
       // Immer Inbox neu laden, um ggf. neue DB-Einträge zu zeigen
       await loadInbox();
     }
+
+    // Einfaches Infinite-Scroll: wenn der Nutzer in der linken Liste fast unten ist,
+    // automatisch mehr E-Mails nachladen (Limit erhöhen) ohne Button-Klick.
+    (function setupInfiniteScroll(){
+      const list = document.getElementById('list');
+      if(!list) return;
+      list.addEventListener('scroll', async () => {
+        if(isLoadingMore) return;
+        const threshold = 80; // px vor dem tatsächlichen Ende
+        if(list.scrollTop + list.clientHeight >= list.scrollHeight - threshold){
+          // Nur im Posteingang automatisch nachladen
+          if(currentFolder !== 'inbox') return;
+          isLoadingMore = true;
+          try{
+            // Limit schrittweise erhöhen und in localStorage merken
+            currentEmailLimit = currentEmailLimit + 100;
+            try{ localStorage.setItem('emailLimit', String(currentEmailLimit)); }catch(_e){}
+            await loadInbox();
+          }finally{
+            isLoadingMore = false;
+          }
+        }
+      });
+    })();
     
     // Manuelles Nachladen wird nicht mehr benötigt, da der Sync nun automatisch
     // im Hintergrund läuft. Die Funktion bleibt als Stub erhalten, falls alte
