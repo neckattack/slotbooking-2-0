@@ -1679,13 +1679,29 @@ function ensureInboxContextMenu(){
                 <div class="kv"><span>E‑Mail</span><b>${escapeHtml(contactEmail)}</b></div>
                 <div class="kv"><span>E-Mails</span><b><a href="#" id="view_all_contact_emails" data-contact-id="${t.contact_id || ''}" style="color:#0369a1; text-decoration:underline;">${emailCount} Nachricht${emailCount !== 1 ? 'en' : ''} anzeigen</a></b></div>
               </div>
-              <!-- Rechte Spalte: Relevanz/Prio-Badge + Typ-Badge -->
+              <!-- Rechte Spalte: Relevanz/Prio-Badge + Typ-Badge + KPI-Chips -->
               <div class="kv" style="justify-content:flex-end; text-align:right; flex-direction:column; align-items:flex-end; gap:4px;">
                 <div>
                   <span style="font-size:11px; color:#6b7280; margin-right:6px;">Relevanz</span>
                   <span id="contact_importance_badge" style="display:none; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:500; background:#e5e7eb; color:#4b5563; white-space:nowrap;"></span>
                 </div>
                 <div id="contact_type_badge" style="display:none; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:500; background:#fee2e2; color:#b91c1c; white-space:nowrap;"></div>
+                <div id="contact_kpi_chips" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:2px; justify-content:flex-end;">
+                  ${kpis.salutation ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:500;">
+                    👋 Anrede: ${kpis.salutation}
+                  </span>` : ''}
+                  ${kpis.sentiment ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:${
+                    kpis.sentiment === 'positive' ? '#d1fae5;color:#065f46' : 
+                    kpis.sentiment === 'negative' ? '#fee2e2;color:#991b1b' : 
+                    '#f3f4f6;color:#374151'
+                  }; border-radius:4px; font-size:11px; font-weight:500;">
+                    ${kpis.sentiment === 'positive' ? '😊' : kpis.sentiment === 'negative' ? '😟' : '😐'} Stimmung: ${
+                      kpis.sentiment === 'positive' ? 'Positiv' : 
+                      kpis.sentiment === 'negative' ? 'Negativ' : 
+                      'Neutral'
+                    }
+                  </span>` : ''}
+                </div>
               </div>
             </div>
             <div style="margin-top:16px; font-size:13px; border-top:1px solid var(--border); padding-top:12px;">
@@ -1705,22 +1721,7 @@ function ensureInboxContextMenu(){
                 <div id="qc_tone" style="margin-bottom:2px;"><span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span></div>
                 <div id="qc_timeline" style="margin-top:4px;"><span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span></div>
               </div>
-              <div id="contact_kpi_chips" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;">
-                ${kpis.salutation ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:500;">
-                  👋 Anrede: ${kpis.salutation}
-                </span>` : ''}
-                ${kpis.sentiment ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:${
-                  kpis.sentiment === 'positive' ? '#d1fae5;color:#065f46' : 
-                  kpis.sentiment === 'negative' ? '#fee2e2;color:#991b1b' : 
-                  '#f3f4f6;color:#374151'
-                }; border-radius:4px; font-size:11px; font-weight:500;">
-                  ${kpis.sentiment === 'positive' ? '😊' : kpis.sentiment === 'negative' ? '😟' : '😐'} Stimmung: ${
-                    kpis.sentiment === 'positive' ? 'Positiv' : 
-                    kpis.sentiment === 'negative' ? 'Negativ' : 
-                    'Neutral'
-                  }
-                </span>` : ''}
-              </div>
+              
               <div id="contact_topic_detail_panel" class="sub" style="font-size:11px; margin-bottom:8px; display:none; padding:6px 8px; border-radius:4px; background:#eff6ff; border:1px solid #bfdbfe;"></div>
               <div id="prof_summary_full" class="sub" style="margin-top:8px; padding:10px; background:#f9fafb; border-radius:6px; line-height:1.5; display:${profileSummaryFull ? 'block' : 'none'};">
                 ${profileSummaryFull ? formatCustomerProfile(profileSummaryFull) : ''}
