@@ -1408,105 +1408,6 @@ function ensureInboxContextMenu(){
             <div class="sub" style="margin-top:20px;">💡 Sie können später jederzeit weitere E-Mails nachladen</div>
           </div>
         `;
-
-        // Relevanz-Badge im KONTAKT-PROFIL (Header rechts) setzen
-        try {
-          const badgeEl = document.getElementById('contact_importance_badge');
-          if (badgeEl) {
-            const bucket = getImportanceBucket(t) || '';
-            let label = '';
-            let bg = '#e5e7eb';
-            let color = '#4b5563';
-
-            if (bucket === 'focus') {
-              label = 'Fokus-Kontakt';
-              bg = '#dcfce7';
-              color = '#166534';
-            } else if (bucket === 'unwichtig') {
-              label = 'Unwichtiger Kontakt';
-              bg = '#fee2e2';
-              color = '#b91c1c';
-            } else if (bucket === 'normal') {
-              label = 'Normal';
-            }
-
-            if (label) {
-              badgeEl.textContent = label;
-              badgeEl.style.display = 'inline-flex';
-              badgeEl.style.background = bg;
-              badgeEl.style.color = color;
-            } else {
-              badgeEl.textContent = '';
-              badgeEl.style.display = 'none';
-            }
-          }
-        } catch (_e_badge) {}
-
-        // Relevanz-Badge im KONTAKT-PROFIL (Header rechts) setzen
-        try {
-          const badgeEl = document.getElementById('contact_importance_badge');
-          if (badgeEl) {
-            const bucket = getImportanceBucket(t) || '';
-            let label = '';
-            let bg = '#e5e7eb';
-            let color = '#4b5563';
-
-            if (bucket === 'focus') {
-              label = 'Fokus-Kontakt';
-              bg = '#dcfce7';
-              color = '#166534';
-            } else if (bucket === 'unwichtig') {
-              label = 'Unwichtiger Kontakt';
-              bg = '#fee2e2';
-              color = '#b91c1c';
-            } else if (bucket === 'normal') {
-              label = 'Normal';
-            }
-
-            if (label) {
-              badgeEl.textContent = label;
-              badgeEl.style.display = 'inline-flex';
-              badgeEl.style.background = bg;
-              badgeEl.style.color = color;
-            } else {
-              badgeEl.textContent = '';
-              badgeEl.style.display = 'none';
-            }
-          }
-        } catch (_e_badge) {}
-
-        // Relevanz-Badge im KONTAKT-PROFIL (Header rechts) setzen
-        try {
-          const badgeEl = document.getElementById('contact_importance_badge');
-          if (badgeEl) {
-            const bucket = getImportanceBucket(t) || '';
-            let label = '';
-            let bg = '#e5e7eb';
-            let color = '#4b5563';
-
-            if (bucket === 'focus') {
-              label = 'Fokus-Kontakt';
-              bg = '#dcfce7';
-              color = '#166534';
-            } else if (bucket === 'unwichtig') {
-              label = 'Unwichtiger Kontakt';
-              bg = '#fee2e2';
-              color = '#b91c1c';
-            } else if (bucket === 'normal') {
-              label = 'Normal';
-            }
-
-            if (label) {
-              badgeEl.textContent = label;
-              badgeEl.style.display = 'inline-flex';
-              badgeEl.style.background = bg;
-              badgeEl.style.color = color;
-            } else {
-              badgeEl.textContent = '';
-              badgeEl.style.display = 'none';
-            }
-          }
-        } catch (_e_badge) {}
         
         // Add click handlers
         document.querySelectorAll('.sync-btn').forEach(btn => {
@@ -1752,6 +1653,39 @@ function ensureInboxContextMenu(){
             </div>
           </div>
         `;
+        // Relevanz-Badge im KONTAKT-PROFIL (Header rechts) setzen
+        try {
+          const badgeEl = document.getElementById('contact_importance_badge');
+          if (badgeEl) {
+            const bucket = getImportanceBucket(t) || '';
+            let label = '';
+            let bg = '#e5e7eb';
+            let color = '#4b5563';
+
+            if (bucket === 'focus') {
+              label = 'Fokus-Kontakt';
+              bg = '#dcfce7';
+              color = '#166534';
+            } else if (bucket === 'unwichtig') {
+              label = 'Unwichtiger Kontakt';
+              bg = '#fee2e2';
+              color = '#b91c1c';
+            } else if (bucket === 'normal') {
+              label = 'Normal';
+            }
+
+            if (label) {
+              badgeEl.textContent = label;
+              badgeEl.style.display = 'inline-flex';
+              badgeEl.style.background = bg;
+              badgeEl.style.color = color;
+            } else {
+              badgeEl.textContent = '';
+              badgeEl.style.display = 'none';
+            }
+          }
+        } catch (_e_badge) {}
+
         // Event handler for "View all contact emails" button
         const viewAllBtn = document.getElementById('view_all_contact_emails');
         if(viewAllBtn && t.contact_id){
@@ -2344,6 +2278,61 @@ function ensureInboxContextMenu(){
                     <div style="font-size:11px; margin-bottom:4px;">Zuletzt erwähnt am: ${escapeHtml(topicDetail.last_mentioned_at || '')}</div>
                   `;
                   topicDetailPanel.innerHTML = detailHtml;
+
+                  // Toggle-Button für Status
+                  const isDone = (topicDetail.status || '').toLowerCase() === 'done';
+                  const newStatus = isDone ? 'open' : 'done';
+                  const btnLabel = isDone ? 'Thema wieder öffnen' : 'Thema schließen (erledigt)';
+                  topicDetailPanel.innerHTML += `<div style="margin:6px 0 8px 0;"><button class="topic-status-toggle" data-topic-id="${topicDetail.id}" data-new-status="${newStatus}" style="background:${isDone ? '#3b82f6' : '#10b981'}; color:#fff; border:0; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;">${btnLabel}</button></div>`;
+
+                  // Toggle-Button für Status verkabeln
+                  const toggleBtn = topicDetailPanel.querySelector('.topic-status-toggle');
+                  if(toggleBtn){
+                    toggleBtn.addEventListener('click', async () => {
+                      const tgtId = toggleBtn.getAttribute('data-topic-id');
+                      const ns = toggleBtn.getAttribute('data-new-status');
+                      if(!tgtId || !ns){ return; }
+                      toggleBtn.disabled = true;
+                      try {
+                        const resSt = await fetch(`/api/contacts/${contactId}/topics/${tgtId}/status`, {
+                          method: 'POST',
+                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: ns })
+                        });
+                        const stData = await parseJsonSafe(resSt);
+                        if(!stData.__ok){ throw new Error(stData.error || 'Status konnte nicht geändert werden'); }
+                        // Quick Card nach Statuswechsel neu laden und Timeline/Open Topics aktualisieren
+                        try{
+                          const qcRes = await fetch(`/api/contacts/${contactId}/quick-card`, { headers: getAuthHeaders() });
+                          const qcData = await parseJsonSafe(qcRes);
+                          renderQuickCard(qcData);
+                        }catch(_){ }
+                        // Topic-Detail erneut laden, um neuen Status zu zeigen
+                        await loadTopicDetail(topicId);
+                      } catch(err) {
+                        topicDetailPanel.innerHTML = `Fehler beim Ändern des Status: ${err}`;
+                      }
+                    });
+                  }
+
+                  // Klick auf E-Mail-Link: direkt zur entsprechenden Mail springen
+                  topicDetailPanel.querySelectorAll('.topic-email-link').forEach(link => {
+                    link.addEventListener('click', () => {
+                      const eid = link.getAttribute('data-email-id');
+                      if(!eid){ return; }
+                      const listEl = document.getElementById('list');
+                      if(!listEl){ return; }
+                      const row = listEl.querySelector(`.item[data-uid="${eid}"]`);
+                      if(row){
+                        try{
+                          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }catch(_){ }
+                        selectItem(eid, row);
+                      } else {
+                        alert('Diese E-Mail ist nicht in der aktuellen Liste sichtbar.');
+                      }
+                    });
+                  });
                 } catch(e) {
                   topicDetailPanel.innerHTML = `Fehler: ${e}`;
                 }
@@ -2375,7 +2364,7 @@ function ensureInboxContextMenu(){
           const topicDetailPanel = document.getElementById('contact_topic_detail_panel');
 
           function renderQuickCard(data){
-            if(!qcBox || !qcName || !qcNow || !qcTopics || !qcReply || !qcReplyMode || !qcTone || !qcTimeline){
+            if(!qcBox || !qcName || !qcNow || !qcTopics || !qcReply || !qcTone || !qcTimeline){
               return;
             }
             if(!data.__ok){
@@ -2385,7 +2374,7 @@ function ensureInboxContextMenu(){
               qcReply.style.display = 'none';
               qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Unklar</span>';
               qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Unbekannt</span>';
-              qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline (Kurz):</span> <span class="muted">Keine Einträge</span>';
+              qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Einträge</span>';
               return;
             }
             const who = data.who || '';
@@ -2415,6 +2404,7 @@ function ensureInboxContextMenu(){
             let badgeLabel = '';
             let badgeBg = '#e5e7eb';
             let badgeColor = '#4b5563';
+
             if(importanceBucket === 'focus'){
               badgeLabel = 'Fokus-Kontakt';
               badgeBg = '#dcfce7';
@@ -2460,7 +2450,7 @@ function ensureInboxContextMenu(){
 
             // Offene Themen als Bullet-Liste
             if(topics && topics.length){
-              let topicsHtml = '<div style="margin-top:8px;"><span style="font-weight:600;">Offene Themen:</span></div><ul style="margin:4px 0 0 16px; padding:0;">';
+              let topicsHtml = '<div style="margin-top:8px;"><span style="font-weight:600;">Offene Themen:</span></div><ul style="list-style:none; padding-left:0; margin:0;">';
               topicsHtml += topics.map(x => `<li style="margin:0;">${escapeHtml(x)}</li>`).join('');
               topicsHtml += '</ul>';
               qcTopics.innerHTML = topicsHtml;
@@ -2511,94 +2501,12 @@ function ensureInboxContextMenu(){
                   <label><input type="checkbox" id="qc_show_closed_topics" ${showClosed ? 'checked' : ''}> Geschlossene Themen anzeigen</label>
                 </div>`;
 
-              // Helper zum Laden eines Topic-Details (auch nach Statuswechsel wiederverwendbar)
-              async function loadTopicDetail(topicId){
-                if(!topicId || !topicDetailPanel){ return; }
-                topicDetailPanel.style.display = 'block';
-                topicDetailPanel.innerHTML = 'Lade Themen-Details...';
-                try {
-                  const res = await fetch(`/api/contacts/${t.contact_id}/topics/${topicId}/detail`, { headers: getAuthHeaders() });
-                  const dataDet = await parseJsonSafe(res);
-                  if(!dataDet.__ok){ throw new Error(dataDet.error || 'Fehler beim Laden des Themas'); }
-                  const td = dataDet.topic || {};
-                  const emails = dataDet.emails || [];
-                  let html = '';
-                  html += `<div style="font-weight:600; margin-bottom:4px;">${escapeHtml(td.label || '')}</div>`;
-                  if(td.summary){
-                    html += `<div style="font-size:11px; margin-bottom:4px; white-space:pre-line;">${escapeHtml(td.summary)}</div>`;
-                  }
-                  html += `<div style="font-size:11px; margin-bottom:4px;">Status: ${escapeHtml(td.status || '')}</div>`;
-                  if(td.last_mentioned_at){
-                    html += `<div style="font-size:11px; margin-bottom:4px;">Zuletzt erwähnt am: ${escapeHtml(td.last_mentioned_at)}</div>`;
-                  }
-                  // Toggle-Button für Status
-                  const isDone = (td.status || '').toLowerCase() === 'done';
-                  const newStatus = isDone ? 'open' : 'done';
-                  const btnLabel = isDone ? 'Thema wieder öffnen' : 'Thema schließen (erledigt)';
-                  html += `<div style="margin:6px 0 8px 0;"><button class="topic-status-toggle" data-topic-id="${td.id}" data-new-status="${newStatus}" style="background:${isDone ? '#3b82f6' : '#10b981'}; color:#fff; border:0; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;">${btnLabel}</button></div>`;
-
-                  if(emails.length){
-                    html += '<div style="font-size:11px; margin-top:6px; margin-bottom:2px; font-weight:500;">Relevante E-Mails:</div>';
-                    html += '<ul style="list-style:none; padding-left:0; margin:0;">';
-                    emails.slice(0,5).forEach((em) => {
-                      const liText = `${em.received_at || ''} – ${em.subject || ''}`;
-                      html += `<li style="padding:2px 0;"><span style="cursor:pointer; text-decoration:underline;" data-email-id="${em.id}" class="topic-email-link">${escapeHtml(liText)}</span></li>`;
-                    });
-                    html += '</ul>';
-                  }
-                  topicDetailPanel.innerHTML = html;
-
-                  // Status-Toggle-Button verkabeln
-                  const toggleBtn = topicDetailPanel.querySelector('.topic-status-toggle');
-                  if(toggleBtn){
-                    toggleBtn.addEventListener('click', async () => {
-                      const tgtId = toggleBtn.getAttribute('data-topic-id');
-                      const ns = toggleBtn.getAttribute('data-new-status');
-                      if(!tgtId || !ns){ return; }
-                      toggleBtn.disabled = true;
-                      try {
-                        const resSt = await fetch(`/api/contacts/${t.contact_id}/topics/${tgtId}/status`, {
-                          method: 'POST',
-                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ status: ns })
-                        });
-                        const stData = await parseJsonSafe(resSt);
-                        if(!stData.__ok){ throw new Error(stData.error || 'Status konnte nicht geändert werden'); }
-                        // Quick Card nach Statuswechsel neu laden und Timeline/Open Topics aktualisieren
-                        try{
-                          const qcRes = await fetch(`/api/contacts/${t.contact_id}/quick-card`, { headers: getAuthHeaders() });
-                          const qcData = await parseJsonSafe(qcRes);
-                          renderQuickCard(qcData);
-                        }catch(_){ }
-                        // Topic-Detail erneut laden, um neuen Status zu zeigen
-                        await loadTopicDetail(topicId);
-                      } catch(err) {
-                        topicDetailPanel.innerHTML = `Fehler beim Ändern des Status: ${err}`;
-                      }
-                    });
-                  }
-
-                  // Klick auf E-Mail-Link: direkt zur entsprechenden Mail springen
-                  topicDetailPanel.querySelectorAll('.topic-email-link').forEach(link => {
-                    link.addEventListener('click', () => {
-                      const eid = link.getAttribute('data-email-id');
-                      if(!eid){ return; }
-                      const listEl = document.getElementById('list');
-                      if(!listEl){ return; }
-                      const row = listEl.querySelector(`.item[data-uid="${eid}"]`);
-                      if(row){
-                        try{
-                          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }catch(_){ }
-                        selectItem(eid, row);
-                      } else {
-                        alert('Diese E-Mail ist nicht in der aktuellen Liste sichtbar.');
-                      }
-                    });
-                  });
-                } catch(e) {
-                  topicDetailPanel.innerHTML = `Fehler: ${e}`;
-                }
+              // Toggle für historische Themen (ein-/ausklappen und ggf. lazy load)
+              const toggleClosed = document.getElementById('qc_show_closed_topics');
+              if(toggleClosed){
+                toggleClosed.addEventListener('change', () => {
+                  renderQuickCard(data);
+                });
               }
 
               // Click-Handler für Timeline-Themen
@@ -2634,14 +2542,6 @@ function ensureInboxContextMenu(){
                   }
                 });
               });
-
-              // Toggle für "geschlossene Themen anzeigen" neu verkabeln
-              const toggleClosed = document.getElementById('qc_show_closed_topics');
-              if(toggleClosed){
-                toggleClosed.addEventListener('change', () => {
-                  renderQuickCard(data);
-                });
-              }
             } else if(timeline.length){
               const tl = timeline.map(x => `<div>${escapeHtml(x)}</div>`).join('');
               qcTimeline.innerHTML = `<span style="font-weight:500;">Timeline:</span> <div>${tl}</div>`;
@@ -2812,29 +2712,6 @@ function ensureInboxContextMenu(){
           });
         }catch(_){ }
         rowEl.classList.remove('unseen');
-        // Prefetch: Draft im Hintergrund erzeugen (mit Auth-Headern)
-        try {
-          const toInput = document.getElementById('compose_to');
-          const subjInput = document.getElementById('compose_subject');
-          const editor = document.getElementById('compose_editor');
-          const res2 = await fetch('/api/emails/agent-compose', { 
-            method:'POST', 
-            headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, 
-            body: JSON.stringify({uid, timeout_s: 8}) 
-          });
-          const data2 = await parseJsonSafe(res2);
-          if(data2 && data2.__ok && currentUid === uid){
-            // Nur befüllen, wenn Editor noch leer/Marker enthält
-            const htmlNow = (editor.innerHTML||'').trim();
-            const isEmpty = !htmlNow || htmlNow.includes('Hier erscheint der Vorschlag');
-            if(isEmpty){
-              toInput.value = data2.to || '';
-              subjInput.value = data2.subject || '';
-              editor.innerHTML = data2.html || '<div class="muted">(leer)</div>';
-              document.getElementById('compose_status').textContent = 'Vorschlag erstellt';
-            }
-          }
-        } catch(_e) { /* still fine */ }
       }catch(e){
         detail.innerHTML = `<div class="sub">Fehler: ${e}</div>`;
       }
