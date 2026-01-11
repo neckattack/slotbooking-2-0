@@ -652,16 +652,43 @@ function ensureInboxContextMenu(){
 
       // Sehr unwichtig: klare Newsletter / No-Reply / Massenmails
       if(newsletterLike){
+        persistAutoImportanceRule(fromAddr, 'unwichtig');
         return 'unwichtig';
       }
 
       // Fokus: eigene Domain oder viele Nachrichten von diesem Kontakt
       if(fromAddr.includes('@neckattack.') || emailCount >= 3){
+        persistAutoImportanceRule(fromAddr, 'focus');
         return 'focus';
       }
 
       // Rest: normal
+      persistAutoImportanceRule(fromAddr, 'normal');
       return 'normal';
+    }
+
+    // Speichert eine automatisch getroffene Wichtigkeits-Entscheidung als Regel,
+    // falls noch keine manuelle Regel für diesen Absender existiert.
+    function persistAutoImportanceRule(fromAddr, bucket){
+      if(!fromAddr || !bucket) return;
+      const addr = normalizeEmailAddress(fromAddr);
+      if(!addr) return;
+      // Wenn bereits eine Regel für diesen Absender existiert, nichts tun
+      if(importanceRules && importanceRules.some(r => r.pattern === addr)) return;
+
+      importanceRules = (importanceRules || []).concat([{ pattern: addr, bucket }]);
+      try{
+        localStorage.setItem('importance_rules', JSON.stringify(importanceRules));
+      }catch(_e_ls_auto){ }
+
+      // Asynchron zum Server schicken (fire & forget)
+      try{
+        fetch('/api/emails/importance-rules', {
+          method: 'POST',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from_addr: addr, bucket })
+        }).catch(() => {});
+      }catch(_e_auto){ }
     }
 
     // Datumsformatierung für die Inbox-Liste rein auf Basis der deutschen Datumsstrings
@@ -1576,17 +1603,6 @@ function ensureInboxContextMenu(){
                 <div style="font-weight:600;">🤖 KI-Kundenprofil</div>
                 <div style="display:flex; gap:6px;">
                   <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" style="background:#7c3aed; color:#fff; border:0; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px;">
-                    ${profileSummary ? '🔄 Profil aktualisieren' : 'Profil erstellen'}
-                  </button>
-                </div>
-              </div>
-              <div id="contact_quick_card" class="sub" style="font-size:11px; margin-bottom:8px; padding:8px 10px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
-                <div style="font-weight:600; margin-bottom:4px;">Überblick</div>
-                <div id="qc_name" style="margin-bottom:2px;"><span style="font-weight:500;">Name:</span> <span class="muted">Lade...</span></div>
-                <div id="qc_now" style="margin-bottom:2px;"><span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span></div>
-                <div id="qc_topics" style="margin-bottom:2px;"><span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span></div>
-                <div id="qc_reply" style="margin-bottom:2px;"><span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span></div>
-                <div id="qc_reply_mode" style="margin-bottom:2px;"><span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Lade...</span></div>
                 <div id="qc_tone" style="margin-bottom:2px;"><span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span></div>
                 <div id="qc_timeline" style="margin-top:4px;"><span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span></div>
               </div>
