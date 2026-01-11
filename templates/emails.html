@@ -223,6 +223,7 @@
           <path d="M12 20a7 7 0 0 1-6.32-4H7.5a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0-.75.75V19.5a.75.75 0 0 0 1.5 0v-1.46A8.5 8.5 0 0 0 12 21.5a8.25 8.25 0 0 0 7.7-4.59.75.75 0 0 0-1.33-.67A6.75 6.75 0 0 1 12 20Z" fill="white"/>
         </svg>
       </button>
+      <button id="toggle_compose_btn" style="background:#111827; padding:8px 16px; border-radius:8px; font-size:14px;">Antwort</button>
       <button id="load_more_btn" style="background:#0284c7; display:none;">📥 Weitere E-Mails laden</button>
       <span id="status" class="sub" style="margin-right:auto;"></span>
       <button id="user_badge" style="background:#111827; display:none;">👤 Lade...</button>
@@ -1681,11 +1682,9 @@ function ensureInboxContextMenu(){
             </div>
             <div style="margin-top:16px; font-size:13px; border-top:1px solid var(--border); padding-top:12px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px;">
-                <div style="font-weight:600;">🤖 KI-Kundenprofil</div>
-                <div style="display:flex; gap:6px;">
-                  <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" style="background:#7c3aed; color:#fff; border:0; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px;">
-                    ${profileSummary ? '🔄 Profil aktualisieren' : 'Profil erstellen'}
-                  </button>
+                <div style="display:flex; align-items:center; gap:6px; font-weight:600;">
+                  <span>🤖 KI-Kundenprofil</span>
+                  <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" title="Profil aktualisieren" style="width:26px; height:26px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:999px; border:0; cursor:pointer; background:#7c3aed; color:#ffffff; font-size:13px;">⚙️</button>
                 </div>
               </div>
               <div id="contact_quick_card" class="sub" style="font-size:11px; margin-bottom:8px; padding:8px 10px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
@@ -2865,6 +2864,16 @@ function ensureInboxContextMenu(){
     document.getElementById('load_more_btn').addEventListener('click', loadMoreEmails);
     document.getElementById('btn_propose').addEventListener('click', proposeDraft);
     document.getElementById('btn_send').addEventListener('click', sendDraft);
+
+    // Antwort-Panel manuell ein-/ausblenden, ohne automatisch eine KI-Antwort zu erzeugen
+    (function setupComposeToggle(){
+      const btn = document.getElementById('toggle_compose_btn');
+      const panel = document.getElementById('compose');
+      if(!btn || !panel) return;
+      btn.addEventListener('click', () => {
+        panel.classList.toggle('open');
+      });
+    })();
     // Auth: get JWT token and user email
     function getAuthToken(){
       return localStorage.getItem('jwt_token') || '';
