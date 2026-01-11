@@ -1076,8 +1076,8 @@ function ensureInboxContextMenu(){
         const bucket = getImportanceBucket(it);
         if(inboxFilter === 'focus') return bucket === 'focus';
         if(inboxFilter === 'unwichtig') return bucket === 'unwichtig';
-        // normal: alle Mails zeigen, unabhängig vom Bucket
-        return true;
+        // normal: nur Mails mit Bucket "normal" anzeigen
+        return bucket === 'normal';
       });
 
       const q = (inboxSearchQuery || '').trim().toLowerCase();
