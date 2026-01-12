@@ -2085,6 +2085,37 @@ def api_emails_sync(current_user):
                 if not message_id:
                     message_id = f"no-id-{uid.decode()}"
 
+                # Thread/Reply-Header auslesen
+                in_reply_to = (msg.get('In-Reply-To') or '').strip()
+                # References kann mehrfach vorkommen; alle kombinieren
+                try:
+                    refs_list = msg.get_all('References', []) or []
+                except Exception:
+                    refs_list = []
+                references_raw = ' '.join(refs_list).strip() if refs_list else ''
+
+                # Einfache thread_id bestimmen:
+                # 1) erste Message-ID aus References
+                # 2) sonst In-Reply-To
+                # 3) sonst eigene Message-ID
+                thread_id = ''
+                try:
+                    import re as _re_tid
+                    candidate = ''
+                    if references_raw:
+                        ids = _re_tid.findall(r'<([^>]+)>', references_raw)
+                        if ids:
+                            candidate = ids[0]
+                    if not candidate and in_reply_to:
+                        m = _re_tid.search(r'<([^>]+)>', in_reply_to)
+                        candidate = m.group(1) if m else in_reply_to
+                    if not candidate and message_id:
+                        m = _re_tid.search(r'<([^>]+)>', message_id)
+                        candidate = m.group(1) if m else message_id
+                    thread_id = candidate[:255] if candidate else ''
+                except Exception:
+                    thread_id = ''
+
                 # Skip- oder Update-Logik für bereits synchronisierte Nachrichten
                 key = (message_id, (folder_db_key or 'inbox').lower())
                 if key in synced_ids:
@@ -2240,10 +2271,10 @@ def api_emails_sync(current_user):
                 # Insert email, Folder-Namen als logischen DB-Key speichern
                 folder_db = (folder_db_key or 'inbox').lower()
                 cursor_db.execute(
-                    "INSERT INTO emails (message_id, user_email, account_id, contact_id, from_addr, from_name, "
+                    "INSERT INTO emails (message_id, in_reply_to, references_raw, thread_id, user_email, account_id, contact_id, from_addr, from_name, "
                     "to_addrs, subject, body_text, body_html, received_at, folder, has_attachments, is_read, is_replied) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                    (message_id, user_email, account_id, contact_id, from_email, from_name, to_addrs,
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (message_id, in_reply_to, references_raw, thread_id, user_email, account_id, contact_id, from_email, from_name, to_addrs,
                      subject, body_text[:50000] if body_text else '', body_html[:100000] if body_html else '',
                      received_at, folder_db, has_attachments, is_read, is_replied)
                 )
