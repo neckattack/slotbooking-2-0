@@ -4998,6 +4998,41 @@ def api_emails_seen(current_user):
     return jsonify({'ok': True, 'imap_updated': imap_updated})
 
 
+@app.route('/api/emails/move', methods=['POST'])
+@require_auth
+def api_emails_move(current_user):
+    """Verschiebt eine E-Mail in einen anderen DB-Ordner (z.B. nach Archiv).
+
+    Erwartet im Body: { uid: <email_id in DB>, target_folder: 'archive' | 'inbox' | ... }
+    Aktuell wird nur die Spalte emails.folder in der Datenbank aktualisiert; ein
+    tatsächlicher IMAP-Move ist optional und kann später ergänzt werden.
+    """
+
+    data = request.get_json(silent=True) or {}
+    email_id = data.get('uid') or data.get('id')
+    target_folder = (data.get('target_folder') or '').strip().lower()
+    if not email_id or not target_folder:
+        return jsonify({'error': 'uid und target_folder erforderlich'}), 400
+
+    user_email = current_user.get('user_email')
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE emails SET folder=%s WHERE id=%s AND user_email=%s",
+            (target_folder, email_id, user_email),
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        app.logger.error(f"[Emails Move] DB error: {e}")
+        return jsonify({'error': 'DB-Fehler beim Verschieben der E-Mail'}), 500
+
+    return jsonify({'__ok': True})
+
+
 def get_settings_db_connection():
     """Connect to SETTINGS_DB (user_email_settings table) or fall back to main DB."""
     host = os.environ.get('SETTINGS_DB_HOST') or os.environ.get('DB_HOST')

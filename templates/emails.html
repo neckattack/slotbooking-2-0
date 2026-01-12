@@ -1325,6 +1325,7 @@ function ensureInboxContextMenu(){
       <div class="item-actions" style="display:flex; align-items:center; gap:4px; opacity:0; pointer-events:none; transition:opacity 0.12s ease-out;">
         <button class="item-contact" type="button" title="Kontakt öffnen" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:#e5e7eb; font-size:13px;">👤</button>
         <button class="item-read-toggle" type="button" title="Als gelesen/ungelesen markieren" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:#e5e7eb; font-size:14px;">●</button>
+        <button class="item-archive" type="button" title="Archivieren" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:#e5e7eb; font-size:13px;">⬛</button>
       </div>
     </div>
   </div>
@@ -1450,6 +1451,22 @@ function ensureInboxContextMenu(){
               }
               renderInboxList();
             }catch(_e_seen){}
+          });
+        }
+
+        const archiveBtn = div.querySelector('.item-archive');
+        if(archiveBtn && currentFolder === 'inbox'){
+          archiveBtn.addEventListener('click', async (ev) => {
+            ev.stopPropagation();
+            try{
+              await fetch('/api/emails/move', {
+                method: 'POST',
+                headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uid: it.uid, target_folder: 'archive' })
+              });
+              inboxEmails = inboxEmails.filter(e => e.uid !== it.uid);
+              renderInboxList();
+            }catch(_e_move){}
           });
         }
 
