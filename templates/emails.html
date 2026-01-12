@@ -22,6 +22,7 @@
     .item .subject { font-size:18px; line-height:1.4; }
     .item.unseen .subject { font-weight:700; }
     .item .meta { color: var(--sub); font-size:14px; margin-top:4px; display:flex; justify-content:space-between; gap:12px; }
+    .item.answer-fade-out { opacity:0; transform:translateX(12px); transition:opacity 0.2s ease-out, transform 0.2s ease-out; }
     .detail { overflow:hidden; padding:20px 28px; background:#f9fafb; }
     .detail h2 { margin:0 0 10px; font-size:22px; }
     .detail .meta { color: var(--sub); font-size:14px; margin-bottom:16px; }
@@ -566,6 +567,8 @@
     let inboxFilter = 'focus';
     // Answer filter: 'unanswered' vs 'all' (Standard: alle anzeigen)
     let inboxAnswerFilter = 'all';
+    // Lokal im Frontend gemerkte Antwort-Information pro UID (wird beim Senden gesetzt)
+    let answeredByUid = {};
     let inboxEmails = [];
     // Manuelle Wichtigkeitsregeln pro Absender (vom Server und/oder localStorage geladen)
     let importanceRules = [];
@@ -788,14 +791,14 @@ function ensureInboxContextMenu(){
       const toggle = document.createElement('div');
       toggle.id = 'inbox_filter_toggle';
       // Sticky am oberen Rand der Listenspalte halten
-      toggle.style.cssText = 'position:sticky; top:0; z-index:5; display:flex; justify-content:flex-start; gap:8px; align-items:center; padding:4px 8px 8px 8px; margin:0 0 4px 0; font-size:12px; background:#ffffff; border-bottom:1px solid var(--border);';
+      toggle.style.cssText = 'position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; gap:8px; align-items:center; padding:4px 8px 8px 8px; margin:0 0 4px 0; font-size:12px; background:#ffffff; border-bottom:1px solid var(--border);';
       toggle.innerHTML = `
-      <div id="inbox_bucket_group" style="display:inline-flex; background:#e5e7eb; border-radius:999px; padding:2px;">
+      <div id="inbox_bucket_group" style="display:inline-flex; background:#e5e7eb; border-radius:999px; padding:2px; flex:1;">
         <button id="filter_focus" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#fff; color:#111827; font-weight:600;">Fokus</button>
         <button id="filter_normal" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Normal</button>
         <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Unwichtig</button>
       </div>
-      <div style="position:relative;">
+      <div style="position:relative; margin-left:auto;">
         <button id="answer_filter_toggle" type="button" style="border:0; display:inline-flex; align-items:center; justify-content:center; padding:0 10px; height:28px; border-radius:999px; cursor:pointer; background:#e5e7eb; color:#111827;">
           <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
@@ -1238,13 +1241,11 @@ function ensureInboxContextMenu(){
         });
       }
 
-      // Antwort-Filter anwenden: "Unbeantwortet" bevorzugt ungelesene E-Mails.
-      // Wenn es keine ungelesenen gibt, wird automatisch wieder auf alle zurückgefallen,
-      // damit die Ansicht nicht komplett leer erscheint.
+      // Antwort-Filter anwenden: "Unbeantwortet" blendet im Frontend alle E-Mails aus,
+      // die in dieser Sitzung bereits beantwortet wurden.
       let answerFiltered = baseFiltered;
       if(inboxAnswerFilter === 'unanswered'){
-        const onlyUnread = baseFiltered.filter(it => !it.is_read);
-        answerFiltered = onlyUnread.length ? onlyUnread : baseFiltered;
+        answerFiltered = baseFiltered.filter(it => !answeredByUid[it.uid]);
       }
 
       const q = (inboxSearchQuery || '').trim().toLowerCase();
@@ -1280,6 +1281,8 @@ function ensureInboxContextMenu(){
         div.dataset.uid = it.uid;
         const bucket = getImportanceBucket(it);
 
+        const isAnswered = !!answeredByUid[it.uid];
+
         const fromLabel = escapeHtml(it.from || '');
         const dateLabel = escapeHtml(formatListDate(it.date || ''));
 
@@ -1303,7 +1306,7 @@ function ensureInboxContextMenu(){
   <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
     <div style="flex:1; min-width:0;">
       <div class="subject">${escapeHtml(it.subject || '(ohne Betreff)')}</div>
-      <div class="meta"><span>${fromLabel}</span><span>${dateLabel}</span></div>
+      <div class="meta"><span>${fromLabel}</span><span>${dateLabel}${isAnswered ? ' ↩︎' : ''}</span></div>
     </div>
     <div class="importance-controls" data-bucket="${bucket}" style="display:inline-flex; flex-direction:row; gap:4px; font-size:13px;">
       ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:#e5e7eb;">↑</button>` : ''}
@@ -3013,6 +3016,36 @@ function ensureInboxContextMenu(){
         const data = await parseJsonSafe(res);
         if(!data.__ok && data.error){ throw new Error(data.error); }
         status.textContent = 'Gesendet';
+
+        // Aktuelle E-Mail im Frontend als beantwortet markieren
+        if(currentUid){
+          answeredByUid[currentUid] = true;
+
+          // Wenn "Unbeantwortet" aktiv ist, die Zeile mit kleiner Animation ausblenden
+          if(inboxAnswerFilter === 'unanswered'){
+            const list = document.getElementById('list');
+            if(list){
+              const row = list.querySelector(`.item[data-uid="${currentUid}"]`);
+              if(row){
+                row.classList.add('answer-fade-out');
+                setTimeout(() => {
+                  if(row.parentNode){
+                    row.parentNode.removeChild(row);
+                  }
+                  // Liste neu aufbauen, damit Zähler und Filterzustand passen
+                  try{ renderInboxList(); }catch(_e){}
+                }, 220);
+              } else {
+                // Falls keine konkrete Zeile gefunden wurde, Liste einfach neu rendern
+                try{ renderInboxList(); }catch(_e2){}
+              }
+            }
+          } else {
+            // In anderen Ansichten nur die Markierung (↩︎) aktualisieren
+            try{ renderInboxList(); }catch(_e3){}
+          }
+        }
+
         // Antwort-Panel nach kurzem Delay automatisch schließen, wenn erfolgreich gesendet wurde
         setTimeout(() => {
           const panel = document.getElementById('compose');
