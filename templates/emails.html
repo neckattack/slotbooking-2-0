@@ -923,6 +923,17 @@ function ensureInboxContextMenu(){
           loadInbox();
         });
       }
+
+      // Reload-Button: expliziten IMAP-Sync anstoßen und danach die Ansicht aktualisieren
+      const reloadBtn = document.getElementById('reload');
+      if(reloadBtn){
+        reloadBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          // Erneuten Auto-Sync erlauben und im Hintergrund alle Ordner synchronisieren
+          autoSyncFinishedOnce = false;
+          autoSyncAllFoldersBackground();
+        });
+      }
       updateButtons();
     }
 
