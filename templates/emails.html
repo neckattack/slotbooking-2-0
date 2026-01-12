@@ -242,11 +242,21 @@
       <div class="row"><label>Empf.</label><input id="compose_to" placeholder="Empfänger" /></div>
       <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
       <div id="compose_editor" class="editor" contenteditable="true"><div class="muted">Hier erscheint der Vorschlag …</div></div>
-      <div class="actions">
+      <div class="actions" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         <button id="btn_propose" disabled>Antwort vorschlagen</button>
         <button id="btn_send" disabled>Senden</button>
-        <span id="compose_status" class="sub"></span>
+        <button id="btn_reload_reply" title="Antwort neu laden" style="border:0; padding:6px 10px; border-radius:999px; font-size:13px; cursor:pointer; background:#111827; color:#ffffff; display:flex; align-items:center; gap:6px;">
+          <span>
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 4a7 7 0 0 1 6.32 4H16.5a.75.75 0 0 0 0 1.5H21a.75.75 0 0 0 .75-.75V4.5a.75.75 0 0 0-1.5 0v1.46A8.5 8.5 0 0 0 12 2.5 8.25 8.25 0 0 0 4.3 7.09a.75.75 0 1 0 1.33.67A6.75 6.75 0 0 1 12 4Z" fill="white"/>
+              <path d="M12 20a7 7 0 0 1-6.32-4H7.5a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0-.75.75V19.5a.75.75 0 0 0 1.5 0v-1.46A8.5 8.5 0 0 0 12 21.5a8.25 8.25 0 0 0 7.7-4.59.75.75 0 0 0-1.33-.67A6.75 6.75 0 0 1 12 20Z" fill="white"/>
+            </svg>
+          </span>
+          <span>Neu laden</span>
+        </button>
+        <span id="compose_status" class="sub" style="margin-left:auto;"></span>
       </div>
+      <div id="compose_topics_mirror" class="sub" style="margin-top:8px; font-size:11px; max-height:160px; overflow:auto;"></div>
     </div>
   </div>
 
@@ -554,6 +564,8 @@
     let currentSettingsAccountId = null;
     // Inbox filtering: 'focus' (wichtig), 'normal' (Standard) vs 'unwichtig' (Newsletter etc.)
     let inboxFilter = 'focus';
+    // Answer filter: 'unanswered' (standard) vs 'all'
+    let inboxAnswerFilter = 'unanswered';
     let inboxEmails = [];
     // Manuelle Wichtigkeitsregeln pro Absender (vom Server und/oder localStorage geladen)
     let importanceRules = [];
@@ -783,12 +795,22 @@ function ensureInboxContextMenu(){
         <button id="filter_normal" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Normal</button>
         <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Unwichtig</button>
       </div>
+      <button id="answer_filter_toggle" type="button" style="border:0; display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#e5e7eb; color:#111827;">
+        <span style="display:inline-flex; align-items:center; justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4 7h14v2H4V7zm4 5h10v2H8v-2zm-4 5h14v2H4v-2z" fill="currentColor"/>
+          </svg>
+        </span>
+        <span id="answer_filter_label">Unbeantwortet</span>
+      </button>
       `;
       // In die Listenspalte einfügen, direkt vor dem ersten Inhalt
       list.insertBefore(toggle, list.firstChild);
       const btnFocus = document.getElementById('filter_focus');
       const btnNormal = document.getElementById('filter_normal');
       const btnOther = document.getElementById('filter_other');
+      const answerToggle = document.getElementById('answer_filter_toggle');
+      const answerLabel = document.getElementById('answer_filter_label');
       const folderSelect = document.getElementById('folder_select');
       const updateButtons = () => {
         // Fokus
@@ -821,10 +843,30 @@ function ensureInboxContextMenu(){
           btnOther.style.color = '#4b5563';
           btnOther.style.fontWeight = '400';
         }
+
+        // Antwort-Filter (Unbeantwortet vs. Alle E-Mails)
+        if(answerToggle && answerLabel){
+          if(inboxAnswerFilter === 'unanswered'){
+            answerToggle.style.background = '#111827';
+            answerToggle.style.color = '#ffffff';
+            answerLabel.textContent = 'Unbeantwortet';
+          } else {
+            answerToggle.style.background = '#e5e7eb';
+            answerToggle.style.color = '#111827';
+            answerLabel.textContent = 'Alle E-Mails';
+          }
+        }
       };
       btnFocus.addEventListener('click', () => { inboxFilter = 'focus'; updateButtons(); renderInboxList(); });
       btnNormal.addEventListener('click', () => { inboxFilter = 'normal'; updateButtons(); renderInboxList(); });
       btnOther.addEventListener('click', () => { inboxFilter = 'unwichtig'; updateButtons(); renderInboxList(); });
+      if(answerToggle){
+        answerToggle.addEventListener('click', () => {
+          inboxAnswerFilter = inboxAnswerFilter === 'unanswered' ? 'all' : 'unanswered';
+          updateButtons();
+          renderInboxList();
+        });
+      }
 
       // Folder-Select mit verfügbaren Ordnern füllen
       if(folderSelect){
@@ -1087,6 +1129,7 @@ function ensureInboxContextMenu(){
       if(!list) return;
       const toggle = document.getElementById('inbox_filter_toggle');
       const bucketGroup = document.getElementById('inbox_bucket_group');
+      const answerToggle = document.getElementById('answer_filter_toggle');
       // Bucket-Toggle (Fokus/Normal/Unwichtig) nur im Posteingang anzeigen,
       // Ordner-Dropdown aber immer sichtbar lassen. Außerhalb des Posteingangs
       // bleibt der Platz erhalten, damit das Dropdown nicht springt.
@@ -1097,6 +1140,16 @@ function ensureInboxContextMenu(){
         } else {
           bucketGroup.style.visibility = 'hidden';
           bucketGroup.style.pointerEvents = 'none';
+        }
+      }
+      // Antwort-Filter nur im Posteingang und ggf. Archiv sinnvoll anzeigen
+      if(answerToggle){
+        if(currentFolder === 'inbox' || currentFolder === 'archive'){
+          answerToggle.style.visibility = 'visible';
+          answerToggle.style.pointerEvents = 'auto';
+        } else {
+          answerToggle.style.visibility = 'hidden';
+          answerToggle.style.pointerEvents = 'none';
         }
       }
       // Nur die E-Mail-Items unterhalb des Toggles leeren
@@ -1127,11 +1180,17 @@ function ensureInboxContextMenu(){
         });
       }
 
+      // Antwort-Filter anwenden: "Unbeantwortet" ≈ ungelesene E-Mails
+      let answerFiltered = baseFiltered;
+      if(inboxAnswerFilter === 'unanswered'){
+        answerFiltered = answerFiltered.filter(it => !it.is_read);
+      }
+
       const q = (inboxSearchQuery || '').trim().toLowerCase();
-      const filtered = q ? baseFiltered.filter(it => {
+      const filtered = q ? answerFiltered.filter(it => {
         const fromStr = ((it.from_addr || it.from || '') + '').toLowerCase();
         return fromStr.includes(q);
-      }) : baseFiltered;
+      }) : answerFiltered;
       if(!filtered.length){
         list.innerHTML = '<div class="sub" style="padding:20px; text-align:center;">Keine E-Mails in dieser Ansicht.</div>';
         return;
@@ -1934,6 +1993,10 @@ function ensureInboxContextMenu(){
                 `;
 
                 prepTopics.innerHTML = topicsHtml;
+                const composeTopics = document.getElementById('compose_topics_mirror');
+                if(composeTopics){
+                  composeTopics.innerHTML = topicsHtml;
+                }
 
                 // Toggle für historische Themen (ein-/ausklappen und ggf. lazy load)
                 try {
@@ -2888,6 +2951,13 @@ function ensureInboxContextMenu(){
     document.getElementById('load_more_btn').addEventListener('click', loadMoreEmails);
     document.getElementById('btn_propose').addEventListener('click', proposeDraft);
     document.getElementById('btn_send').addEventListener('click', sendDraft);
+    const reloadReplyBtn = document.getElementById('btn_reload_reply');
+    if(reloadReplyBtn){
+      reloadReplyBtn.addEventListener('click', () => {
+        // Antwort erneut von der KI vorschlagen lassen (gleiche Logik wie "Antwort vorschlagen")
+        proposeDraft();
+      });
+    }
 
     // Antwort-Panel manuell ein-/ausblenden, ohne automatisch eine KI-Antwort zu erzeugen.
     // Event-Delegation, damit es auch für dynamische Buttons im Detailbereich funktioniert.
