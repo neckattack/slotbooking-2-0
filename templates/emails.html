@@ -795,14 +795,24 @@ function ensureInboxContextMenu(){
         <button id="filter_normal" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Normal</button>
         <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Unwichtig</button>
       </div>
-      <button id="answer_filter_toggle" type="button" style="border:0; display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#e5e7eb; color:#111827;">
-        <span style="display:inline-flex; align-items:center; justify-content:center;">
-          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M4 7h14v2H4V7zm4 5h10v2H8v-2zm-4 5h14v2H4v-2z" fill="currentColor"/>
+      <div style="position:relative;">
+        <button id="answer_filter_toggle" type="button" style="border:0; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:999px; cursor:pointer; background:#e5e7eb; color:#111827;">
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4 7h11.5a1 1 0 0 0 .8-.4l1.4-1.8a.5.5 0 0 1 .8.6l-1.4 1.8a2 2 0 0 1-1.6.8H4a.5.5 0 0 1 0-1zM4 12h6.5a2 2 0 0 0 1.6-.8l1.4-1.8a.5.5 0 1 0-.8-.6l-1.4 1.8a1 1 0 0 1-.8.4H4a.5.5 0 0 0 0 1zM4 17h9.5a1 1 0 0 0 .8-.4l1.4-1.8a.5.5 0 0 0-.8-.6l-1.4 1.8a1 1 0 0 1-.8.4H4a.5.5 0 0 0 0 1z" fill="currentColor"/>
           </svg>
-        </span>
-        <span id="answer_filter_label">Unbeantwortet</span>
-      </button>
+          <span id="answer_filter_label" style="display:none;">Alle E-Mails</span>
+        </button>
+        <div id="answer_filter_menu" style="position:absolute; top:36px; right:0; background:#ffffff; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 8px 20px rgba(15,23,42,0.15); padding:4px 0; min-width:150px; font-size:12px; z-index:10; display:none;">
+          <button data-answer-value="all" type="button" style="width:100%; text-align:left; padding:6px 10px; border:0; background:transparent; cursor:pointer; display:flex; align-items:center; gap:6px;">
+            <span class="answer_filter_check" style="width:14px; text-align:center; font-size:11px;">✓</span>
+            <span>Alle E-Mails</span>
+          </button>
+          <button data-answer-value="unanswered" type="button" style="width:100%; text-align:left; padding:6px 10px; border:0; background:transparent; cursor:pointer; display:flex; align-items:center; gap:6px;">
+            <span class="answer_filter_check" style="width:14px; text-align:center; font-size:11px; opacity:.2;">✓</span>
+            <span>Unbeantwortet</span>
+          </button>
+        </div>
+      </div>
       `;
       // In die Listenspalte einfügen, direkt vor dem ersten Inhalt
       list.insertBefore(toggle, list.firstChild);
@@ -811,6 +821,7 @@ function ensureInboxContextMenu(){
       const btnOther = document.getElementById('filter_other');
       const answerToggle = document.getElementById('answer_filter_toggle');
       const answerLabel = document.getElementById('answer_filter_label');
+      const answerMenu = document.getElementById('answer_filter_menu');
       const folderSelect = document.getElementById('folder_select');
       const updateButtons = () => {
         // Fokus
@@ -844,27 +855,49 @@ function ensureInboxContextMenu(){
           btnOther.style.fontWeight = '400';
         }
 
-        // Antwort-Filter (Unbeantwortet vs. Alle E-Mails)
-        if(answerToggle && answerLabel){
-          if(inboxAnswerFilter === 'unanswered'){
-            answerToggle.style.background = '#111827';
-            answerToggle.style.color = '#ffffff';
-            answerLabel.textContent = 'Unbeantwortet';
-          } else {
-            answerToggle.style.background = '#e5e7eb';
-            answerToggle.style.color = '#111827';
-            answerLabel.textContent = 'Alle E-Mails';
-          }
+        // Antwort-Filter (Alle E-Mails vs. Unbeantwortet) im Dropdown markieren
+        if(answerMenu){
+          const options = answerMenu.querySelectorAll('button[data-answer-value]');
+          options.forEach(btn => {
+            const val = btn.getAttribute('data-answer-value');
+            const check = btn.querySelector('.answer_filter_check');
+            const active = val === inboxAnswerFilter;
+            if(check){
+              check.style.opacity = active ? '1' : '.2';
+            }
+            btn.style.background = active ? '#f3f4f6' : 'transparent';
+          });
         }
       };
       btnFocus.addEventListener('click', () => { inboxFilter = 'focus'; updateButtons(); renderInboxList(); });
       btnNormal.addEventListener('click', () => { inboxFilter = 'normal'; updateButtons(); renderInboxList(); });
       btnOther.addEventListener('click', () => { inboxFilter = 'unwichtig'; updateButtons(); renderInboxList(); });
-      if(answerToggle){
-        answerToggle.addEventListener('click', () => {
-          inboxAnswerFilter = inboxAnswerFilter === 'unanswered' ? 'all' : 'unanswered';
-          updateButtons();
-          renderInboxList();
+
+      if(answerToggle && answerMenu){
+        // Icon öffnet/schließt das Dropdown
+        answerToggle.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          const isOpen = answerMenu.style.display === 'block';
+          answerMenu.style.display = isOpen ? 'none' : 'block';
+        });
+
+        // Auswahl im Dropdown setzt den Filterzustand
+        answerMenu.querySelectorAll('button[data-answer-value]').forEach(btn => {
+          btn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const val = btn.getAttribute('data-answer-value') || 'all';
+            inboxAnswerFilter = val;
+            answerMenu.style.display = 'none';
+            updateButtons();
+            renderInboxList();
+          });
+        });
+
+        // Klick außerhalb schließt das Menü
+        document.addEventListener('click', (ev) => {
+          if(!answerMenu.contains(ev.target) && ev.target !== answerToggle && !answerToggle.contains(ev.target)){
+            answerMenu.style.display = 'none';
+          }
         });
       }
 
