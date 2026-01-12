@@ -1245,15 +1245,15 @@ function ensureInboxContextMenu(){
         });
       }
 
-      // Antwort-Filter anwenden:
+      // Antwort-Filter anwenden basierend auf Lese-Status:
       //  - all: keine Einschränkung
-      //  - unanswered: nur Mails ohne Antwort in dieser Sitzung
-      //  - answered: nur Mails, die bereits beantwortet wurden
+      //  - unanswered: nur ungelesene Mails (is_read === false)
+      //  - answered: nur gelesene Mails (is_read === true)
       let answerFiltered = baseFiltered;
       if(inboxAnswerFilter === 'unanswered'){
-        answerFiltered = baseFiltered.filter(it => !answeredByUid[it.uid]);
+        answerFiltered = baseFiltered.filter(it => !it.is_read);
       } else if(inboxAnswerFilter === 'answered'){
-        answerFiltered = baseFiltered.filter(it => !!answeredByUid[it.uid]);
+        answerFiltered = baseFiltered.filter(it => !!it.is_read);
       }
 
       const q = (inboxSearchQuery || '').trim().toLowerCase();
@@ -1289,7 +1289,8 @@ function ensureInboxContextMenu(){
         div.dataset.uid = it.uid;
         const bucket = getImportanceBucket(it);
 
-        const isAnswered = !!answeredByUid[it.uid];
+        // Für die aktuelle einfache Heuristik gilt: gelesene Mails gelten als "beantwortet".
+        const isAnswered = !!it.is_read;
 
         const fromLabel = escapeHtml(it.from || '');
         const dateLabel = escapeHtml(formatListDate(it.date || ''));
