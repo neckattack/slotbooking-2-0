@@ -1535,6 +1535,8 @@ def api_emails_rewrite_draft(current_user):
         "\n- Inhalte, Fakten, Namen und Zahlen bleiben erhalten."
         "\n- Nichts hinzufügen, was nicht im Entwurf steht."
         "\n- Nichts weglassen, nur sprachlich glätten."
+        "\n- Erhalte die grundsätzliche Absatzreihenfolge: Einleitung oben, Hauptteil in der Mitte, Abschluss/Signatur unten."
+        "\n- Wenn mehrere Themen enthalten sind (z.B. Support-Anliegen und Changelog-Hinweis), fasse sie in klar getrennten Abschnitten in logischer Reihenfolge zusammen: erst Antwort auf das eigentliche Anliegen, dann organisatorische Hinweise (Changelog/Releases), ganz unten Abschluss und Signatur."
         "\n- Schreibe eine passende Anrede und einen höflichen Abschluss, falls im Entwurf vorhanden."
     )
 
