@@ -1322,16 +1322,16 @@ function ensureInboxContextMenu(){
 
         div.innerHTML = `
   <div style="position:relative; display:flex; justify-content:space-between; align-items:center; gap:8px;">
-    <div style="flex:1; min-width:0; padding-right:88px;">
+    <div style="flex:1; min-width:0; padding-right:96px;">
       <div class="subject">${escapeHtml(it.subject || '(ohne Betreff)')}</div>
       <div class="meta"><span>${fromLabel}</span><span>${dateLabel}${isAnswered ? ' ↩︎' : ''}</span></div>
     </div>
-    <div style="position:absolute; right:0; top:50%; transform:translateY(-50%); display:flex; align-items:center; gap:6px; padding-right:8px;">
-      <div class="importance-controls" data-bucket="${bucket}" style="display:flex; flex-direction:column; justify-content:space-between; align-items:center; gap:4px; font-size:13px;">
+    <div style="position:absolute; right:0; top:50%; transform:translateY(-50%); display:flex; flex-direction:row-reverse; align-items:center; gap:6px;">
+      <div class="importance-controls" data-bucket="${bucket}" style="display:flex; flex-direction:column; justify-content:space-between; align-items:center; gap:4px; font-size:13px; margin-right:8px;">
         ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="border:1px solid #9ca3af; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:#f9fafb; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↑</button>` : ''}
         ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="border:1px solid #9ca3af; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:#f9fafb; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↓</button>` : ''}
       </div>
-      <div class="item-actions" style="position:relative; display:flex; align-items:center; gap:4px; opacity:0; pointer-events:none; transition:opacity 0.12s ease-out; background:rgba(17,24,39,0.92); padding:4px 6px; border-radius:999px; box-shadow:0 8px 24px rgba(15,23,42,0.35);">
+      <div class="item-actions" style="position:relative; display:flex; align-items:center; gap:4px; opacity:0; pointer-events:none; transition:opacity 0.12s ease-out; background:rgba(17,24,39,0.92); padding:4px 6px; border-radius:999px; box-shadow:0 8px 24px rgba(15,23,42,0.35); margin-right:8px;">
         <button class="item-contact" type="button" title="Kontakt öffnen" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#e5e7eb; font-size:13px;">👤</button>
         <button class="item-read-toggle" type="button" title="Als gelesen/ungelesen markieren" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#e5e7eb; font-size:14px;">●</button>
         <button class="item-archive" type="button" title="Archivieren" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#e5e7eb; font-size:13px;">⬛</button>
