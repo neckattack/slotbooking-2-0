@@ -1695,14 +1695,14 @@ function ensureInboxContextMenu(){
                 </div>
               </div>
             </div>
-            <div style="margin-top:16px; font-size:13px; border-top:1px solid var(--border); padding-top:12px;">
+            <div style="margin-top:16px; font-size:16px; border-top:1px solid var(--border); padding-top:12px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px;">
                 <div style="display:flex; align-items:center; gap:6px; font-weight:600;">
                   <span>🤖 KI-Kundenprofil</span>
                   <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" title="Profil aktualisieren" style="width:30px; height:30px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:999px; border:0; cursor:pointer; background:#111827; color:#ffffff; font-size:16px;">⚙️</button>
                 </div>
               </div>
-              <div id="contact_quick_card" class="sub" style="font-size:11px; margin-bottom:8px; padding:8px 10px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
+              <div id="contact_quick_card" class="sub" style="font-size:16px; margin-bottom:8px; padding:10px 12px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
                 <div style="font-weight:600; margin-bottom:4px;">Überblick</div>
                 <div id="qc_name" style="margin-bottom:2px;"><span style="font-weight:500;">Name:</span> <span class="muted">Lade...</span></div>
                 <div id="qc_now" style="margin-bottom:2px;"><span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span></div>
@@ -1713,7 +1713,7 @@ function ensureInboxContextMenu(){
                 <div id="qc_timeline" style="margin-top:4px;"><span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span></div>
               </div>
               
-              <div id="contact_topic_detail_panel" class="sub" style="font-size:11px; margin-bottom:8px; display:none; padding:6px 8px; border-radius:4px; background:#eff6ff; border:1px solid #bfdbfe;"></div>
+              <div id="contact_topic_detail_panel" class="sub" style="font-size:16px; margin-bottom:8px; display:none; padding:8px 10px; border-radius:4px; background:#eff6ff; border:1px solid #bfdbfe;"></div>
               <div id="prof_summary_full" class="sub" style="margin-top:8px; padding:10px; background:#f9fafb; border-radius:6px; line-height:1.5; display:${profileSummaryFull ? 'block' : 'none'};">
                 ${profileSummaryFull ? formatCustomerProfile(profileSummaryFull) : ''}
               </div>
@@ -1724,8 +1724,8 @@ function ensureInboxContextMenu(){
               </div>
               <div id="contact_notes_list" class="sub" style="max-height:120px; overflow:auto; padding:6px 0; border-radius:4px; background:#f9fafb;"></div>
               <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
-                <textarea id="contact_note_input" rows="2" placeholder="Kurze Notiz zum Kontakt (z.B. 'Angestellter von neckattack', 'Diesen Kontakt ignorieren', ...)" style="width:100%; font-size:12px; padding:6px 8px; border-radius:4px; border:1px solid var(--border); resize:vertical;"></textarea>
-                <button id="contact_note_save" style="align-self:flex-end; background:#059669; color:#fff; border:0; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px;">Notiz speichern</button>
+                <textarea id="contact_note_input" rows="2" placeholder="Kurze Notiz zum Kontakt (z.B. 'Angestellter von neckattack', 'Diesen Kontakt ignorieren', ...)" style="width:100%; font-size:16px; padding:8px 10px; border-radius:4px; border:1px solid var(--border); resize:vertical;"></textarea>
+                <button id="contact_note_save" style="alignself:flex-end; background:#059669; color:#fff; border:0; padding:7px 12px; border-radius:4px; cursor:pointer; font-size:14px; font-weight:500;">Notiz speichern</button>
                 <div id="contact_note_status" class="sub"></div>
               </div>
             </div>
