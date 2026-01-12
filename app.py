@@ -1487,6 +1487,94 @@ def api_emails_agent_compose(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/emails/rewrite-draft', methods=['POST'])
+@require_auth
+def api_emails_rewrite_draft(current_user):
+    """Schreibt einen vorhandenen Antwortentwurf stilistisch neu, ohne Inhalte zu 
+    ändern oder Informationen abzuschneiden.
+
+    Request-JSON:
+      { html: string, timeout_s?: int }
+
+    Response-JSON:
+      { __ok: bool, html?: string, error?: string }
+    """
+    data = request.get_json(silent=True) or {}
+    raw_html = data.get('html') or ''
+    if not raw_html:
+        return jsonify({'__ok': False, 'error': 'html fehlt'}), 400
+
+    try:
+        req_timeout = int(data.get('timeout_s')) if 'timeout_s' in data else None
+    except Exception:
+        req_timeout = None
+    timeout_s = max(4, min(30, req_timeout or 15))
+
+    # HTML grob in Text umwandeln, damit der Agent mit Klartext arbeitet
+    try:
+        import re as _re, html as _html
+
+        def _html_to_text_simple(s: str) -> str:
+            s = _html.unescape(s or '')
+            s = _re.sub(r'<br\s*/?>', '\n', s, flags=_re.I)
+            s = _re.sub(r'</p\s*>', '\n\n', s, flags=_re.I)
+            s = _re.sub(r'<[^>]+>', '', s)
+            s = _re.sub(r'\n{3,}', '\n\n', s)
+            return s.strip()
+
+        source_text = _html_to_text_simple(raw_html)
+    except Exception:
+        source_text = raw_html
+
+    user_email = current_user.get('user_email') or ''
+
+    # Anweisung: nur umformulieren, keine Fakten hinzufügen oder entfernen
+    system_prefix = (
+        "Du bist ein E-Mail-Lektor. Du bekommst einen vorhandenen Entwurf und "
+        "formulierst ihn stilistisch besser, flüssiger und professionell um. "
+        "\n- Inhalte, Fakten, Namen und Zahlen bleiben erhalten."
+        "\n- Nichts hinzufügen, was nicht im Entwurf steht."
+        "\n- Nichts weglassen, nur sprachlich glätten."
+        "\n- Schreibe eine passende Anrede und einen höflichen Abschluss, falls im Entwurf vorhanden."
+    )
+
+    try:
+        # Nutzt denselben Helfer wie agent-compose, aber mit eigenem Kanal
+        antwort_body, timed_out = _agent_respond_with_timeout(
+            source_text,
+            channel="email_rewrite",
+            user_email=user_email,
+            timeout_s=timeout_s,
+            agent_settings={
+                'role': 'Lektor',
+                'instructions': system_prefix,
+            },
+            contact_profile=None,
+        )
+
+        if not antwort_body:
+            return jsonify({'__ok': False, 'error': 'Leere Antwort vom Lektor'}), 502
+
+        # Antwort in einfaches HTML überführen: Absätze und Zeilenumbrüche
+        import html as _html2
+        text = antwort_body.replace('\r', '')
+        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+        html_parts = []
+        for p in paragraphs:
+            p_esc = _html2.escape(p)
+            p_esc = p_esc.replace('\n', '<br>')
+            html_parts.append(f"<p>{p_esc}</p>")
+        final_html = '\n'.join(html_parts) or _html2.escape(text)
+
+        return jsonify({'__ok': True, 'html': final_html}), 200
+    except Exception as e:
+        try:
+            app.logger.error(f"[REWRITE-DRAFT] error: {e}")
+        except Exception:
+            pass
+        return jsonify({'__ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/emails/send', methods=['POST'])
 @require_auth
 def api_emails_send(current_user):

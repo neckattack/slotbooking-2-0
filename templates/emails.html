@@ -3030,9 +3030,37 @@ function ensureInboxContextMenu(){
     document.getElementById('btn_send').addEventListener('click', sendDraft);
     const reloadReplyBtn = document.getElementById('btn_reload_reply');
     if(reloadReplyBtn){
-      reloadReplyBtn.addEventListener('click', () => {
-        // Antwort erneut von der KI vorschlagen lassen (gleiche Logik wie "Antwort vorschlagen")
-        proposeDraft();
+      reloadReplyBtn.addEventListener('click', async () => {
+        const status = document.getElementById('compose_status');
+        const editor = document.getElementById('compose_editor');
+        if(!editor){ return; }
+        const htmlNow = (editor.innerHTML || '').trim();
+        const textNow = (editor.textContent || '').trim();
+        if(!htmlNow || !textNow){
+          // Wenn noch kein Inhalt vorhanden ist, stattdessen normalen Vorschlag erzeugen
+          await proposeDraft();
+          return;
+        }
+        if(status){ status.textContent = 'Formuliere neu …'; }
+        reloadReplyBtn.disabled = true;
+        try{
+          const res = await fetch('/api/emails/rewrite-draft', {
+            method: 'POST',
+            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ html: htmlNow, timeout_s: 15 })
+          });
+          const data = await parseJsonSafe(res);
+          if(!data.__ok){
+            if(status){ status.textContent = 'Fehler beim Neuformulieren: ' + (data.error || 'Unbekannter Fehler'); }
+            return;
+          }
+          editor.innerHTML = data.html || editor.innerHTML;
+          if(status){ status.textContent = 'Antwort neu formuliert'; }
+        } catch(e){
+          if(status){ status.textContent = 'Fehler beim Neuformulieren: ' + e; }
+        } finally {
+          reloadReplyBtn.disabled = false;
+        }
       });
     }
 
