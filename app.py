@@ -2538,7 +2538,7 @@ def api_emails_list(current_user):
                 cursor.execute(
                     """
                     SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
-                           e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.starred,
+                           e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.is_replied, e.starred,
                            e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
                     FROM emails e
                     LEFT JOIN contacts c ON e.contact_id = c.id
