@@ -821,6 +821,10 @@ function ensureInboxContextMenu(){
             <span class="answer_filter_check" style="width:14px; text-align:center; font-size:11px; opacity:.2;">✓</span>
             <span>Unbeantwortet</span>
           </button>
+          <button data-answer-value="answered" type="button" style="width:100%; text-align:left; padding:6px 10px; border:0; background:transparent; cursor:pointer; display:flex; align-items:center; gap:6px; color:#111827;">
+            <span class="answer_filter_check" style="width:14px; text-align:center; font-size:11px; opacity:.2;">✓</span>
+            <span>Beantwortet</span>
+          </button>
         </div>
       </div>
       `;
@@ -1241,11 +1245,15 @@ function ensureInboxContextMenu(){
         });
       }
 
-      // Antwort-Filter anwenden: "Unbeantwortet" blendet im Frontend alle E-Mails aus,
-      // die in dieser Sitzung bereits beantwortet wurden.
+      // Antwort-Filter anwenden:
+      //  - all: keine Einschränkung
+      //  - unanswered: nur Mails ohne Antwort in dieser Sitzung
+      //  - answered: nur Mails, die bereits beantwortet wurden
       let answerFiltered = baseFiltered;
       if(inboxAnswerFilter === 'unanswered'){
         answerFiltered = baseFiltered.filter(it => !answeredByUid[it.uid]);
+      } else if(inboxAnswerFilter === 'answered'){
+        answerFiltered = baseFiltered.filter(it => !!answeredByUid[it.uid]);
       }
 
       const q = (inboxSearchQuery || '').trim().toLowerCase();
