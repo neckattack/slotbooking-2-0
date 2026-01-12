@@ -2095,159 +2095,169 @@ function ensureInboxContextMenu(){
                   prepDebug.innerHTML = dbgHtml;
                 }
 
-                // Buttons verkabeln
-                prepTopics.querySelectorAll('.reply-opt-btn').forEach(btn => {
-                  btn.addEventListener('click', async () => {
-                    const topicId = btn.getAttribute('data-topic-id') || '';
-                    const optId = btn.getAttribute('data-opt-id') || '';
-                    const kind = btn.getAttribute('data-kind') || 'historical';
+                // Hilfsfunktion: Buttons innerhalb eines Containers verkabeln
+                function wireReplyPrepButtons(rootEl){
+                  if(!rootEl) return;
+                  // Kategorie-Buttons (FAQ-Antwort, To-Do, Historie, Weiterleiten)
+                  rootEl.querySelectorAll('.reply-opt-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                      const topicId = btn.getAttribute('data-topic-id') || '';
+                      const optId = btn.getAttribute('data-opt-id') || '';
+                      const kind = btn.getAttribute('data-kind') || 'historical';
 
-                    const isActive = btn.getAttribute('data-active') === '1';
-                    if(isActive){
-                      // Toggle aus
-                      setSnippetForButton(topicId, optId, null);
-                      btn.setAttribute('data-active', '0');
-                      btn.style.backgroundColor = '#e5e7eb';
-                      btn.style.color = '#374151';
-                      btn.style.opacity = '1';
-                      return;
-                    }
+                      const isActive = btn.getAttribute('data-active') === '1';
+                      if(isActive){
+                        // Toggle aus
+                        setSnippetForButton(topicId, optId, null);
+                        btn.setAttribute('data-active', '0');
+                        btn.style.backgroundColor = '#e5e7eb';
+                        btn.style.color = '#374151';
+                        btn.style.opacity = '1';
+                        return;
+                      }
 
-                    if(kind === 'historical'){
-                      // Historische Themen: feste Snippets + ggf. Thema schließen
-                      const snippetEnc = btn.getAttribute('data-snippet') || '';
-                      const snippet = decodeURIComponent(snippetEnc);
-                      setSnippetForButton(topicId, optId, snippet);
-                      btn.setAttribute('data-active', '1');
-                      btn.style.backgroundColor = '#16a34a';
-                      btn.style.color = '#ffffff';
-                      btn.style.opacity = '1';
+                      if(kind === 'historical'){
+                        // Historische Themen: feste Snippets + ggf. Thema schließen
+                        const snippetEnc = btn.getAttribute('data-snippet') || '';
+                        const snippet = decodeURIComponent(snippetEnc);
+                        setSnippetForButton(topicId, optId, snippet);
+                        btn.setAttribute('data-active', '1');
+                        btn.style.backgroundColor = '#16a34a';
+                        btn.style.color = '#ffffff';
+                        btn.style.opacity = '1';
 
-                      if(optId === 'close' && topicId && t.contact_id){
-                        try{
-                          const resSt = await fetch(`/api/contacts/${t.contact_id}/topics/${topicId}/status`, {
-                            method: 'POST',
-                            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ status: 'done' })
-                          });
-                          const stData = await parseJsonSafe(resSt);
-                          if(!stData.__ok){
-                            console.error('Status konnte nicht geändert werden', stData.error);
-                          } else if(btn.closest('.reply-prep-topic')){
-                            // einfach den Block entfernen
-                            btn.closest('.reply-prep-topic').remove();
+                        if(optId === 'close' && topicId && t.contact_id){
+                          try{
+                            const resSt = await fetch(`/api/contacts/${t.contact_id}/topics/${topicId}/status`, {
+                              method: 'POST',
+                              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ status: 'done' })
+                            });
+                            const stData = await parseJsonSafe(resSt);
+                            if(!stData.__ok){
+                              console.error('Status konnte nicht geändert werden', stData.error);
+                            } else if(btn.closest('.reply-prep-topic')){
+                              // einfach den Block entfernen
+                              btn.closest('.reply-prep-topic').remove();
+                            }
+                          } catch(e){
+                            console.error('Fehler beim Schließen des Themas aus Reply-Prep:', e);
                           }
-                        } catch(e){
-                          console.error('Fehler beim Schließen des Themas aus Reply-Prep:', e);
                         }
-                      }
-                      return;
-                    }
-
-                    // Aktuelle Themen: dynamische KI-Antwort
-                    const mode = btn.getAttribute('data-mode') || '';
-                    const topicLabel = btn.getAttribute('data-topic-label') || '';
-                    const topicExpl = btn.getAttribute('data-topic-expl') || '';
-
-                    btn.disabled = true;
-                    btn.style.opacity = '0.6';
-                    try {
-                      const res = await fetch('/api/reply-prep/category-draft', {
-                        method: 'POST',
-                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          mode,
-                          topic_label: topicLabel,
-                          topic_explanation: topicExpl,
-                          email_id: t.id,
-                          contact_id: t.contact_id || null,
-                          topic_id: null
-                        })
-                      });
-                      const dataCat = await parseJsonSafe(res);
-                      if(!dataCat.__ok){
-                        alert('Konnte keine Antwort für diese Kategorie erzeugen: ' + (dataCat.error || 'Unbekannter Fehler'));
                         return;
                       }
-                      const snippet = dataCat.snippet || '';
-                      if(!snippet){
-                        alert('Die KI hat keinen Text zurückgeliefert.');
-                        return;
+
+                      // Aktuelle Themen: dynamische KI-Antwort
+                      const mode = btn.getAttribute('data-mode') || '';
+                      const topicLabel = btn.getAttribute('data-topic-label') || '';
+                      const topicExpl = btn.getAttribute('data-topic-expl') || '';
+
+                      btn.disabled = true;
+                      btn.style.opacity = '0.6';
+                      try {
+                        const res = await fetch('/api/reply-prep/category-draft', {
+                          method: 'POST',
+                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            mode,
+                            topic_label: topicLabel,
+                            topic_explanation: topicExpl,
+                            email_id: t.id,
+                            contact_id: t.contact_id || null,
+                            topic_id: null
+                          })
+                        });
+                        const dataCat = await parseJsonSafe(res);
+                        if(!dataCat.__ok){
+                          alert('Konnte keine Antwort für diese Kategorie erzeugen: ' + (dataCat.error || 'Unbekannter Fehler'));
+                          return;
+                        }
+                        const snippet = dataCat.snippet || '';
+                        if(!snippet){
+                          alert('Die KI hat keinen Text zurückgeliefert.');
+                          return;
+                        }
+                        setSnippetForButton(topicId, optId, snippet);
+                        btn.setAttribute('data-active', '1');
+                        btn.style.backgroundColor = '#16a34a';
+                        btn.style.color = '#ffffff';
+                        btn.style.opacity = '1';
+                      } catch(e){
+                        alert('Fehler bei der Kategorie-Antwort: ' + e);
+                      } finally {
+                        btn.disabled = false;
+                        if(btn.style.opacity === '0.6') btn.style.opacity = '1';
                       }
-                      setSnippetForButton(topicId, optId, snippet);
-                      btn.setAttribute('data-active', '1');
-                      btn.style.backgroundColor = '#16a34a';
-                      btn.style.color = '#ffffff';
-                      btn.style.opacity = '1';
-                    } catch(e){
-                      alert('Fehler bei der Kategorie-Antwort: ' + e);
-                    } finally {
-                      btn.disabled = false;
-                      if(btn.style.opacity === '0.6') btn.style.opacity = '1';
-                    }
+                    });
                   });
-                });
 
-                // Manuelle Antwortkategorie: Stichworte -> LLM-Formulierung
-                prepTopics.querySelectorAll('.reply-manual-btn').forEach(btn => {
-                  btn.addEventListener('click', async () => {
-                    const topicKind = btn.getAttribute('data-kind') || 'current';
-                    const topicId = btn.getAttribute('data-topic-id') || '';
-                    const container = btn.closest('.reply-prep-topic');
-                    if(!container) return;
-                    const noteEl = container.querySelector('.reply-manual-note');
-                    if(!noteEl) return;
-                    const note = noteEl.value.trim();
-                    if(!note){
-                      alert('Bitte zuerst Stichworte eingeben.');
-                      return;
-                    }
+                  // Manuelle Antwortkategorie: Stichworte -> LLM-Formulierung
+                  rootEl.querySelectorAll('.reply-manual-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                      const topicKind = btn.getAttribute('data-kind') || 'current';
+                      const topicId = btn.getAttribute('data-topic-id') || '';
+                      const container = btn.closest('.reply-prep-topic');
+                      if(!container) return;
+                      const noteEl = container.querySelector('.reply-manual-note');
+                      if(!noteEl) return;
+                      const note = noteEl.value.trim();
+                      if(!note){
+                        alert('Bitte zuerst Stichworte eingeben.');
+                        return;
+                      }
 
-                    const topicLabel = noteEl.getAttribute('data-topic-label') || '';
-                    const topicExpl = noteEl.getAttribute('data-topic-expl') || '';
+                      const topicLabel = noteEl.getAttribute('data-topic-label') || '';
+                      const topicExpl = noteEl.getAttribute('data-topic-expl') || '';
 
-                    btn.disabled = true;
-                    const oldText = btn.textContent;
-                    btn.textContent = 'Formuliere...';
-                    try{
-                      const res = await fetch('/api/reply-prep/manual-draft', {
-                        method: 'POST',
-                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          topic_label: topicLabel,
-                          topic_explanation: topicExpl,
-                          note: note,
-                          contact_name: contactName || ''
-                        })
-                      });
-                      const data = await parseJsonSafe(res);
-                      if(!data.__ok){
-                        alert('Konnte keine manuelle Antwort formulieren: ' + (data.error || 'Unbekannter Fehler'));
-                      } else {
-                        const snippet = data.snippet || '';
-                        const optId = topicId ? `manual_${topicId}` : `manual_${topicLabel || 'topic'}`;
-                        // Toggle-Logik wie bei Buttons: wenn bereits aktiv, entfernen; sonst setzen
-                        const isActive = btn.getAttribute('data-active') === '1';
-                        if(isActive){
-                          setSnippetForButton(topicId || topicLabel, optId, null);
-                          btn.setAttribute('data-active', '0');
-                          btn.style.backgroundColor = '#6366f1';
-                          btn.style.opacity = '1';
+                      btn.disabled = true;
+                      const oldText = btn.textContent;
+                      btn.textContent = 'Formuliere...';
+                      try{
+                        const res = await fetch('/api/reply-prep/manual-draft', {
+                          method: 'POST',
+                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            topic_label: topicLabel,
+                            topic_explanation: topicExpl,
+                            note: note,
+                            contact_name: contactName || ''
+                          })
+                        });
+                        const data = await parseJsonSafe(res);
+                        if(!data.__ok){
+                          alert('Konnte keine manuelle Antwort formulieren: ' + (data.error || 'Unbekannter Fehler'));
                         } else {
-                          setSnippetForButton(topicId || topicLabel, optId, snippet);
-                          btn.setAttribute('data-active', '1');
-                          btn.style.backgroundColor = '#16a34a';
-                          btn.style.opacity = '1';
+                          const snippet = data.snippet || '';
+                          const optId = topicId ? `manual_${topicId}` : `manual_${topicLabel || 'topic'}`;
+                          // Toggle-Logik wie bei Buttons: wenn bereits aktiv, entfernen; sonst setzen
+                          const isActive = btn.getAttribute('data-active') === '1';
+                          if(isActive){
+                            setSnippetForButton(topicId || topicLabel, optId, null);
+                            btn.setAttribute('data-active', '0');
+                            btn.style.backgroundColor = '#6366f1';
+                            btn.style.opacity = '1';
+                          } else {
+                            setSnippetForButton(topicId || topicLabel, optId, snippet);
+                            btn.setAttribute('data-active', '1');
+                            btn.style.backgroundColor = '#16a34a';
+                            btn.style.opacity = '1';
+                          }
                         }
+                      } catch(e){
+                        alert('Fehler bei manueller Formulierung: ' + e);
+                      } finally {
+                        btn.disabled = false;
+                        btn.textContent = oldText;
                       }
-                    } catch(e){
-                      alert('Fehler bei manueller Formulierung: ' + e);
-                    } finally {
-                      btn.disabled = false;
-                      btn.textContent = oldText;
-                    }
+                    });
                   });
-                });
+                }
+
+                // Buttons sowohl im Haupt-Topics-Block als auch im gespiegelten Compose-Block aktivieren
+                wireReplyPrepButtons(prepTopics);
+                wireReplyPrepButtons(composeTopics);
+                wireReplyManualButtons(prepTopics);
+                wireReplyManualButtons(composeTopics);
 
                 // Rote X-Schaltflächen in Themenblöcken
                 prepTopics.querySelectorAll('.reply-prep-close').forEach(closeBtn => {
