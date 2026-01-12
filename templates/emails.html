@@ -566,9 +566,8 @@
     // Inbox filtering: 'focus' (wichtig), 'normal' (Standard) vs 'unwichtig' (Newsletter etc.)
     let inboxFilter = 'focus';
     // Answer filter: 'unanswered' vs 'all'/'answered' – Standard: nur unbeantwortete Mails zeigen
+    // Basis ist das persistente Feld is_replied aus der Datenbank (IMAP-Flag \Answered).
     let inboxAnswerFilter = 'unanswered';
-    // Lokal im Frontend gemerkte Antwort-Information pro UID (wird beim Senden gesetzt)
-    let answeredByUid = {};
     let inboxEmails = [];
     // Manuelle Wichtigkeitsregeln pro Absender (vom Server und/oder localStorage geladen)
     let importanceRules = [];
@@ -1245,15 +1244,15 @@ function ensureInboxContextMenu(){
         });
       }
 
-      // Antwort-Filter anwenden basierend auf Antwort-Status in dieser Sitzung:
+      // Antwort-Filter anwenden basierend auf persistenter Antwort-Info (is_replied):
       //  - all: keine Einschränkung
-      //  - unanswered: Mails ohne answeredByUid[uid]
-      //  - answered: Mails, die bereits beantwortet wurden (answeredByUid[uid] === true)
+      //  - unanswered: Mails ohne is_replied
+      //  - answered: Mails, die bereits beantwortet wurden (is_replied === 1)
       let answerFiltered = baseFiltered;
       if(inboxAnswerFilter === 'unanswered'){
-        answerFiltered = baseFiltered.filter(it => !answeredByUid[it.uid]);
+        answerFiltered = baseFiltered.filter(it => !it.is_replied);
       } else if(inboxAnswerFilter === 'answered'){
-        answerFiltered = baseFiltered.filter(it => !!answeredByUid[it.uid]);
+        answerFiltered = baseFiltered.filter(it => !!it.is_replied);
       }
 
       const q = (inboxSearchQuery || '').trim().toLowerCase();
@@ -1289,7 +1288,7 @@ function ensureInboxContextMenu(){
         div.dataset.uid = it.uid;
         const bucket = getImportanceBucket(it);
 
-        const isAnswered = !!answeredByUid[it.uid];
+        const isAnswered = !!it.is_replied;
 
         const fromLabel = escapeHtml(it.from || '');
         const dateLabel = escapeHtml(formatListDate(it.date || ''));
@@ -3091,14 +3090,17 @@ function ensureInboxContextMenu(){
       if(!currentAccountId){ status.textContent = 'Kein E-Mail-Account ausgewählt.'; return; }
       status.textContent = 'Sende …';
       try{
-        const res = await fetch('/api/emails/send', { method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body: JSON.stringify({to: toInput.value, subject: subjInput.value, html: editor.innerHTML, account_id: currentAccountId}) });
+        const res = await fetch('/api/emails/send', { method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body: JSON.stringify({to: toInput.value, subject: subjInput.value, html: editor.innerHTML, account_id: currentAccountId, reply_to_uid: currentUid}) });
         const data = await parseJsonSafe(res);
         if(!data.__ok && data.error){ throw new Error(data.error); }
         status.textContent = 'Gesendet';
 
-        // Aktuelle E-Mail im Frontend als beantwortet markieren
-        if(currentUid){
-          answeredByUid[currentUid] = true;
+        // Aktuelle E-Mail im Frontend als beantwortet markieren (is_replied = 1)
+        if(currentUid && inboxEmails && inboxEmails.length){
+          const idx = inboxEmails.findIndex(e => String(e.uid) === String(currentUid));
+          if(idx >= 0){
+            inboxEmails[idx].is_replied = 1;
+          }
 
           // Wenn "Unbeantwortet" aktiv ist, die Zeile mit kleiner Animation ausblenden
           if(inboxAnswerFilter === 'unanswered'){

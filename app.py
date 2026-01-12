@@ -1589,6 +1589,7 @@ def api_emails_send(current_user):
     subject = data.get('subject') or ''
     html = data.get('html') or ''
     account_id = data.get('account_id')
+    reply_to_uid = data.get('reply_to_uid')
     if not to_addr or not html:
         return jsonify({'error': 'to und html sind erforderlich'}), 400
     
@@ -1717,6 +1718,22 @@ def api_emails_send(current_user):
                     app.logger.error(f"[SMTP] STARTTLS also failed: {e2}")
                     # Raise the more specific error
                     raise e2
+
+        # Nach erfolgreichem Versand optional Ursprungs-Mail als beantwortet markieren
+        if reply_to_uid:
+            try:
+                conn_reply = get_settings_db_connection()
+                cur_reply = conn_reply.cursor()
+                cur_reply.execute(
+                    "UPDATE emails SET is_replied=1 WHERE id=%s AND user_email=%s",
+                    (reply_to_uid, user_email),
+                )
+                conn_reply.commit()
+                cur_reply.close()
+                conn_reply.close()
+            except Exception as e_upd:
+                app.logger.warning(f"[Send] Could not mark original email as replied (id={reply_to_uid}): {e_upd}")
+
         return jsonify({'ok': True})
     except Exception as e:
         import socket, smtplib, ssl, traceback
@@ -2058,8 +2075,9 @@ def api_emails_sync(current_user):
                     meta_raw = ''
                     raw_email = tup
 
-                # Gelesen-Status aus FLAGS extrahieren
+                # Gelesen-Status und Beantwortet-Status aus FLAGS extrahieren
                 is_read = 1 if ('\\Seen' in meta_raw) else 0
+                is_replied = 1 if ('\\Answered' in meta_raw) else 0
                 msg = email.message_from_bytes(raw_email)
 
                 # Extract message_id
@@ -2067,9 +2085,17 @@ def api_emails_sync(current_user):
                 if not message_id:
                     message_id = f"no-id-{uid.decode()}"
 
-                # Skip, wenn diese Kombination aus message_id und Ziel-Ordner bereits in der DB vorhanden ist
+                # Skip- oder Update-Logik für bereits synchronisierte Nachrichten
                 key = (message_id, (folder_db_key or 'inbox').lower())
                 if key in synced_ids:
+                    # Flags (gelesen/beantwortet) in der bestehenden Zeile aktualisieren
+                    try:
+                        cursor_db.execute(
+                            "UPDATE emails SET is_read=%s, is_replied=%s WHERE user_email=%s AND account_id=%s AND message_id=%s AND folder=%s",
+                            (is_read, is_replied, user_email, account_id, message_id, folder_db_key)
+                        )
+                    except Exception as _upd_err:
+                        app.logger.warning(f"[Sync] Could not update flags for message_id={message_id}: {_upd_err}")
                     continue
 
                 # Extract headers
@@ -2215,11 +2241,11 @@ def api_emails_sync(current_user):
                 folder_db = (folder_db_key or 'inbox').lower()
                 cursor_db.execute(
                     "INSERT INTO emails (message_id, user_email, account_id, contact_id, from_addr, from_name, "
-                    "to_addrs, subject, body_text, body_html, received_at, folder, has_attachments, is_read) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    "to_addrs, subject, body_text, body_html, received_at, folder, has_attachments, is_read, is_replied) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                     (message_id, user_email, account_id, contact_id, from_email, from_name, to_addrs,
                      subject, body_text[:50000] if body_text else '', body_html[:100000] if body_html else '',
-                     received_at, folder_db, has_attachments, is_read)
+                     received_at, folder_db, has_attachments, is_read, is_replied)
                 )
 
                 synced_count += 1
@@ -2450,7 +2476,7 @@ def api_emails_list(current_user):
             cursor.execute(
                 """
                 SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
-                       e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.starred,
+                       e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.is_replied, e.starred,
                        e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
                 FROM emails e
                 LEFT JOIN contacts c ON e.contact_id = c.id
@@ -2467,7 +2493,7 @@ def api_emails_list(current_user):
                 cursor.execute(
                     """
                     SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
-                           e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.starred,
+                           e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.is_replied, e.starred,
                            e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
                     FROM emails e
                     LEFT JOIN contacts c ON e.contact_id = c.id
@@ -2542,6 +2568,7 @@ def api_emails_list(current_user):
                 'date': email_row['received_at'].strftime('%d.%m.%Y %H:%M') if email_row['received_at'] else '',
                 'body_preview': (email_row['body_text'] or '')[:200],
                 'is_read': email_row['is_read'],
+                'is_replied': email_row.get('is_replied', 0),
                 'starred': email_row['starred'],
                 'has_attachments': email_row['has_attachments'],
                 'contact_name': email_row['contact_name'],
