@@ -565,8 +565,8 @@
     let currentSettingsAccountId = null;
     // Inbox filtering: 'focus' (wichtig), 'normal' (Standard) vs 'unwichtig' (Newsletter etc.)
     let inboxFilter = 'focus';
-    // Answer filter: 'unanswered' vs 'all' (Standard: alle anzeigen)
-    let inboxAnswerFilter = 'all';
+    // Answer filter: 'unanswered' vs 'all'/'answered' – Standard: nur unbeantwortete Mails zeigen
+    let inboxAnswerFilter = 'unanswered';
     // Lokal im Frontend gemerkte Antwort-Information pro UID (wird beim Senden gesetzt)
     let answeredByUid = {};
     let inboxEmails = [];
