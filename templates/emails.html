@@ -3212,6 +3212,33 @@ function ensureInboxContextMenu(){
       // Wenn Panel zu ist → öffnen. Wenn offen: nur schließen, wenn Editor leer ist.
       if(!panel.classList.contains('open')){
         panel.classList.add('open');
+
+        // Empfänger + Betreff automatisch aus der aktuellen E-Mail vorbelegen
+        try{
+          const toInput = document.getElementById('compose_to');
+          const subjInput = document.getElementById('compose_subject');
+          if(toInput || subjInput){
+            if(currentUid && Array.isArray(inboxEmails)){
+              const mail = inboxEmails.find(e => String(e.uid) === String(currentUid));
+              if(mail){
+                // Empfänger: Absender-Adresse der originalen Mail
+                if(toInput && !toInput.value){
+                  const rawFrom = mail.from_addr || mail.from || '';
+                  let addr = rawFrom;
+                  const m = /<([^>]+)>/.exec(String(rawFrom));
+                  if(m){ addr = m[1]; }
+                  toInput.value = addr || '';
+                }
+                // Betreff: Re: <Subject>, falls noch kein Re:/Fwd: Prefix vorhanden ist
+                if(subjInput && !subjInput.value){
+                  const subj = String(mail.subject || '').trim();
+                  const hasPrefix = /^((re|aw|fwd|wg)\s*[:：])/i.test(subj);
+                  subjInput.value = hasPrefix ? subj : (subj ? 'Re: ' + subj : '');
+                }
+              }
+            }
+          }
+        }catch(_e_prefill){ /* Prefill ist Komfort, Fehler hier ignorieren */ }
       } else {
         if(isComposeEmpty()){
           panel.classList.remove('open');
