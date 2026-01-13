@@ -1333,9 +1333,25 @@ function ensureInboxContextMenu(){
         ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="border:1px solid #9ca3af; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:#f9fafb; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↓</button>` : ''}
       </div>
       <div class="item-actions" style="position:relative; display:flex; align-items:center; gap:4px; opacity:0; pointer-events:none; transition:opacity 0.12s ease-out; background:#f9fafb; padding:4px 6px; border-radius:999px; box-shadow:0 4px 12px rgba(15,23,42,0.18); border:1px solid #e5e7eb; margin-right:8px;">
-        <button class="item-contact" type="button" title="Kontakt öffnen" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:15px;">${(typeof getIconSvg === 'function' && getIconSvg('user', { size: 18 })) || '👤'}</button>
-        <button class="item-read-toggle" type="button" title="Als gelesen/ungelesen markieren" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:17px;">${(typeof getIconSvg === 'function' && getIconSvg('eye', { size: 18 })) || '👁'}</button>
-        <button class="item-archive" type="button" title="Archivieren" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:15px;">${(typeof getIconSvg === 'function' && getIconSvg('archive', { size: 18 })) || '⬛'}</button>
+        <button class="item-contact" type="button" title="Kontakt öffnen" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+          </svg>
+        </button>
+        <button class="item-read-toggle" type="button" title="Als gelesen/ungelesen markieren" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
+        <button class="item-archive" type="button" title="Archivieren" style="border:0; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="4" rx="1" />
+            <path d="M5 7v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7" />
+            <path d="M10 12h4" />
+          </svg>
+        </button>
       </div>
     </div>
   </div>
