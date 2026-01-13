@@ -1333,7 +1333,7 @@ function ensureInboxContextMenu(){
         ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="border:1px solid #9ca3af; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:#f9fafb; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↑</button>` : ''}
         ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="border:1px solid #9ca3af; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:#f9fafb; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↓</button>` : ''}
       </div>
-      <div class="item-actions" style="position:relative; height:100%; display:flex; align-items:center; gap:8px; padding:0 10px; background:rgba(249,250,251,0.98); border-left:1px solid #e5e7eb; box-shadow:-4px 0 12px rgba(15,23,42,0.12); transform:translateX(105%); transition:transform 0.14s ease-out; pointer-events:none;">
+      <div class="item-actions" style="position:relative; height:100%; display:flex; align-items:center; gap:8px; padding:0 10px; background:rgba(249,250,251,0.98); border-left:1px solid #e5e7eb; box-shadow:-4px 0 12px rgba(15,23,42,0.12); transform:translateX(130%); transition:transform 0.14s ease-out; pointer-events:none;">
         <span style="font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#9ca3af; writing-mode:vertical-rl; text-orientation:mixed;">Aktionen</span>
         <button class="item-contact" type="button" title="Kontakt öffnen" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:17px;">
           👤
@@ -1368,7 +1368,7 @@ function ensureInboxContextMenu(){
             actionsBar.style.pointerEvents = 'auto';
           });
           div.addEventListener('mouseleave', () => {
-            actionsBar.style.transform = 'translateX(105%)';
+            actionsBar.style.transform = 'translateX(130%)';
             actionsBar.style.pointerEvents = 'none';
           });
         }
