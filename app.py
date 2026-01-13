@@ -1734,6 +1734,62 @@ def api_emails_send(current_user):
             except Exception as e_upd:
                 app.logger.warning(f"[Send] Could not mark original email as replied (id={reply_to_uid}): {e_upd}")
 
+        # Gesendete Mail in der lokalen DB im Folder "sent" ablegen,
+        # damit sie im Gesendet-Ordner sichtbar ist – unabhängig davon,
+        # ob der Mailserver selbst eine Kopie speichert.
+        try:
+            import re as _re_plain
+            import uuid as _uuid
+            from datetime import datetime as _dt
+
+            # Message-ID erzeugen, falls vom SMTP-Server keine gesetzt wurde
+            message_id = msg.get('Message-ID') or f"<{_uuid.uuid4()}@inboxiq.local>"
+
+            # Einfacher Plaintext aus dem HTML (Tags entfernen)
+            body_text_plain = _re_plain.sub(r"<[^>]+>", " ", html or "")
+            body_text_plain = _re_plain.sub(r"\s+", " ", body_text_plain).strip()
+
+            received_at = _dt.utcnow()
+
+            conn_db = get_settings_db_connection()
+            cur_db = conn_db.cursor()
+            # Minimal-Insert analog zum IMAP-Sync, aber ohne Kontakt-Verknüpfung
+            cur_db.execute(
+                "INSERT INTO emails (message_id, in_reply_to, references_raw, thread_id, user_email, account_id, contact_id, "
+                "from_addr, from_name, to_addrs, subject, body_text, body_html, received_at, folder, has_attachments, "
+                "is_read, is_replied) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    message_id,
+                    None,
+                    None,
+                    None,
+                    user_email,
+                    account_id,
+                    None,
+                    from_addr,
+                    '',
+                    to_addr,
+                    subject,
+                    body_text_plain[:50000] if body_text_plain else '',
+                    html[:100000] if html else '',
+                    received_at,
+                    'sent',
+                    0,
+                    1,
+                    0,
+                ),
+            )
+            conn_db.commit()
+            cur_db.close()
+            conn_db.close()
+        except Exception as e_db_sent:
+            # Kein Hard-Error beim Senden, aber im Log sichtbar machen
+            try:
+                app.logger.warning(f"[Send] Could not store sent email in DB: {e_db_sent}")
+            except Exception:
+                pass
+
         return jsonify({'ok': True})
     except Exception as e:
         import socket, smtplib, ssl, traceback
