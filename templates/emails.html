@@ -258,8 +258,9 @@
         </button>
         <span id="compose_status" class="sub" style="margin-left:auto;"></span>
       </div>
-      <div id="compose_reply_prefs" class="sub" style="margin-top:4px; font-size:11px; color:#6b7280;">
-        Antwortstil: Standard (noch keine Kontakt-Einstellungen geladen).
+      <div id="compose_reply_prefs" class="sub" style="margin-top:4px; font-size:11px; color:#6b7280; display:flex; align-items:center; gap:8px;">
+        <span id="compose_reply_prefs_text">Antwortstil: Standard (noch keine Kontakt-Einstellungen geladen).</span>
+        <button id="compose_reply_prefs_edit" type="button" style="margin-left:auto; padding:2px 8px; border-radius:999px; border:0; background:#111827; color:#ffffff; font-size:10px; cursor:pointer; white-space:nowrap;">Stil anpassen…</button>
       </div>
       <div id="compose_topics_mirror" class="sub" style="margin-top:8px; font-size:11px; max-height:160px; overflow:auto;"></div>
     </div>
@@ -586,7 +587,27 @@
     const accountFolderCache = {};
     // Aktueller Kontakt & dessen Reply-Preferences (für Compose-Panel)
     let currentContactId = null;
+    let currentContactName = null;
+    let currentContactEmail = null;
     let currentReplyPrefs = null;
+
+    // "Stil anpassen" im Compose-Panel öffnet das Kontakt-Detail-Modal für den aktuellen Kontakt
+    (function(){
+      try{
+        const editBtn = document.getElementById('compose_reply_prefs_edit');
+        if(editBtn){
+          editBtn.onclick = () => {
+            if(!currentContactId){
+              alert('Kein Kontakt zur aktuellen E-Mail erkannt.');
+              return;
+            }
+            const name = currentContactName || currentContactEmail || 'Kontakt';
+            const email = currentContactEmail || '';
+            openContactDetailModal(currentContactId, name, email);
+          };
+        }
+      }catch(_e){}
+    })();
 
 // Einfaches Kontextmenü für E-Mail-Zeilen (z.B. "Als gelesen/ungelesen markieren")
 let inboxContextMenuEl = null;
@@ -2745,12 +2766,14 @@ function ensureInboxContextMenu(){
 
         // Reply-Preferences des Kontakts für das Compose-Panel laden
         currentContactId = t.contact_id || null;
+        currentContactName = contactName || null;
+        currentContactEmail = contactEmail || null;
         if(currentContactId){
           loadComposeReplyPrefs(currentContactId, t);
         } else {
-          const prefsEl = document.getElementById('compose_reply_prefs');
-          if(prefsEl){
-            prefsEl.textContent = 'Antwortstil: Standard (Kontakt unbekannt, es gelten globale Defaults).';
+          const prefsTextEl = document.getElementById('compose_reply_prefs_text');
+          if(prefsTextEl){
+            prefsTextEl.textContent = 'Antwortstil: Standard (Kontakt unbekannt, es gelten globale Defaults).';
           }
         }
         
