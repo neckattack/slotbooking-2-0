@@ -44,7 +44,7 @@
     .profile .grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
     .profile .kv { font-size:14px; }
     .profile .kv span { color: var(--sub); display:inline-block; min-width:90px; }
-    .compose { position:fixed; top:64px; right:0; width:640px; height:calc(100vh - 64px); border-left:1px solid var(--border); padding:18px 18px; overflow:auto; background:transparent; transform:translateX(100%); transition:transform 0.25s ease-out; z-index:50; }
+    .compose { position:fixed; top:64px; right:0; width:min(960px, 100vw); height:calc(100vh - 64px); border-left:1px solid var(--border); padding:18px 18px; overflow:auto; background:transparent; transform:translateX(100%); transition:transform 0.25s ease-out; z-index:50; }
     .compose.open { transform:translateX(0); }
     /* Inner Card des Compose-Panels im Tailwind-Stil (ohne Tailwind-Build) */
     .compose-inner {
