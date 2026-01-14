@@ -3424,7 +3424,25 @@ function ensureInboxContextMenu(){
       return textNow.length === 0;
     }
 
-    async function proposeDraft(){
+    async function autosaveComposeReplyPrefs(){
+      try{
+        if(!currentContactId){ return; }
+        const lenInput = document.getElementById('cmp_length');
+        const formInput = document.getElementById('cmp_formality');
+        const payload = { style_source: 'manual' };
+        if(lenInput){ payload.length_level = parseInt(lenInput.value, 10) || 3; }
+        if(formInput){ payload.formality_level = parseInt(formInput.value, 10) || 3; }
+        payload.salutation_mode = cmpSelectedSal;
+        payload.persona_mode = cmpSelectedPers;
+        await fetch(`/api/contacts/${currentContactId}/reply-prefs`, {
+          method: 'POST',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }catch(_e){ /* Best Effort */ }
+    }
+
+    async function proposeDraft(force=false){
       const composeEl = document.getElementById('compose');
       if(composeEl && !composeEl.classList.contains('open')){
         composeEl.classList.add('open');
@@ -3436,14 +3454,17 @@ function ensureInboxContextMenu(){
       if(!currentUid){ status.textContent = 'Bitte zuerst eine E-Mail auswählen.'; return; }
       status.textContent = 'Vorschlag wird erstellt …';
       try{
+        // Vor dem Compose-Vorschlag immer aktuelle Reply-Preferences sichern,
+        // damit der Agent den neuesten Stil nutzt.
+        await autosaveComposeReplyPrefs();
         // Erster Versuch (8s Timeout)
-        let res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid, timeout_s: 8}) });
+        let res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid, timeout_s: 8, force: !!force}) });
         let data = await parseJsonSafe(res);
         if(!data.__ok){
           // Bei 504 (compose_timeout/compose_empty) ein zweiter Versuch mit 20s Timeout
           if(data.__status === 504){
             status.textContent = 'Ausgelastet, zweiter Versuch (bis 20s) …';
-            res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid, timeout_s: 20}) });
+            res = await fetch('/api/emails/agent-compose', { method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body: JSON.stringify({uid: currentUid, timeout_s: 20, force: true}) });
             data = await parseJsonSafe(res);
           }
         }

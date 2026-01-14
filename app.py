@@ -1044,6 +1044,7 @@ def api_emails_agent_compose(current_user):
     """
     data = request.get_json(silent=True) or {}
     email_id = data.get('uid')  # uid ist jetzt email_id aus DB
+    force = bool(data.get('force'))
     # Optional: längeres Timeout anfordern (z. B. 20s), aber deckeln
     try:
         req_timeout = int(data.get('timeout_s')) if 'timeout_s' in data else None
@@ -1063,18 +1064,20 @@ def api_emails_agent_compose(current_user):
     
     user_email = current_user.get('user_email')
     try:
-        # Compose-Cache Early-Return (TTL 300s) für schnelle Wiederholungen
-        import time as _t
-        now = _t.time()
-        cc = COMPOSE_CACHE.get(str(email_id))
-        if cc and now - cc.get('ts', 0) < 300 and not cc.get('timed_out'):
-            if cc.get('has_body') or cc.get('has_preface'):
-                return jsonify({ 'html': cc['html'], 'to': cc['to'], 'subject': cc['subject'] })
-            else:
-                try:
-                    del COMPOSE_CACHE[str(email_id)]
-                except Exception:
-                    pass
+        # Compose-Cache Early-Return (TTL 300s) für schnelle Wiederholungen,
+        # kann per force-Flag explizit umgangen werden (z.B. bei geänderten Reply-Preferences).
+        if not force:
+            import time as _t
+            now = _t.time()
+            cc = COMPOSE_CACHE.get(str(email_id))
+            if cc and now - cc.get('ts', 0) < 300 and not cc.get('timed_out'):
+                if cc.get('has_body') or cc.get('has_preface'):
+                    return jsonify({ 'html': cc['html'], 'to': cc['to'], 'subject': cc['subject'] })
+                else:
+                    try:
+                        del COMPOSE_CACHE[str(email_id)]
+                    except Exception:
+                        pass
         
         # Load email from database
         conn = get_settings_db_connection()
@@ -1331,6 +1334,75 @@ def api_emails_agent_compose(current_user):
             s = re.sub(r'\n\s*\n\s*\n+', '\n\n', s)
             return s.strip()
         source_text = (plaintext or (_html_to_text(html_body) if html_body else '')).strip()
+
+        # Robuste Namens-Erkennung aus der Signatur, um generische Namen wie "Info" zu vermeiden.
+        try:
+            contact_name = email_row.get('contact_name') or from_name or ''
+            contact_id = email_row.get('contact_id')
+
+            def _looks_like_bad_name(name: str) -> bool:
+                if not name:
+                    return True
+                n = name.strip()
+                if '@' in n:
+                    return True
+                lowered = n.lower()
+                if lowered in {'info', 'information', 'kundendienst', 'kundenservice'}:
+                    return True
+                return False
+
+            def _extract_name_from_signature(text: str) -> str | None:
+                import re
+                if not text:
+                    return None
+                lines = [ln.strip() for ln in text.splitlines()]
+                # Suche zuerst nach typischen Grußformeln und nimm die nächste nicht-leere Zeile
+                greet_patterns = [
+                    r'viele grüße',
+                    r'liebe grüße',
+                    r'mit freundlichen grüßen',
+                    r'freundliche grüße',
+                ]
+                for i, ln in enumerate(lines):
+                    low = ln.lower()
+                    if any(pat in low for pat in greet_patterns):
+                        # Kandidaten in den nächsten 3 Zeilen suchen
+                        for j in range(i + 1, min(i + 4, len(lines))):
+                            cand = lines[j]
+                            if not cand or '@' in cand or len(cand) > 60:
+                                continue
+                            # Format: "Anne" oder "Anne Baumgart"
+                            if re.match(r'^[A-ZÄÖÜ][a-zäöüß]+(\s+[A-ZÄÖÜ][a-zäöüß]+)?$', cand):
+                                return cand
+                # Fallback: letzte sinnvolle Zeilen durchgehen
+                for ln in reversed(lines[-8:]):
+                    if not ln or '@' in ln or len(ln) > 60:
+                        continue
+                    if re.match(r'^[A-ZÄÖÜ][a-zäöüß]+(\s+[A-ZÄÖÜ][a-zäöüß]+)?$', ln):
+                        return ln
+                return None
+
+            if _looks_like_bad_name(contact_name):
+                better = _extract_name_from_signature(source_text)
+                if better:
+                    contact_name = better
+                    email_row['contact_name'] = better
+                    # Kontaktname in DB aktualisieren (Best Effort)
+                    if contact_id:
+                        try:
+                            conn_upd = get_settings_db_connection()
+                            cur_upd = conn_upd.cursor()
+                            cur_upd.execute(
+                                "UPDATE contacts SET name = %s WHERE id = %s AND user_email = %s",
+                                (better, contact_id, user_email),
+                            )
+                            conn_upd.commit()
+                            cur_upd.close()
+                            conn_upd.close()
+                        except Exception as _e_upd:
+                            app.logger.warning(f"[ContactNameUpdate] Error: {_e_upd}")
+        except Exception as _e_name:
+            app.logger.warning(f"[ContactNameDetect] Error: {_e_name}")
 
         # Stil-Hinweis (falls vorhanden) vor den eigentlichen Mail-Text stellen,
         # damit der Agent die Antwort in der gewünschten Länge/Förmlichkeit formuliert.
