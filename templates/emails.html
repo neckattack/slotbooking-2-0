@@ -1333,7 +1333,7 @@ function ensureInboxContextMenu(){
         ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="border:1px solid #9ca3af; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:#f9fafb; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↑</button>` : ''}
         ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="border:1px solid #9ca3af; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:#f9fafb; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↓</button>` : ''}
       </div>
-      <div class="item-actions" style="position:relative; height:100%; display:flex; align-items:center; gap:10px; padding:0 12px; background:var(--hover); border-left:1px solid #e5e7eb; box-shadow:-4px 0 12px rgba(15,23,42,0.12); transform:translateX(130%); transition:transform 0.14s ease-out; pointer-events:none;">
+      <div class="item-actions" style="position:relative; height:100%; display:flex; align-items:center; gap:10px; padding:0 12px; background:var(--hover); border-left:1px solid #e5e7eb; box-shadow:-4px 0 12px rgba(15,23,42,0.12); transform:translateX(180%); transition:transform 0.14s ease-out; pointer-events:none;">
         <button class="item-contact" type="button" title="Kontakt öffnen" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:17px;">
           👤
         </button>
@@ -1367,7 +1367,7 @@ function ensureInboxContextMenu(){
             actionsBar.style.pointerEvents = 'auto';
           });
           div.addEventListener('mouseleave', () => {
-            actionsBar.style.transform = 'translateX(130%)';
+            actionsBar.style.transform = 'translateX(180%)';
             actionsBar.style.pointerEvents = 'none';
           });
         }
