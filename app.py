@@ -1111,7 +1111,145 @@ def api_emails_agent_compose(current_user):
         plaintext = email_row['body_text']
         html_body = email_row['body_html']
 
+        # Falls noch keine Reply-Preferences für diesen Kontakt gesetzt sind,
+        # versuchen wir einmalig, sie grob aus der Historie abzuleiten und in
+        # contacts.reply_* zu speichern (style_source = 'history').
+        def _maybe_initialize_reply_prefs_from_history(row: dict) -> dict:
+            try:
+                contact_id = row.get('contact_id')
+                contact_email = row.get('contact_email') or row.get('from_addr') or ''
+                style_source = (row.get('reply_style_source') or '').strip()
+                if not contact_id or style_source:
+                    return {}
+
+                conn_h = get_settings_db_connection()
+                cur_h = conn_h.cursor(dictionary=True)
+
+                # Letzte 20 E-Mails dieses Users mit diesem Kontakt (hin und zurück)
+                like_addr = f"%{contact_email}%" if contact_email else '%'
+                cur_h.execute(
+                    """
+                    SELECT body_text
+                    FROM emails
+                    WHERE user_email = %s
+                      AND (to_addrs LIKE %s OR from_addr LIKE %s)
+                    ORDER BY received_at DESC
+                    LIMIT 20
+                    """,
+                    (user_email, like_addr, like_addr),
+                )
+                rows = cur_h.fetchall()
+                if not rows:
+                    cur_h.close()
+                    conn_h.close()
+                    return {}
+
+                texts = [
+                    (r.get('body_text') or '').strip()
+                    for r in rows
+                    if (r.get('body_text') or '').strip()
+                ]
+                if not texts:
+                    cur_h.close()
+                    conn_h.close()
+                    return {}
+
+                # Grobe Längen- und Förmlichkeitsschätzung
+                import re
+
+                total_len = sum(len(t) for t in texts)
+                avg_len = total_len / max(len(texts), 1)
+                if avg_len < 400:
+                    length_level = 2  # eher kurz
+                elif avg_len < 900:
+                    length_level = 3  # mittel
+                elif avg_len < 1500:
+                    length_level = 4  # länger
+                else:
+                    length_level = 5  # sehr ausführlich
+
+                all_text = "\n".join(texts).lower()
+                du_hits = 0
+                sie_hits = 0
+
+                # Sehr vereinfachte Heuristiken für Du/Sie und Förmlichkeit
+                for pattern in [r"hallo ", r"hi ", r"hey ", r"liebe*r? "]:
+                    du_hits += len(re.findall(pattern, all_text, flags=re.IGNORECASE))
+                for pattern in [r"sehr geehrte", r"sehr geehrter", r"sehr geehrten", r"sie "]:
+                    sie_hits += len(re.findall(pattern, all_text, flags=re.IGNORECASE))
+
+                if sie_hits > du_hits:
+                    salutation_mode = 'sie'
+                    formality_level = 4 if sie_hits - du_hits < 3 else 5
+                elif du_hits > sie_hits:
+                    salutation_mode = 'du'
+                    formality_level = 2 if du_hits - sie_hits < 3 else 1
+                else:
+                    salutation_mode = None
+                    formality_level = 3
+
+                persona_mode = 'ich'
+
+                cur_h.close()
+
+                # In contacts speichern (nur, wenn noch nichts gesetzt war)
+                cur_u = conn_h.cursor()
+                cur_u.execute(
+                    """
+                    UPDATE contacts
+                    SET reply_length_level = %s,
+                        reply_formality_level = %s,
+                        reply_salutation_mode = %s,
+                        reply_persona_mode = %s,
+                        reply_style_source = 'history'
+                    WHERE id = %s AND user_email = %s
+                    """,
+                    (
+                        length_level,
+                        formality_level,
+                        salutation_mode,
+                        persona_mode,
+                        contact_id,
+                        user_email,
+                    ),
+                )
+                conn_h.commit()
+                cur_u.close()
+
+                # Aktualisierte Werte laden, damit wir sie direkt verwenden können
+                cur_r = conn_h.cursor(dictionary=True)
+                cur_r.execute(
+                    """
+                    SELECT reply_greeting_template,
+                           reply_closing_template,
+                           reply_length_level,
+                           reply_formality_level,
+                           reply_salutation_mode,
+                           reply_persona_mode,
+                           reply_style_source
+                    FROM contacts
+                    WHERE id = %s AND user_email = %s
+                    """,
+                    (contact_id, user_email),
+                )
+                updated = cur_r.fetchone() or {}
+                cur_r.close()
+                conn_h.close()
+
+                return updated
+            except Exception as e:
+                try:
+                    app.logger.warning(f"[ReplyPrefsHistory] Error: {e}")
+                except Exception:
+                    pass
+                return {}
+
         # Antwortstil / Reply-Preferences des Kontakts als Stil-Hinweis vorbereiten
+        # Falls noch keine Werte vorhanden sind, versuchen wir vorher eine History-Initialisierung.
+        history_update = _maybe_initialize_reply_prefs_from_history(email_row)
+        if history_update:
+            email_row.update(history_update)
+
         def _build_reply_style_hint(row: dict) -> str:
             try:
                 length_level = row.get('reply_length_level')
