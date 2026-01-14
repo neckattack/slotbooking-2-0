@@ -259,21 +259,18 @@
         <span id="compose_status" class="sub" style="margin-left:auto;"></span>
       </div>
       <div id="compose_reply_prefs_block" class="sub" style="margin-top:8px; font-size:11px; color:#111827; padding:8px 10px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;">
-          <div style="font-weight:600; font-size:12px; display:flex; align-items:center; gap:6px;">
-            <span>✉️ Antwortstil</span>
-          </div>
-          <button id="compose_reply_prefs_save" type="button" style="padding:3px 10px; border-radius:999px; border:0; background:#111827; color:#ffffff; font-size:10px; cursor:pointer; white-space:nowrap;">Speichern</button>
+        <div style="display:flex; justify-content:flex-start; align-items:center; gap:6px; margin-bottom:4px; font-weight:600; font-size:12px;">
+          <span>✉️ Antwortstil</span>
         </div>
         <div id="compose_reply_prefs_status" class="sub" style="font-size:11px; margin-bottom:6px; color:#6b7280;">Lade Antwort-Einstellungen…</div>
         <div style="display:flex; flex-direction:column; gap:6px;">
           <label style="font-size:11px; display:flex; flex-direction:column; gap:2px;">
             <span>Länge der Antwort <span id="cmp_length_label" class="muted">(Standard)</span></span>
-            <input id="cmp_length" type="range" min="1" max="5" step="1" value="3" />
+            <input id="cmp_length" type="range" min="1" max="5" step="1" value="3" style="width:100%;" />
           </label>
           <label style="font-size:11px; display:flex; flex-direction:column; gap:2px;">
             <span>Förmlichkeit <span id="cmp_formality_label" class="muted">(Standard)</span></span>
-            <input id="cmp_formality" type="range" min="1" max="5" step="1" value="3" />
+            <input id="cmp_formality" type="range" min="1" max="5" step="1" value="3" style="width:100%;" />
           </label>
           <div style="display:flex; flex-direction:column; gap:4px; font-size:11px;">
             <div>
@@ -3238,6 +3235,7 @@ function ensureInboxContextMenu(){
 
     let cmpSelectedSal = null;
     let cmpSelectedPers = null;
+    let cmpAutosaveTimer = null;
 
     async function loadComposeReplyPrefs(contactId, emailSummary){
       const blockEl = document.getElementById('compose_reply_prefs_block');
@@ -3251,7 +3249,7 @@ function ensureInboxContextMenu(){
       const salSie = document.getElementById('cmp_sal_sie');
       const persIch = document.getElementById('cmp_pers_ich');
       const persWir = document.getElementById('cmp_pers_wir');
-      const saveBtn = document.getElementById('compose_reply_prefs_save');
+      const saveBtn = null; // Speichern-Button entfernt, wir nutzen Auto-Save
 
       if(!blockEl){ return; }
 
@@ -3325,16 +3323,37 @@ function ensureInboxContextMenu(){
           statusEl.style.color = '#6b7280';
         }
 
+        function scheduleComposePrefsAutosave(){
+          if(!statusEl) return;
+          statusEl.textContent = 'Antwortstil: Änderungen werden gespeichert…';
+          statusEl.style.color = '#6b7280';
+          if(cmpAutosaveTimer){
+            clearTimeout(cmpAutosaveTimer);
+          }
+          cmpAutosaveTimer = setTimeout(async () => {
+            try{
+              await autosaveComposeReplyPrefs();
+              statusEl.textContent = 'Antwortstil: Gespeichert (Quelle: manual).';
+              statusEl.style.color = '#16a34a';
+            }catch(_e){
+              statusEl.textContent = 'Antwortstil: Fehler beim Speichern.';
+              statusEl.style.color = '#dc2626';
+            }
+          }, 1000);
+        }
+
         // Event-Handler nur einmal registrieren
         if(lenInput && !lenInput.dataset.cmpAttached){
           lenInput.addEventListener('input', () => {
             if(lenLabel) lenLabel.textContent = cmpLabelForLength(lenInput.value);
+            scheduleComposePrefsAutosave();
           });
           lenInput.dataset.cmpAttached = '1';
         }
         if(formInput && !formInput.dataset.cmpAttached){
           formInput.addEventListener('input', () => {
             if(formLabel) formLabel.textContent = cmpLabelForFormality(formInput.value);
+            scheduleComposePrefsAutosave();
           });
           formInput.dataset.cmpAttached = '1';
         }
@@ -3343,11 +3362,13 @@ function ensureInboxContextMenu(){
             cmpSelectedSal = (cmpSelectedSal === 'du') ? null : 'du';
             cmpSetToggleActive(salDu, cmpSelectedSal === 'du');
             cmpSetToggleActive(salSie, cmpSelectedSal === 'sie');
+            scheduleComposePrefsAutosave();
           });
           salSie.addEventListener('click', () => {
             cmpSelectedSal = (cmpSelectedSal === 'sie') ? null : 'sie';
             cmpSetToggleActive(salDu, cmpSelectedSal === 'du');
             cmpSetToggleActive(salSie, cmpSelectedSal === 'sie');
+            scheduleComposePrefsAutosave();
           });
           salDu.dataset.cmpAttached = '1';
           salSie.dataset.cmpAttached = '1';
@@ -3357,51 +3378,16 @@ function ensureInboxContextMenu(){
             cmpSelectedPers = (cmpSelectedPers === 'ich') ? null : 'ich';
             cmpSetToggleActive(persIch, cmpSelectedPers === 'ich');
             cmpSetToggleActive(persWir, cmpSelectedPers === 'wir');
+            scheduleComposePrefsAutosave();
           });
           persWir.addEventListener('click', () => {
             cmpSelectedPers = (cmpSelectedPers === 'wir') ? null : 'wir';
             cmpSetToggleActive(persIch, cmpSelectedPers === 'ich');
             cmpSetToggleActive(persWir, cmpSelectedPers === 'wir');
+            scheduleComposePrefsAutosave();
           });
           persIch.dataset.cmpAttached = '1';
           persWir.dataset.cmpAttached = '1';
-        }
-
-        if(saveBtn && !saveBtn.dataset.cmpAttached){
-          saveBtn.addEventListener('click', async () => {
-            if(!currentContactId){ return; }
-            if(statusEl){
-              statusEl.textContent = 'Antwortstil: Speichere…';
-              statusEl.style.color = '#6b7280';
-            }
-            const payload = { style_source: 'manual' };
-            if(lenInput){ payload.length_level = parseInt(lenInput.value, 10) || 3; }
-            if(formInput){ payload.formality_level = parseInt(formInput.value, 10) || 3; }
-            payload.salutation_mode = cmpSelectedSal;
-            payload.persona_mode = cmpSelectedPers;
-
-            try{
-              const res2 = await fetch(`/api/contacts/${currentContactId}/reply-prefs`, {
-                method: 'POST',
-                headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-              });
-              const d2 = await res2.json();
-              if(!d2 || d2.error){
-                throw new Error(d2 && d2.error ? d2.error : 'Unbekannter Fehler');
-              }
-              if(statusEl){
-                statusEl.textContent = 'Antwortstil: Gespeichert (Quelle: manual).';
-                statusEl.style.color = '#16a34a';
-              }
-            }catch(e){
-              if(statusEl){
-                statusEl.textContent = 'Antwortstil: Fehler beim Speichern – ' + e;
-                statusEl.style.color = '#dc2626';
-              }
-            }
-          });
-          saveBtn.dataset.cmpAttached = '1';
         }
 
       }catch(e){
