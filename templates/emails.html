@@ -63,10 +63,34 @@
     .compose input { flex:1; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:15px; }
     .compose .editor { min-height:260px; border-radius:14px; padding:16px 18px; background:#f9fafb; font-size:15px; border:1px solid #e5e7eb; }
     .compose .actions { margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; }
-    /* Zweispaltiges Layout im Compose-Panel: links Editor, rechts Antwortstil + Topics */
-    .compose-body { display:flex; gap:18px; align-items:flex-start; margin-top:8px; }
-    .compose-main { flex:2; min-width:0; }
-    .compose-side { flex:1.2; min-width:0; }
+    /* Zweispaltiges Layout im Compose-Panel: links Antwort, rechts Themen (gleiche Höhe, intern scrollbar) */
+    .compose-body {
+      display:flex;
+      gap:18px;
+      align-items:stretch;
+      margin-top:8px;
+      max-height:480px; /* gemeinsamer oberer Bereich; darunter Antwortstil-Block */
+      overflow:hidden;
+    }
+    .compose-main,
+    .compose-side {
+      flex:1;
+      min-width:0;
+      display:flex;
+      flex-direction:column;
+      min-height:0; /* wichtig für korrektes Scrollen der Inhalte */
+    }
+    /* Editor nutzt den verfügbaren Platz in der linken Spalte, Aktionen bleiben unten */
+    .compose-main .editor {
+      flex:1;
+      min-height:0;
+    }
+    /* Themen-Spalte füllt die volle Höhe des oberen Bereichs und scrollt intern */
+    .compose-side #compose_topics_mirror {
+      flex:1;
+      min-height:0;
+      overflow:auto;
+    }
     /* Antwortstil-Panel: volle Spaltenbreite für die Slider im modernen Card-Look */
     #compose_reply_prefs_block { width:100%; box-sizing:border-box; border-radius:14px; border:1px solid #e5e7eb; background:#f9fafb; padding:10px 12px; }
     #compose_reply_prefs_block input[type="range"] { width:100%; display:block; }
@@ -185,6 +209,11 @@
         width:100%;
         padding:12px;
         overflow-x:hidden;
+      }
+      /* Auf Mobile: oberer Bereich nicht künstlich begrenzen, Spalten weiter untereinander */
+      .compose-body {
+        max-height:none;
+        overflow:visible;
       }
       /* In der Mobile-Ansicht Compose-Spalten untereinander stapeln */
       .compose-body {
