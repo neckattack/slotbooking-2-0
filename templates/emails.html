@@ -61,7 +61,16 @@
     .compose .row { display:flex; gap:10px; margin-bottom:8px; align-items:center; }
     .compose label { width:70px; color:var(--sub); font-size:13px; }
     .compose input { flex:1; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:15px; }
-    .compose .editor { min-height:260px; border-radius:14px; padding:16px 18px; background:#f9fafb; font-size:15px; border:1px solid #e5e7eb; }
+    .compose .editor {
+      min-height:260px;
+      border-radius:14px;
+      padding:16px 18px;
+      background:#f9fafb;
+      font-size:15px;
+      border:1px solid #e5e7eb;
+      max-height:100%;
+      overflow-y:auto; /* Antwortfeld intern scrollbar machen */
+    }
     .compose .actions { margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; }
     /* Zweispaltiges Layout im Compose-Panel: links Antwort, rechts Themen (gleiche Höhe, intern scrollbar) */
     .compose-body {
@@ -352,7 +361,7 @@
             </div>
           </div>
           <div id="compose_reply_prefs_label" class="sub" style="margin-top:6px; font-size:11px; color:#6b7280;">
-            Antwortstil: Standard (bisher keine gespeicherten Kontakt-Einstellungen; es gelten Defaults &amp; Heuristiken).
+            Antwortstil: wird aus bisherigen E-Mails abgeleitet (zuerst unsere Antworten, dann die Art, wie dieser Kontakt schreibt).
           </div>
         </div>
       </div>
@@ -2817,7 +2826,7 @@ function ensureInboxContextMenu(){
         } else {
           const prefsTextEl = document.getElementById('compose_reply_prefs_text');
           if(prefsTextEl){
-            prefsTextEl.textContent = 'Antwortstil: Standard (Kontakt unbekannt, es gelten globale Defaults).';
+            prefsTextEl.textContent = 'Antwortstil: wird heuristisch aus bisherigen E-Mails abgeleitet (zuerst unsere Antworten, dann eingehende Mails).';
           }
         }
         
@@ -3205,7 +3214,7 @@ function ensureInboxContextMenu(){
     function formatReplyPrefsLabel(prefs, contactName, contactEmail){
       try{
         if(!prefs){
-          return 'Antwortstil: Standard (bisher keine Kontakt-Einstellungen; es gelten Defaults & Heuristiken).';
+          return 'Antwortstil: wird heuristisch aus bisherigen E-Mails abgeleitet (zuerst unsere Antworten, dann eingehende Mails).';
         }
         const parts = [];
 
@@ -3239,12 +3248,12 @@ function ensureInboxContextMenu(){
         const who = contactName || contactEmail || '';
 
         if(!parts.length){
-          return `Antwortstil: Standard für diesen Kontakt${who ? ' (' + who + ')' : ''} (Quelle: ${src}).`;
+          return `Antwortstil: wird heuristisch aus bisherigen E-Mails abgeleitet${who ? ' – Kontakt: ' + who : ''} (Quelle: ${src}).`;
         }
 
-        return `Antwortstil: ${parts.join(', ')}${who ? ' – Kontakt: ' + who : ''} (Quelle: ${src}).`;
+        return `Antwortstil: ${parts.join(', ')}${who ? ' – Kontakt: ' + who : ''} (Quelle: ${src}, basierend auf bisherigen E-Mails).`;
       }catch(_e){
-        return 'Antwortstil: Standard (Fehler beim Laden der Kontakt-Einstellungen).';
+        return 'Antwortstil: wird heuristisch aus bisherigen E-Mails abgeleitet (Fehler beim Laden der Kontakt-Einstellungen).';
       }
     }
 
