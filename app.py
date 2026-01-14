@@ -1582,19 +1582,23 @@ def api_emails_agent_compose(current_user):
         user_greeting_style = _learn_user_greeting_style(user_email, contact_email_addr)
         address_info = _determine_address_style(contact_name_str, contact_email_addr, user_email)
         
-        # Build personalized greeting
+        # Build personalized greeting (oben in der Antwort)
         greeting_word = user_greeting_style or "Hallo"
         contact_display_name = address_info['name']
         
         if address_info['is_formal'] and not address_info['use_first_name']:
-            # Formal: "Sehr geehrter Herr Schmidt" or "Guten Tag Frau Müller"
+            # Formal: "Sehr geehrter Herr Schmidt" oder "Guten Tag Frau Müller"
             if greeting_word.lower() in ['sehr geehrter', 'sehr geehrte']:
                 greeting_html = f"<p>{greeting_word} {contact_display_name},</p>"
             else:
                 greeting_html = f"<p>{greeting_word} {contact_display_name},</p>"
         else:
-            # Informal: "Hallo Max" or "Moin Anna"
+            # Informell: "Hallo Max" oder "Moin Anna"
             greeting_html = f"<p>{greeting_word} {contact_display_name},</p>"
+
+        # Standard-Abschluss (unten in der Antwort, Signatur kommt separat beim Versand)
+        # Perspektivisch können wir diesen Text pro Kontakt in reply_closing_template hinterlegen.
+        closing_html = "<p>Viele Grüße</p>"
         
         app.logger.info(f"[Greeting] Style: {greeting_word}, Formal: {address_info['is_formal']}, Name: {contact_display_name}")
         # Preface: Jobs upcoming/past (nur bei EXPLIZITER Bitte nach Jobs/Terminen)
@@ -1739,13 +1743,13 @@ def api_emails_agent_compose(current_user):
         # - Wenn Preface vorhanden ist, KEIN weiterer Body anhängen (ist bereits die gewünschte Antwortform)
         has_preface = bool(visible_preface_html)
         if visible_preface_html:
-            antwort_html = greeting_html + visible_preface_html
+            antwort_html = greeting_html + visible_preface_html + closing_html
         else:
             # Wenn der LLM-Body leer ist (auch ohne Timeout), liefern wir 504 statt eines leeren Drafts mit nur "Hallo,"
             if not _has_meaningful_body:
                 return jsonify({'error': 'compose_empty'}), 504
             body_html = _plaintext_to_html_email(antwort_body)
-            antwort_html = greeting_html + body_html
+            antwort_html = greeting_html + body_html + closing_html
         has_body = _has_meaningful_body
         # Draft ohne feste KI-Standardsignatur: nur der eigentliche Antworttext.
         # Die persönliche Signatur des Users wird erst beim Versand im Endpoint
