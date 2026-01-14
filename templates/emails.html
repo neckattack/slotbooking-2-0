@@ -546,8 +546,11 @@
         </div>
         <button id="contact_detail_close" style="background:#6b7280; padding:8px 12px;">✕</button>
       </div>
-      <div class="sub" style="margin-bottom:12px;">
+      <div class="sub" style="margin-bottom:4px;">
         <strong id="contact_detail_count">0</strong> E-Mails insgesamt
+      </div>
+      <div id="contact_reply_prefs_status" class="sub" style="margin-bottom:12px; font-size:11px; color:#6b7280;">
+        Antwortstil: Lade Einstellungen…
       </div>
       <div id="contact_detail_emails" style="border-top:1px solid var(--border); padding-top:16px;">
         <div class="sub" style="text-align:center; padding:20px;">Lade E-Mails...</div>
@@ -4230,11 +4233,51 @@ function ensureInboxContextMenu(){
       const importanceEl = document.getElementById('contact_importance_badge');
       const countEl = document.getElementById('contact_detail_count');
       const emailsEl = document.getElementById('contact_detail_emails');
+      const prefsStatusEl = document.getElementById('contact_reply_prefs_status');
       
       modal.style.display = 'flex';
       if(nameEl) nameEl.textContent = contactName;
       if(emailEl) emailEl.textContent = contactEmail;
       emailsEl.innerHTML = '<div class="sub" style="text-align:center; padding:20px;">Lade E-Mails...</div>';
+
+      // Kleiner Debug-Hinweis: Reply-Preferences für diesen Kontakt laden (Antwortstil)
+      if(prefsStatusEl){
+        prefsStatusEl.textContent = 'Antwortstil: Lade Einstellungen…';
+        fetch(`/api/contacts/${contactId}/reply-prefs`, { headers: getAuthHeaders() })
+          .then(res => res.json())
+          .then(data => {
+            try{
+              if(!data || data.error){
+                prefsStatusEl.textContent = 'Antwortstil: Fehler – ' + (data && data.error ? data.error : 'Unbekannt');
+                prefsStatusEl.style.color = '#dc2626';
+                return;
+              }
+              const prefs = data.preferences || {};
+              if(!prefs || (
+                prefs.greeting_template == null &&
+                prefs.closing_template == null &&
+                prefs.length_level == null &&
+                prefs.formality_level == null &&
+                !prefs.salutation_mode &&
+                !prefs.persona_mode
+              )){
+                prefsStatusEl.textContent = 'Antwortstil: Noch keine gespeicherten Einstellungen (es gelten Default-Werte).';
+                prefsStatusEl.style.color = '#6b7280';
+              } else {
+                const src = prefs.style_source || 'manuell/auto';
+                prefsStatusEl.textContent = `Antwortstil: Einstellungen geladen (${src}).`;
+                prefsStatusEl.style.color = '#16a34a';
+              }
+            }catch(_e){
+              prefsStatusEl.textContent = 'Antwortstil: Fehler beim Auswerten der Daten.';
+              prefsStatusEl.style.color = '#dc2626';
+            }
+          })
+          .catch(e => {
+            prefsStatusEl.textContent = 'Antwortstil: Fehler – ' + e;
+            prefsStatusEl.style.color = '#dc2626';
+          });
+      }
       
       // Load emails from this contact
       fetch(`/api/contacts/${contactId}/emails`, { headers: getAuthHeaders() })
