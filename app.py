@@ -466,8 +466,7 @@ def api_emails_inbox(current_user):
         # Cache nutzen
         cache_key = f"{host}:{port}:{user}:{mailbox}:{limit}"
         import time as _t
-        now = _t.time()
-        if INBOX_CACHE["data"] is not None and INBOX_CACHE["key"] == cache_key and now - INBOX_CACHE["ts"] < 15:
+        if INBOX_CACHE["data"] is not None and INBOX_CACHE["key"] == cache_key and _t.time() - INBOX_CACHE["ts"] < 15:
             return jsonify({'items': INBOX_CACHE['data']})
         # Logge, welche Keys tatsächlich verwendet werden
         used_host_key = 'IMAP_HOST' if os.environ.get('IMAP_HOST') else ('IMAP_SERVER' if os.environ.get('IMAP_SERVER') else '—')
@@ -5416,8 +5415,7 @@ def api_emails_thread(current_user):
             'text': text_body
         }
         import time as _t
-        now = _t.time()
-        THREAD_CACHE[uid] = {"data": result, "ts": now}
+        THREAD_CACHE[uid] = {"data": result, "ts": _t.time()}
         return jsonify(result)
     except Exception as e:
         app.logger.error(f"[IMAP] thread error: {e}")
