@@ -258,6 +258,9 @@
         </button>
         <span id="compose_status" class="sub" style="margin-left:auto;"></span>
       </div>
+      <div id="compose_reply_prefs" class="sub" style="margin-top:4px; font-size:11px; color:#6b7280;">
+        Antwortstil: Standard (noch keine Kontakt-Einstellungen geladen).
+      </div>
       <div id="compose_topics_mirror" class="sub" style="margin-top:8px; font-size:11px; max-height:160px; overflow:auto;"></div>
     </div>
   </div>
@@ -581,6 +584,9 @@
     // Verfügbare Ordner für den aktuellen Account
     let availableFolders = [];
     const accountFolderCache = {};
+    // Aktueller Kontakt & dessen Reply-Preferences (für Compose-Panel)
+    let currentContactId = null;
+    let currentReplyPrefs = null;
 
 // Einfaches Kontextmenü für E-Mail-Zeilen (z.B. "Als gelesen/ungelesen markieren")
 let inboxContextMenuEl = null;
@@ -2706,6 +2712,17 @@ function ensureInboxContextMenu(){
         if(t.contact_id){
           loadContactTopics(t.contact_id);
         }
+
+        // Reply-Preferences des Kontakts für das Compose-Panel laden
+        currentContactId = t.contact_id || null;
+        if(currentContactId){
+          loadComposeReplyPrefs(currentContactId, t);
+        } else {
+          const prefsEl = document.getElementById('compose_reply_prefs');
+          if(prefsEl){
+            prefsEl.textContent = 'Antwortstil: Standard (Kontakt unbekannt, es gelten globale Defaults).';
+          }
+        }
         
         // Quick Card (Überblick) laden (mit einfachem Frontend-Cache pro Kontakt)
         if(t.contact_id){
@@ -3085,6 +3102,91 @@ function ensureInboxContextMenu(){
         }
       }catch(e){
         detail.innerHTML = `<div class="sub">Fehler: ${e}</div>`;
+      }
+    }
+
+    function formatReplyPrefsLabel(prefs, contactName, contactEmail){
+      try{
+        if(!prefs){
+          return 'Antwortstil: Standard (bisher keine Kontakt-Einstellungen; es gelten Defaults & Heuristiken).';
+        }
+        const parts = [];
+
+        const len = prefs.length_level;
+        if(typeof len === 'number'){
+          if(len <= 1) parts.push('sehr kurz (1/5)');
+          else if(len === 2) parts.push('kurz (2/5)');
+          else if(len === 3) parts.push('mittel (3/5)');
+          else if(len === 4) parts.push('lang (4/5)');
+          else parts.push('sehr ausführlich (5/5)');
+        }
+
+        const form = prefs.formality_level;
+        if(typeof form === 'number'){
+          if(form <= 1) parts.push('sehr locker');
+          else if(form === 2) parts.push('eher locker');
+          else if(form === 3) parts.push('neutral');
+          else if(form === 4) parts.push('eher formell');
+          else parts.push('sehr formell/höflich');
+        }
+
+        const sal = (prefs.salutation_mode || '').toLowerCase();
+        if(sal === 'du') parts.push('Anrede: Du');
+        else if(sal === 'sie') parts.push('Anrede: Sie');
+
+        const persona = (prefs.persona_mode || '').toLowerCase();
+        if(persona === 'ich') parts.push('Ich-Form');
+        else if(persona === 'wir') parts.push('Wir-Form');
+
+        const src = prefs.style_source || 'default/auto';
+        const who = contactName || contactEmail || '';
+
+        if(!parts.length){
+          return `Antwortstil: Standard für diesen Kontakt${who ? ' (' + who + ')' : ''} (Quelle: ${src}).`;
+        }
+
+        return `Antwortstil: ${parts.join(', ')}${who ? ' – Kontakt: ' + who : ''} (Quelle: ${src}).`;
+      }catch(_e){
+        return 'Antwortstil: Standard (Fehler beim Laden der Kontakt-Einstellungen).';
+      }
+    }
+
+    async function loadComposeReplyPrefs(contactId, emailSummary){
+      const prefsEl = document.getElementById('compose_reply_prefs');
+      if(!prefsEl){ return; }
+      if(!contactId){
+        prefsEl.textContent = 'Antwortstil: Standard (Kontakt unbekannt, es gelten globale Defaults).';
+        return;
+      }
+
+      prefsEl.textContent = 'Antwortstil: Lade Kontakt-Einstellungen…';
+
+      try{
+        const res = await fetch(`/api/contacts/${contactId}/reply-prefs`, { headers: getAuthHeaders() });
+        const data = await res.json();
+        if(!data || data.error){
+          prefsEl.textContent = 'Antwortstil: Fehler – ' + (data && data.error ? data.error : 'Unbekannt');
+          prefsEl.style.color = '#dc2626';
+          return;
+        }
+        const prefs = data.preferences || {};
+        // Im Frontend-Objekt etwas normalisieren
+        currentReplyPrefs = {
+          greeting_template: prefs.greeting_template,
+          closing_template: prefs.closing_template,
+          length_level: typeof prefs.length_level === 'number' ? prefs.length_level : null,
+          formality_level: typeof prefs.formality_level === 'number' ? prefs.formality_level : null,
+          salutation_mode: prefs.salutation_mode || null,
+          persona_mode: prefs.persona_mode || null,
+          style_source: prefs.style_source || 'default'
+        };
+
+        const label = formatReplyPrefsLabel(currentReplyPrefs, emailSummary && emailSummary.contact_name, emailSummary && emailSummary.from);
+        prefsEl.textContent = label;
+        prefsEl.style.color = '#6b7280';
+      }catch(e){
+        prefsEl.textContent = 'Antwortstil: Fehler – ' + e;
+        prefsEl.style.color = '#dc2626';
       }
     }
 
