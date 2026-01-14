@@ -1336,7 +1336,8 @@ def api_emails_agent_compose(current_user):
             return s.strip()
         source_text = (plaintext or (_html_to_text(html_body) if html_body else '')).strip()
 
-        # Robuste Namens-Erkennung aus der Signatur, um generische Namen wie "Info" zu vermeiden.
+        # Robuste Namens-Erkennung aus Absender und Signatur, um generische oder Firmen-Namen wie
+        # "Info", "Service-Team" oder "René Wendler von Unternehmenswelt" zu vermeiden.
         try:
             contact_name = email_row.get('contact_name') or from_name or ''
             contact_id = email_row.get('contact_id')
@@ -1348,9 +1349,49 @@ def api_emails_agent_compose(current_user):
                 if '@' in n:
                     return True
                 lowered = n.lower()
-                if lowered in {'info', 'information', 'kundendienst', 'kundenservice'}:
+                # eindeutig generische Namen oder Funktionspostfächer
+                bad_exact = {
+                    'info', 'information', 'kundendienst', 'kundenservice', 'support',
+                    'service', 'newsletter', 'no-reply', 'noreply', 'kontakt', 'team',
+                }
+                if lowered in bad_exact:
                     return True
+                # Firmen-/Organisations-Zusätze, die auf keinen reinen Personennamen hindeuten
+                company_tokens = {
+                    'gmbh', 'ug', 'ag', 'kg', 'ohg', 'eg', 'egmbh', 'se', 'inc', 'llc',
+                    'ltd', 'company', 'unternehmenswelt', 'verein', 'e.v.', 'ev', 'kg aA',
+                }
+                tokens = [t for t in n.replace(',', ' ').split() if t]
+                if any(t.lower() in company_tokens for t in tokens):
+                    return True
+                # Wenn sehr viele Wörter vorkommen und typische Verbindungswörter wie "von" enthalten sind,
+                # ist es wahrscheinlich ein Personenname + Firma ("Max Muster von Beispiel GmbH").
+                if len(tokens) >= 3:
+                    connector_tokens = {'von', 'bei', 'für', 'im', 'am'}
+                    if any(t.lower() in connector_tokens for t in tokens):
+                        return True
                 return False
+
+            def _extract_name_from_display(name_str: str) -> str | None:
+                """Versucht, aus einem From-Display-Namen den reinen Personen-Namen zu extrahieren.
+                Beispiele:
+                  "René Wendler von Unternehmenswelt" -> "René Wendler"
+                  "Max Mustermann | Firmenname GmbH" -> "Max Mustermann""" 
+                import re
+                if not name_str:
+                    return None
+                # Teil vor einer evtl. E-Mail-Adresse in <...> nehmen
+                if '<' in name_str:
+                    name_str = name_str.split('<', 1)[0].strip()
+                # Pipe/Strich als Trenner zwischen Person und Firma behandeln
+                for sep in ['|', '-', '–', '/']:
+                    if sep in name_str:
+                        name_str = name_str.split(sep, 1)[0].strip()
+                # Muster: Ersten ein oder zwei kapitalisierten Wörter am Anfang nehmen
+                m = re.match(r'^([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)?)\b', name_str)
+                if m:
+                    return m.group(1).strip()
+                return None
 
             def _extract_name_from_signature(text: str) -> str | None:
                 import re
@@ -1384,7 +1425,8 @@ def api_emails_agent_compose(current_user):
                 return None
 
             if _looks_like_bad_name(contact_name):
-                better = _extract_name_from_signature(source_text)
+                # Zuerst versuchen wir, aus dem From-Display-Namen einen sauberen Personen-Namen zu ziehen.
+                better = _extract_name_from_display(from_name or '') or _extract_name_from_signature(source_text)
                 if better:
                     contact_name = better
                     email_row['contact_name'] = better
