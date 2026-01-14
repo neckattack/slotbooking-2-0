@@ -258,9 +258,39 @@
         </button>
         <span id="compose_status" class="sub" style="margin-left:auto;"></span>
       </div>
-      <div id="compose_reply_prefs" class="sub" style="margin-top:4px; font-size:11px; color:#6b7280; display:flex; align-items:center; gap:8px;">
-        <span id="compose_reply_prefs_text">Antwortstil: Standard (noch keine Kontakt-Einstellungen geladen).</span>
-        <button id="compose_reply_prefs_edit" type="button" style="margin-left:auto; padding:2px 8px; border-radius:999px; border:0; background:#111827; color:#ffffff; font-size:10px; cursor:pointer; white-space:nowrap;">Stil anpassen…</button>
+      <div id="compose_reply_prefs_block" class="sub" style="margin-top:8px; font-size:11px; color:#111827; padding:8px 10px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;">
+          <div style="font-weight:600; font-size:12px; display:flex; align-items:center; gap:6px;">
+            <span>✉️ Antwortstil</span>
+          </div>
+          <button id="compose_reply_prefs_save" type="button" style="padding:3px 10px; border-radius:999px; border:0; background:#111827; color:#ffffff; font-size:10px; cursor:pointer; white-space:nowrap;">Speichern</button>
+        </div>
+        <div id="compose_reply_prefs_status" class="sub" style="font-size:11px; margin-bottom:6px; color:#6b7280;">Lade Antwort-Einstellungen…</div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <label style="font-size:11px; display:flex; flex-direction:column; gap:2px;">
+            <span>Länge der Antwort <span id="cmp_length_label" class="muted">(Standard)</span></span>
+            <input id="cmp_length" type="range" min="1" max="5" step="1" value="3" />
+          </label>
+          <label style="font-size:11px; display:flex; flex-direction:column; gap:2px;">
+            <span>Förmlichkeit <span id="cmp_formality_label" class="muted">(Standard)</span></span>
+            <input id="cmp_formality" type="range" min="1" max="5" step="1" value="3" />
+          </label>
+          <div style="display:flex; flex-direction:column; gap:4px; font-size:11px;">
+            <div>
+              <span style="margin-right:6px;">Anrede</span>
+              <button type="button" id="cmp_sal_du" data-value="du" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer; margin-right:4px;">Du</button>
+              <button type="button" id="cmp_sal_sie" data-value="sie" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer;">Sie</button>
+            </div>
+            <div>
+              <span style="margin-right:6px;">Perspektive</span>
+              <button type="button" id="cmp_pers_ich" data-value="ich" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer; margin-right:4px;">Ich</button>
+              <button type="button" id="cmp_pers_wir" data-value="wir" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer;">Wir</button>
+            </div>
+          </div>
+        </div>
+        <div id="compose_reply_prefs_label" class="sub" style="margin-top:6px; font-size:11px; color:#6b7280;">
+          Antwortstil: Standard (bisher keine gespeicherten Kontakt-Einstellungen; es gelten Defaults &amp; Heuristiken).
+        </div>
       </div>
       <div id="compose_topics_mirror" class="sub" style="margin-top:8px; font-size:11px; max-height:160px; overflow:auto;"></div>
     </div>
@@ -1993,36 +2023,8 @@ function ensureInboxContextMenu(){
                 <div id="qc_tone" style="margin-bottom:2px;"><span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span></div>
                 <div id="qc_timeline" style="margin-top:4px;"><span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span></div>
               </div>
-              <div id="contact_reply_prefs_panel" class="sub" style="font-size:14px; margin-bottom:8px; padding:10px 12px; border-radius:6px; background:#fefce8; border:1px solid #facc15;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px;">
-                  <div style="font-weight:600; display:flex; align-items:center; gap:6px;">
-                    <span>✉️ Antwortstil</span>
-                  </div>
-                  <button id="contact_reply_prefs_save" style="background:#111827; color:#ffffff; border:0; padding:4px 10px; border-radius:999px; font-size:11px; cursor:pointer;">Speichern</button>
-                </div>
-                <div id="contact_reply_prefs_status" class="sub" style="font-size:11px; margin-bottom:6px; color:#6b7280;">Lade Antwort-Einstellungen…</div>
-                <div style="display:flex; flex-direction:column; gap:6px;">
-                  <label style="font-size:12px; display:flex; flex-direction:column; gap:2px;">
-                    <span>Länge der Antwort <span id="crp_length_label" class="muted">(Standard)</span></span>
-                    <input id="crp_length" type="range" min="1" max="5" step="1" value="3" />
-                  </label>
-                  <label style="font-size:12px; display:flex; flex-direction:column; gap:2px;">
-                    <span>Förmlichkeit <span id="crp_formality_label" class="muted">(Standard)</span></span>
-                    <input id="crp_formality" type="range" min="1" max="5" step="1" value="3" />
-                  </label>
-                  <div style="display:flex; flex-direction:column; gap:4px; font-size:12px;">
-                    <div>
-                      <span style="margin-right:6px;">Anrede</span>
-                      <button type="button" id="crp_sal_du" data-value="du" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:11px; cursor:pointer; margin-right:4px;">Du</button>
-                      <button type="button" id="crp_sal_sie" data-value="sie" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:11px; cursor:pointer;">Sie</button>
-                    </div>
-                    <div>
-                      <span style="margin-right:6px;">Perspektive</span>
-                      <button type="button" id="crp_pers_ich" data-value="ich" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:11px; cursor:pointer; margin-right:4px;">Ich</button>
-                      <button type="button" id="crp_pers_wir" data-value="wir" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:11px; cursor:pointer;">Wir</button>
-                    </div>
-                  </div>
-                </div>
+              <div id="contact_reply_prefs_status" class="sub" style="font-size:11px; margin:4px 0 8px 0; color:#6b7280;">
+                Antwortstil: Lade Einstellungen…
               </div>
               <div id="contact_topic_detail_panel" class="sub" style="font-size:16px; margin-bottom:8px; display:none; padding:8px 10px; border-radius:4px; background:#eff6ff; border:1px solid #bfdbfe;"></div>
               <div id="prof_summary_full" class="sub" style="margin-top:8px; padding:10px; background:#f9fafb; border-radius:6px; line-height:1.5; display:${profileSummaryFull ? 'block' : 'none'};">
@@ -3204,26 +3206,84 @@ function ensureInboxContextMenu(){
       }
     }
 
+    // Hilfsfunktionen für Compose-Reply-Panel (Slider/Toggles)
+    function cmpLabelForLength(v){
+      const n = parseInt(v, 10) || 3;
+      if(n <= 1) return 'sehr kurz (1/5)';
+      if(n === 2) return 'kurz (2/5)';
+      if(n === 3) return 'mittel (3/5)';
+      if(n === 4) return 'lang (4/5)';
+      return 'sehr ausführlich (5/5)';
+    }
+    function cmpLabelForFormality(v){
+      const n = parseInt(v, 10) || 3;
+      if(n <= 1) return 'sehr locker (1/5)';
+      if(n === 2) return 'eher locker (2/5)';
+      if(n === 3) return 'neutral (3/5)';
+      if(n === 4) return 'eher formell (4/5)';
+      return 'sehr formell/höflich (5/5)';
+    }
+    function cmpSetToggleActive(btn, active){
+      if(!btn) return;
+      if(active){
+        btn.style.background = '#111827';
+        btn.style.color = '#ffffff';
+        btn.style.borderColor = '#111827';
+      } else {
+        btn.style.background = '#f9fafb';
+        btn.style.color = '#111827';
+        btn.style.borderColor = '#d1d5db';
+      }
+    }
+
+    let cmpSelectedSal = null;
+    let cmpSelectedPers = null;
+
     async function loadComposeReplyPrefs(contactId, emailSummary){
-      const prefsEl = document.getElementById('compose_reply_prefs');
-      if(!prefsEl){ return; }
+      const blockEl = document.getElementById('compose_reply_prefs_block');
+      const statusEl = document.getElementById('compose_reply_prefs_status');
+      const labelEl = document.getElementById('compose_reply_prefs_label');
+      const lenInput = document.getElementById('cmp_length');
+      const formInput = document.getElementById('cmp_formality');
+      const lenLabel = document.getElementById('cmp_length_label');
+      const formLabel = document.getElementById('cmp_formality_label');
+      const salDu = document.getElementById('cmp_sal_du');
+      const salSie = document.getElementById('cmp_sal_sie');
+      const persIch = document.getElementById('cmp_pers_ich');
+      const persWir = document.getElementById('cmp_pers_wir');
+      const saveBtn = document.getElementById('compose_reply_prefs_save');
+
+      if(!blockEl){ return; }
+
+      // Basis-Initialisierung der Slider-Labels
+      if(lenInput && lenLabel){ lenLabel.textContent = cmpLabelForLength(lenInput.value); }
+      if(formInput && formLabel){ formLabel.textContent = cmpLabelForFormality(formInput.value); }
+
       if(!contactId){
-        prefsEl.textContent = 'Antwortstil: Standard (Kontakt unbekannt, es gelten globale Defaults).';
+        if(statusEl){
+          statusEl.textContent = 'Antwortstil: Kontakt unbekannt, es gelten globale Defaults.';
+          statusEl.style.color = '#6b7280';
+        }
         return;
       }
 
-      prefsEl.textContent = 'Antwortstil: Lade Kontakt-Einstellungen…';
+      if(statusEl){
+        statusEl.textContent = 'Antwortstil: Lade Kontakt-Einstellungen…';
+        statusEl.style.color = '#6b7280';
+      }
 
       try{
         const res = await fetch(`/api/contacts/${contactId}/reply-prefs`, { headers: getAuthHeaders() });
         const data = await res.json();
         if(!data || data.error){
-          prefsEl.textContent = 'Antwortstil: Fehler – ' + (data && data.error ? data.error : 'Unbekannt');
-          prefsEl.style.color = '#dc2626';
+          if(statusEl){
+            statusEl.textContent = 'Antwortstil: Fehler – ' + (data && data.error ? data.error : 'Unbekannt');
+            statusEl.style.color = '#dc2626';
+          }
           return;
         }
         const prefs = data.preferences || {};
-        // Im Frontend-Objekt etwas normalisieren
+
         currentReplyPrefs = {
           greeting_template: prefs.greeting_template,
           closing_template: prefs.closing_template,
@@ -3234,12 +3294,121 @@ function ensureInboxContextMenu(){
           style_source: prefs.style_source || 'default'
         };
 
-        const label = formatReplyPrefsLabel(currentReplyPrefs, emailSummary && emailSummary.contact_name, emailSummary && emailSummary.from);
-        prefsEl.textContent = label;
-        prefsEl.style.color = '#6b7280';
+        // Slider-Werte setzen
+        if(lenInput){
+          const v = currentReplyPrefs.length_level || 3;
+          lenInput.value = String(v);
+          if(lenLabel) lenLabel.textContent = cmpLabelForLength(v);
+        }
+        if(formInput){
+          const v = currentReplyPrefs.formality_level || 3;
+          formInput.value = String(v);
+          if(formLabel) formLabel.textContent = cmpLabelForFormality(v);
+        }
+
+        // Toggles setzen
+        cmpSelectedSal = (currentReplyPrefs.salutation_mode || '').toLowerCase() || null;
+        cmpSetToggleActive(salDu, cmpSelectedSal === 'du');
+        cmpSetToggleActive(salSie, cmpSelectedSal === 'sie');
+
+        cmpSelectedPers = (currentReplyPrefs.persona_mode || '').toLowerCase() || null;
+        cmpSetToggleActive(persIch, cmpSelectedPers === 'ich');
+        cmpSetToggleActive(persWir, cmpSelectedPers === 'wir');
+
+        if(labelEl){
+          labelEl.textContent = formatReplyPrefsLabel(currentReplyPrefs, emailSummary && emailSummary.contact_name, emailSummary && emailSummary.from);
+        }
+
+        if(statusEl){
+          const src = currentReplyPrefs.style_source || 'default/auto';
+          statusEl.textContent = `Quelle: ${src}`;
+          statusEl.style.color = '#6b7280';
+        }
+
+        // Event-Handler nur einmal registrieren
+        if(lenInput && !lenInput.dataset.cmpAttached){
+          lenInput.addEventListener('input', () => {
+            if(lenLabel) lenLabel.textContent = cmpLabelForLength(lenInput.value);
+          });
+          lenInput.dataset.cmpAttached = '1';
+        }
+        if(formInput && !formInput.dataset.cmpAttached){
+          formInput.addEventListener('input', () => {
+            if(formLabel) formLabel.textContent = cmpLabelForFormality(formInput.value);
+          });
+          formInput.dataset.cmpAttached = '1';
+        }
+        if(salDu && salSie && !salDu.dataset.cmpAttached){
+          salDu.addEventListener('click', () => {
+            cmpSelectedSal = (cmpSelectedSal === 'du') ? null : 'du';
+            cmpSetToggleActive(salDu, cmpSelectedSal === 'du');
+            cmpSetToggleActive(salSie, cmpSelectedSal === 'sie');
+          });
+          salSie.addEventListener('click', () => {
+            cmpSelectedSal = (cmpSelectedSal === 'sie') ? null : 'sie';
+            cmpSetToggleActive(salDu, cmpSelectedSal === 'du');
+            cmpSetToggleActive(salSie, cmpSelectedSal === 'sie');
+          });
+          salDu.dataset.cmpAttached = '1';
+          salSie.dataset.cmpAttached = '1';
+        }
+        if(persIch && persWir && !persIch.dataset.cmpAttached){
+          persIch.addEventListener('click', () => {
+            cmpSelectedPers = (cmpSelectedPers === 'ich') ? null : 'ich';
+            cmpSetToggleActive(persIch, cmpSelectedPers === 'ich');
+            cmpSetToggleActive(persWir, cmpSelectedPers === 'wir');
+          });
+          persWir.addEventListener('click', () => {
+            cmpSelectedPers = (cmpSelectedPers === 'wir') ? null : 'wir';
+            cmpSetToggleActive(persIch, cmpSelectedPers === 'ich');
+            cmpSetToggleActive(persWir, cmpSelectedPers === 'wir');
+          });
+          persIch.dataset.cmpAttached = '1';
+          persWir.dataset.cmpAttached = '1';
+        }
+
+        if(saveBtn && !saveBtn.dataset.cmpAttached){
+          saveBtn.addEventListener('click', async () => {
+            if(!currentContactId){ return; }
+            if(statusEl){
+              statusEl.textContent = 'Antwortstil: Speichere…';
+              statusEl.style.color = '#6b7280';
+            }
+            const payload = { style_source: 'manual' };
+            if(lenInput){ payload.length_level = parseInt(lenInput.value, 10) || 3; }
+            if(formInput){ payload.formality_level = parseInt(formInput.value, 10) || 3; }
+            payload.salutation_mode = cmpSelectedSal;
+            payload.persona_mode = cmpSelectedPers;
+
+            try{
+              const res2 = await fetch(`/api/contacts/${currentContactId}/reply-prefs`, {
+                method: 'POST',
+                headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+              const d2 = await res2.json();
+              if(!d2 || d2.error){
+                throw new Error(d2 && d2.error ? d2.error : 'Unbekannter Fehler');
+              }
+              if(statusEl){
+                statusEl.textContent = 'Antwortstil: Gespeichert (Quelle: manual).';
+                statusEl.style.color = '#16a34a';
+              }
+            }catch(e){
+              if(statusEl){
+                statusEl.textContent = 'Antwortstil: Fehler beim Speichern – ' + e;
+                statusEl.style.color = '#dc2626';
+              }
+            }
+          });
+          saveBtn.dataset.cmpAttached = '1';
+        }
+
       }catch(e){
-        prefsEl.textContent = 'Antwortstil: Fehler – ' + e;
-        prefsEl.style.color = '#dc2626';
+        if(statusEl){
+          statusEl.textContent = 'Antwortstil: Fehler – ' + e;
+          statusEl.style.color = '#dc2626';
+        }
       }
     }
 
@@ -4389,92 +4558,13 @@ function ensureInboxContextMenu(){
       const countEl = document.getElementById('contact_detail_count');
       const emailsEl = document.getElementById('contact_detail_emails');
       const prefsStatusEl = document.getElementById('contact_reply_prefs_status');
-      const crpLength = document.getElementById('crp_length');
-      const crpFormality = document.getElementById('crp_formality');
-      const crpLengthLabel = document.getElementById('crp_length_label');
-      const crpFormalityLabel = document.getElementById('crp_formality_label');
-      const crpSalDu = document.getElementById('crp_sal_du');
-      const crpSalSie = document.getElementById('crp_sal_sie');
-      const crpPersIch = document.getElementById('crp_pers_ich');
-      const crpPersWir = document.getElementById('crp_pers_wir');
-      const crpSaveBtn = document.getElementById('contact_reply_prefs_save');
-
-      let crpSelectedSal = null;
-      let crpSelectedPers = null;
-
-      function labelForLength(v){
-        const n = parseInt(v, 10) || 3;
-        if(n <= 1) return 'sehr kurz (1/5)';
-        if(n === 2) return 'kurz (2/5)';
-        if(n === 3) return 'mittel (3/5)';
-        if(n === 4) return 'lang (4/5)';
-        return 'sehr ausführlich (5/5)';
-      }
-      function labelForFormality(v){
-        const n = parseInt(v, 10) || 3;
-        if(n <= 1) return 'sehr locker (1/5)';
-        if(n === 2) return 'eher locker (2/5)';
-        if(n === 3) return 'neutral (3/5)';
-        if(n === 4) return 'eher formell (4/5)';
-        return 'sehr formell/höflich (5/5)';
-      }
-      function setToggleActive(btn, active){
-        if(!btn) return;
-        if(active){
-          btn.style.background = '#111827';
-          btn.style.color = '#ffffff';
-          btn.style.borderColor = '#111827';
-        }else{
-          btn.style.background = '#f9fafb';
-          btn.style.color = '#111827';
-          btn.style.borderColor = '#d1d5db';
-        }
-      }
 
       modal.style.display = 'flex';
       if(nameEl) nameEl.textContent = contactName;
       if(emailEl) emailEl.textContent = contactEmail;
       emailsEl.innerHTML = '<div class="sub" style="text-align:center; padding:20px;">Lade E-Mails...</div>';
 
-      if(crpLength && crpLengthLabel){
-        crpLengthLabel.textContent = labelForLength(crpLength.value);
-        crpLength.oninput = () => {
-          crpLengthLabel.textContent = labelForLength(crpLength.value);
-        };
-      }
-      if(crpFormality && crpFormalityLabel){
-        crpFormalityLabel.textContent = labelForFormality(crpFormality.value);
-        crpFormality.oninput = () => {
-          crpFormalityLabel.textContent = labelForFormality(crpFormality.value);
-        };
-      }
-
-      if(crpSalDu && crpSalSie){
-        crpSalDu.onclick = () => {
-          crpSelectedSal = crpSelectedSal === 'du' ? null : 'du';
-          setToggleActive(crpSalDu, crpSelectedSal === 'du');
-          setToggleActive(crpSalSie, crpSelectedSal === 'sie');
-        };
-        crpSalSie.onclick = () => {
-          crpSelectedSal = crpSelectedSal === 'sie' ? null : 'sie';
-          setToggleActive(crpSalDu, crpSelectedSal === 'du');
-          setToggleActive(crpSalSie, crpSelectedSal === 'sie');
-        };
-      }
-      if(crpPersIch && crpPersWir){
-        crpPersIch.onclick = () => {
-          crpSelectedPers = crpSelectedPers === 'ich' ? null : 'ich';
-          setToggleActive(crpPersIch, crpSelectedPers === 'ich');
-          setToggleActive(crpPersWir, crpSelectedPers === 'wir');
-        };
-        crpPersWir.onclick = () => {
-          crpSelectedPers = crpSelectedPers === 'wir' ? null : 'wir';
-          setToggleActive(crpPersIch, crpSelectedPers === 'ich');
-          setToggleActive(crpPersWir, crpSelectedPers === 'wir');
-        };
-      }
-
-      // Reply-Preferences für diesen Kontakt laden (Antwortstil + Steuerung befüllen)
+      // Nur Status zu Reply-Preferences anzeigen (kein Edit an dieser Stelle)
       if(prefsStatusEl){
         prefsStatusEl.textContent = 'Antwortstil: Lade Einstellungen…';
         prefsStatusEl.style.color = '#6b7280';
@@ -4488,24 +4578,6 @@ function ensureInboxContextMenu(){
                 return;
               }
               const prefs = data.preferences || {};
-
-              if(crpLength && typeof prefs.length_level === 'number'){
-                crpLength.value = String(prefs.length_level);
-                if(crpLengthLabel){ crpLengthLabel.textContent = labelForLength(crpLength.value); }
-              }
-              if(crpFormality && typeof prefs.formality_level === 'number'){
-                crpFormality.value = String(prefs.formality_level);
-                if(crpFormalityLabel){ crpFormalityLabel.textContent = labelForFormality(crpFormality.value); }
-              }
-
-              crpSelectedSal = (prefs.salutation_mode || '').toLowerCase() || null;
-              setToggleActive(crpSalDu, crpSelectedSal === 'du');
-              setToggleActive(crpSalSie, crpSelectedSal === 'sie');
-
-              crpSelectedPers = (prefs.persona_mode || '').toLowerCase() || null;
-              setToggleActive(crpPersIch, crpSelectedPers === 'ich');
-              setToggleActive(crpPersWir, crpSelectedPers === 'wir');
-
               if(!prefs || (
                 prefs.greeting_template == null &&
                 prefs.closing_template == null &&
@@ -4530,43 +4602,6 @@ function ensureInboxContextMenu(){
             prefsStatusEl.textContent = 'Antwortstil: Fehler – ' + e;
             prefsStatusEl.style.color = '#dc2626';
           });
-      }
-
-      // Speichern der Reply-Preferences (manuelle Werte haben Vorrang)
-      if(crpSaveBtn){
-        crpSaveBtn.onclick = async () => {
-          if(!contactId){ return; }
-          if(prefsStatusEl){
-            prefsStatusEl.textContent = 'Antwortstil: Speichere…';
-            prefsStatusEl.style.color = '#6b7280';
-          }
-          const payload = { style_source: 'manual' };
-          if(crpLength){ payload.length_level = parseInt(crpLength.value, 10) || 3; }
-          if(crpFormality){ payload.formality_level = parseInt(crpFormality.value, 10) || 3; }
-          payload.salutation_mode = crpSelectedSal;
-          payload.persona_mode = crpSelectedPers;
-
-          try{
-            const res = await fetch(`/api/contacts/${contactId}/reply-prefs`, {
-              method: 'POST',
-              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            if(!data || data.error){
-              throw new Error(data && data.error ? data.error : 'Unbekannter Fehler');
-            }
-            if(prefsStatusEl){
-              prefsStatusEl.textContent = 'Antwortstil: Gespeichert (Quelle: manual).';
-              prefsStatusEl.style.color = '#16a34a';
-            }
-          }catch(e){
-            if(prefsStatusEl){
-              prefsStatusEl.textContent = 'Antwortstil: Fehler beim Speichern – ' + e;
-              prefsStatusEl.style.color = '#dc2626';
-            }
-          }
-        };
       }
       
       // Load emails from this contact
