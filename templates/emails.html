@@ -63,6 +63,10 @@
     .compose input { flex:1; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:15px; }
     .compose .editor { min-height:260px; border-radius:14px; padding:16px 18px; background:#f9fafb; font-size:15px; border:1px solid #e5e7eb; }
     .compose .actions { margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; }
+    /* Zweispaltiges Layout im Compose-Panel: links Editor, rechts Antwortstil + Topics */
+    .compose-body { display:flex; gap:18px; align-items:flex-start; margin-top:8px; }
+    .compose-main { flex:2; min-width:0; }
+    .compose-side { flex:1.2; min-width:0; }
     /* Antwortstil-Panel: volle Spaltenbreite für die Slider im modernen Card-Look */
     #compose_reply_prefs_block { width:100%; box-sizing:border-box; border-radius:14px; border:1px solid #e5e7eb; background:#f9fafb; padding:10px 12px; }
     #compose_reply_prefs_block input[type="range"] { width:100%; display:block; }
@@ -182,6 +186,10 @@
         padding:12px;
         overflow-x:hidden;
       }
+      /* In der Mobile-Ansicht Compose-Spalten untereinander stapeln */
+      .compose-body {
+        flex-direction:column;
+      }
       
       /* Make modals responsive */
       .modal .box { 
@@ -259,57 +267,63 @@
           <h3 style="margin:0;">Antwort</h3>
           <button id="compose_close_btn" title="Antwort schließen" class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-900 text-white text-base hover:bg-slate-800 transition-colors">✕</button>
         </div>
-        <div class="row"><label>Empf.</label><input id="compose_to" placeholder="Empfänger" /></div>
-        <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
-        <div id="compose_editor" class="editor" contenteditable="true"><div class="muted">Hier erscheint der Vorschlag …</div></div>
-        <div class="actions" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-          <button id="btn_propose" disabled class="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Antwort vorschlagen</button>
-          <button id="btn_send" disabled class="px-4 py-2 rounded-full bg-emerald-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Senden</button>
-          <button id="btn_reload_reply" title="Antwort neu laden" class="border-0 px-3 py-2 rounded-full text-sm cursor-pointer bg-slate-900 text-white inline-flex items-center gap-1 hover:bg-slate-800 transition-colors">
-            <span>
-              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M12 4a7 7 0 0 1 6.32 4H16.5a.75.75 0 0 0 0 1.5H21a.75.75 0 0 0 .75-.75V4.5a.75.75 0 0 0-1.5 0v1.46A8.5 8.5 0 0 0 12 2.5 8.25 8.25 0 0 0 4.3 7.09a.75.75 0 1 0 1.33.67A6.75 6.75 0 0 1 12 4Z" fill="white"/>
-                <path d="M12 20a7 7 0 0 1-6.32-4H7.5a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0-.75.75V19.5a.75.75 0 0 0 1.5 0v-1.46A8.5 8.5 0 0 0 12 21.5a8.25 8.25 0 0 0 7.7-4.59.75.75 0 0 0-1.33-.67A6.75 6.75 0 0 0 12 20Z" fill="white"/>
-              </svg>
-            </span>
-            <span>Neu laden</span>
-          </button>
-          <span id="compose_status" class="sub" style="margin-left:auto;"></span>
-        </div>
-      <div id="compose_reply_prefs_block" class="sub" style="margin-top:8px; font-size:11px; color:#111827;">
-        <div style="display:flex; justify-content:flex-start; align-items:center; gap:6px; margin-bottom:4px; font-weight:600; font-size:12px;">
-          <span>✉️ Antwortstil</span>
-        </div>
-        <div id="compose_reply_prefs_status" class="sub" style="font-size:11px; margin-bottom:6px; color:#6b7280;">Antwortstil: Lade Einstellungen…</div>
-        <div style="display:flex; flex-direction:column; gap:6px;">
-          <label style="font-size:11px; display:flex; flex-direction:column; gap:2px;">
-            <span>Länge der Antwort <span id="cmp_length_label" class="muted">(Standard)</span></span>
-            <input id="cmp_length" type="range" min="1" max="5" step="1" value="3" style="width:100%;" />
-          </label>
-          <label style="font-size:11px; display:flex; flex-direction:column; gap:2px;">
-            <span>Förmlichkeit <span id="cmp_formality_label" class="muted">(Standard)</span></span>
-            <input id="cmp_formality" type="range" min="1" max="5" step="1" value="3" style="width:100%;" />
-          </label>
-          <div style="display:flex; flex-direction:column; gap:4px; font-size:11px;">
-            <div>
-              <span style="margin-right:6px;">Anrede</span>
-              <button type="button" id="cmp_sal_du" data-value="du" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer; margin-right:4px;">Du</button>
-              <button type="button" id="cmp_sal_sie" data-value="sie" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer;">Sie</button>
-            </div>
-            <div>
-              <span style="margin-right:6px;">Perspektive</span>
-              <button type="button" id="cmp_pers_ich" data-value="ich" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer; margin-right:4px;">Ich</button>
-              <button type="button" id="cmp_pers_wir" data-value="wir" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer;">Wir</button>
+        <div class="compose-body">
+          <div class="compose-main">
+            <div class="row"><label>Empf.</label><input id="compose_to" placeholder="Empfänger" /></div>
+            <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
+            <div id="compose_editor" class="editor" contenteditable="true"><div class="muted">Hier erscheint der Vorschlag …</div></div>
+            <div class="actions" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <button id="btn_propose" disabled class="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Antwort vorschlagen</button>
+              <button id="btn_send" disabled class="px-4 py-2 rounded-full bg-emerald-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Senden</button>
+              <button id="btn_reload_reply" title="Antwort neu laden" class="border-0 px-3 py-2 rounded-full text-sm cursor-pointer bg-slate-900 text-white inline-flex items-center gap-1 hover:bg-slate-800 transition-colors">
+                <span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M12 4a7 7 0 0 1 6.32 4H16.5a.75.75 0 0 0 0 1.5H21a.75.75 0 0 0 .75-.75V4.5a.75.75 0 0 0-1.5 0v1.46A8.5 8.5 0 0 0 12 2.5 8.25 8.25 0 0 0 4.3 7.09a.75.75 0 1 0 1.33.67A6.75 6.75 0 0 1 12 4Z" fill="white"/>
+                    <path d="M12 20a7 7 0 0 1-6.32-4H7.5a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0-.75.75V19.5a.75.75 0 0 0 1.5 0v-1.46A8.5 8.5 0 0 0 12 21.5a8.25 8.25 0 0 0 7.7-4.59.75.75 0 0 0-1.33-.67A6.75 6.75 0 0 0 12 20Z" fill="white"/>
+                  </svg>
+                </span>
+                <span>Neu laden</span>
+              </button>
+              <span id="compose_status" class="sub" style="margin-left:auto;"></span>
             </div>
           </div>
-        </div>
-        <div id="compose_reply_prefs_label" class="sub" style="margin-top:6px; font-size:11px; color:#6b7280;">
-          Antwortstil: Standard (bisher keine gespeicherten Kontakt-Einstellungen; es gelten Defaults &amp; Heuristiken).
+          <div class="compose-side">
+            <div id="compose_reply_prefs_block" class="sub" style="margin-top:0; font-size:11px; color:#111827;">
+              <div style="display:flex; justify-content:flex-start; align-items:center; gap:6px; margin-bottom:4px; font-weight:600; font-size:12px;">
+                <span>✉️ Antwortstil</span>
+              </div>
+              <div id="compose_reply_prefs_status" class="sub" style="font-size:11px; margin-bottom:6px; color:#6b7280;">Antwortstil: Lade Einstellungen…</div>
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <label style="font-size:11px; display:flex; flex-direction:column; gap:2px;">
+                  <span>Länge der Antwort <span id="cmp_length_label" class="muted">(Standard)</span></span>
+                  <input id="cmp_length" type="range" min="1" max="5" step="1" value="3" style="width:100%;" />
+                </label>
+                <label style="font-size:11px; display:flex; flex-direction:column; gap:2px;">
+                  <span>Förmlichkeit <span id="cmp_formality_label" class="muted">(Standard)</span></span>
+                  <input id="cmp_formality" type="range" min="1" max="5" step="1" value="3" style="width:100%;" />
+                </label>
+                <div style="display:flex; flex-direction:column; gap:4px; font-size:11px;">
+                  <div>
+                    <span style="margin-right:6px;">Anrede</span>
+                    <button type="button" id="cmp_sal_du" data-value="du" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer; margin-right:4px;">Du</button>
+                    <button type="button" id="cmp_sal_sie" data-value="sie" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer;">Sie</button>
+                  </div>
+                  <div>
+                    <span style="margin-right:6px;">Perspektive</span>
+                    <button type="button" id="cmp_pers_ich" data-value="ich" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer; margin-right:4px;">Ich</button>
+                    <button type="button" id="cmp_pers_wir" data-value="wir" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer;">Wir</button>
+                  </div>
+                </div>
+              </div>
+              <div id="compose_reply_prefs_label" class="sub" style="margin-top:6px; font-size:11px; color:#6b7280;">
+                Antwortstil: Standard (bisher keine gespeicherten Kontakt-Einstellungen; es gelten Defaults &amp; Heuristiken).
+              </div>
+            </div>
+            <div id="compose_topics_mirror" class="sub" style="margin-top:8px; font-size:11px; max-height:200px; overflow:auto;"></div>
+          </div>
         </div>
       </div>
-      <div id="compose_topics_mirror" class="sub" style="margin-top:8px; font-size:11px; max-height:160px; overflow:auto;"></div>
     </div>
-  </div>
 
   <!-- Simple Image Lightbox for inline email images -->
   <div id="image_lightbox" class="modal" style="z-index:300;">
