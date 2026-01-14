@@ -1363,12 +1363,26 @@ function ensureInboxContextMenu(){
         const actionsWrapper = div.querySelector('.item-actions-wrapper');
         if(actionsWrapper){
           div.addEventListener('mouseenter', () => {
+            // Alten Wrapper ohne Animation zurücksetzen, damit kein Zwischenbild entsteht
+            if(currentActionsWrapper && currentActionsWrapper !== actionsWrapper){
+              const prev = currentActionsWrapper;
+              const prevTransition = prev.style.transition;
+              prev.style.transition = 'none';
+              prev.style.transform = 'translateX(180%)';
+              prev.style.pointerEvents = 'none';
+              // Reflow erzwingen, damit der Browser den Zustand übernimmt
+              void prev.offsetWidth;
+              prev.style.transition = prevTransition || 'transform 0.16s ease-out';
+            }
+            currentActionsWrapper = actionsWrapper;
             actionsWrapper.style.transform = 'translateX(0)';
             actionsWrapper.style.pointerEvents = 'auto';
           });
           div.addEventListener('mouseleave', () => {
-            actionsWrapper.style.transform = 'translateX(180%)';
-            actionsWrapper.style.pointerEvents = 'none';
+            if(currentActionsWrapper === actionsWrapper){
+              actionsWrapper.style.transform = 'translateX(180%)';
+              actionsWrapper.style.pointerEvents = 'none';
+            }
           });
         }
 
@@ -1807,6 +1821,7 @@ function ensureInboxContextMenu(){
 
     let autoReadTimer = null;
     let autoReadUid = null;
+    let currentActionsWrapper = null;
 
     async function selectItem(uid, rowEl){
       // Active markieren
