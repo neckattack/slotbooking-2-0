@@ -288,38 +288,38 @@
             </div>
           </div>
           <div class="compose-side">
-            <div id="compose_reply_prefs_block" class="sub" style="margin-top:0; font-size:11px; color:#111827;">
-              <div style="display:flex; justify-content:flex-start; align-items:center; gap:6px; margin-bottom:4px; font-weight:600; font-size:12px;">
-                <span>✉️ Antwortstil</span>
+            <div id="compose_topics_mirror" class="sub" style="margin-top:0; font-size:11px; max-height:200px; overflow:auto;"></div>
+          </div>
+        </div>
+        <div id="compose_reply_prefs_block" class="sub" style="margin-top:12px; font-size:11px; color:#111827;">
+          <div style="display:flex; justify-content:flex-start; align-items:center; gap:6px; margin-bottom:4px; font-weight:600; font-size:12px;">
+            <span>✉️ Antwortstil</span>
+          </div>
+          <div id="compose_reply_prefs_status" class="sub" style="font-size:11px; margin-bottom:6px; color:#6b7280;">Antwortstil: Lade Einstellungen…</div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <label style="font-size:11px; display:flex; flex-direction:column; gap:2px;">
+              <span>Länge der Antwort <span id="cmp_length_label" class="muted">(Standard)</span></span>
+              <input id="cmp_length" type="range" min="1" max="5" step="1" value="3" style="width:100%;" />
+            </label>
+            <label style="font-size:11px; display:flex; flex-direction:column; gap:2px;">
+              <span>Förmlichkeit <span id="cmp_formality_label" class="muted">(Standard)</span></span>
+              <input id="cmp_formality" type="range" min="1" max="5" step="1" value="3" style="width:100%;" />
+            </label>
+            <div style="display:flex; flex-direction:column; gap:4px; font-size:11px;">
+              <div>
+                <span style="margin-right:6px;">Anrede</span>
+                <button type="button" id="cmp_sal_du" data-value="du" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer; margin-right:4px;">Du</button>
+                <button type="button" id="cmp_sal_sie" data-value="sie" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer;">Sie</button>
               </div>
-              <div id="compose_reply_prefs_status" class="sub" style="font-size:11px; margin-bottom:6px; color:#6b7280;">Antwortstil: Lade Einstellungen…</div>
-              <div style="display:flex; flex-direction:column; gap:6px;">
-                <label style="font-size:11px; display:flex; flex-direction:column; gap:2px;">
-                  <span>Länge der Antwort <span id="cmp_length_label" class="muted">(Standard)</span></span>
-                  <input id="cmp_length" type="range" min="1" max="5" step="1" value="3" style="width:100%;" />
-                </label>
-                <label style="font-size:11px; display:flex; flex-direction:column; gap:2px;">
-                  <span>Förmlichkeit <span id="cmp_formality_label" class="muted">(Standard)</span></span>
-                  <input id="cmp_formality" type="range" min="1" max="5" step="1" value="3" style="width:100%;" />
-                </label>
-                <div style="display:flex; flex-direction:column; gap:4px; font-size:11px;">
-                  <div>
-                    <span style="margin-right:6px;">Anrede</span>
-                    <button type="button" id="cmp_sal_du" data-value="du" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer; margin-right:4px;">Du</button>
-                    <button type="button" id="cmp_sal_sie" data-value="sie" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer;">Sie</button>
-                  </div>
-                  <div>
-                    <span style="margin-right:6px;">Perspektive</span>
-                    <button type="button" id="cmp_pers_ich" data-value="ich" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer; margin-right:4px;">Ich</button>
-                    <button type="button" id="cmp_pers_wir" data-value="wir" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer;">Wir</button>
-                  </div>
-                </div>
-              </div>
-              <div id="compose_reply_prefs_label" class="sub" style="margin-top:6px; font-size:11px; color:#6b7280;">
-                Antwortstil: Standard (bisher keine gespeicherten Kontakt-Einstellungen; es gelten Defaults &amp; Heuristiken).
+              <div>
+                <span style="margin-right:6px;">Perspektive</span>
+                <button type="button" id="cmp_pers_ich" data-value="ich" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer; margin-right:4px;">Ich</button>
+                <button type="button" id="cmp_pers_wir" data-value="wir" style="padding:3px 8px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; font-size:10px; cursor:pointer;">Wir</button>
               </div>
             </div>
-            <div id="compose_topics_mirror" class="sub" style="margin-top:8px; font-size:11px; max-height:200px; overflow:auto;"></div>
+          </div>
+          <div id="compose_reply_prefs_label" class="sub" style="margin-top:6px; font-size:11px; color:#6b7280;">
+            Antwortstil: Standard (bisher keine gespeicherten Kontakt-Einstellungen; es gelten Defaults &amp; Heuristiken).
           </div>
         </div>
       </div>
