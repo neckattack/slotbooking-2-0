@@ -49,6 +49,9 @@
     .compose input { flex:1; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:15px; }
     .compose .editor { min-height:260px; border:1px solid var(--border); border-radius:10px; padding:14px; background:#fff; font-size:15px; }
     .compose .actions { margin-top:12px; display:flex; gap:10px; }
+    /* Antwortstil-Panel: volle Spaltenbreite für die Slider */
+    #compose_reply_prefs_block { width:100%; box-sizing:border-box; }
+    #compose_reply_prefs_block input[type="range"] { width:100%; display:block; }
     .muted { color:var(--sub); }
     .sub { color:var(--sub); font-size:13px; }
     .modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.35); z-index:100; }
