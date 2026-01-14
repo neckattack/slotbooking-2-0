@@ -2927,6 +2927,138 @@ def api_contacts_emails(current_user, contact_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/contacts/<int:contact_id>/reply-prefs', methods=['GET'])
+@require_auth
+def api_contacts_reply_prefs_get(current_user, contact_id):
+    """Reply-Preferences (Begrüßung, Abschluss, Stil) für einen Kontakt lesen."""
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute(
+            """
+            SELECT id, contact_email, name,
+                   reply_greeting_template,
+                   reply_closing_template,
+                   reply_length_level,
+                   reply_formality_level,
+                   reply_salutation_mode,
+                   reply_persona_mode,
+                   reply_style_source
+            FROM contacts
+            WHERE id=%s AND user_email=%s
+            """,
+            (contact_id, user_email),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not row:
+            return jsonify({'error': 'Contact not found'}), 404
+
+        prefs = {
+            'contact_id': row['id'],
+            'contact_email': row.get('contact_email'),
+            'contact_name': row.get('name'),
+            'greeting_template': row.get('reply_greeting_template'),
+            'closing_template': row.get('reply_closing_template'),
+            'length_level': row.get('reply_length_level'),
+            'formality_level': row.get('reply_formality_level'),
+            'salutation_mode': row.get('reply_salutation_mode'),
+            'persona_mode': row.get('reply_persona_mode'),
+            'style_source': row.get('reply_style_source'),
+        }
+
+        return jsonify({'ok': True, 'preferences': prefs}), 200
+
+    except Exception as e:
+        try:
+            app.logger.error(f"[Contact Reply Prefs GET] Error: {e}")
+        except Exception:
+            pass
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/contacts/<int:contact_id>/reply-prefs', methods=['POST'])
+@require_auth
+def api_contacts_reply_prefs_set(current_user, contact_id):
+    """Reply-Preferences für einen Kontakt speichern."""
+    user_email = current_user.get('user_email')
+    data = request.get_json(silent=True) or {}
+
+    greeting = data.get('greeting_template')
+    closing = data.get('closing_template')
+    length_level = data.get('length_level')
+    formality_level = data.get('formality_level')
+    salutation_mode = data.get('salutation_mode')
+    persona_mode = data.get('persona_mode')
+    style_source = (data.get('style_source') or 'manual').strip() or 'manual'
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Kontakt gehört zu diesem User?
+        cursor.execute(
+            "SELECT id FROM contacts WHERE id=%s AND user_email=%s",
+            (contact_id, user_email),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Contact not found'}), 404
+
+        # Nur Felder updaten, die im Payload sind
+        fields = []
+        params = []
+
+        if 'greeting_template' in data:
+            fields.append('reply_greeting_template=%s')
+            params.append(greeting)
+        if 'closing_template' in data:
+            fields.append('reply_closing_template=%s')
+            params.append(closing)
+        if 'length_level' in data:
+            fields.append('reply_length_level=%s')
+            params.append(length_level)
+        if 'formality_level' in data:
+            fields.append('reply_formality_level=%s')
+            params.append(formality_level)
+        if 'salutation_mode' in data:
+            fields.append('reply_salutation_mode=%s')
+            params.append(salutation_mode)
+        if 'persona_mode' in data:
+            fields.append('reply_persona_mode=%s')
+            params.append(persona_mode)
+
+        if fields:
+            fields.append('reply_style_source=%s')
+            params.append(style_source)
+        else:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'No fields to update'}), 400
+
+        params.extend([contact_id, user_email])
+        sql = f"UPDATE contacts SET {', '.join(fields)} WHERE id=%s AND user_email=%s"
+        cursor.execute(sql, tuple(params))
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({'ok': True}), 200
+
+    except Exception as e:
+        try:
+            app.logger.error(f"[Contact Reply Prefs POST] Error: {e}")
+        except Exception:
+            pass
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/contacts/<int:contact_id>/notes', methods=['GET'])
 @require_auth
 def api_contacts_notes_list(current_user, contact_id):
