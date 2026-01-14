@@ -1081,9 +1081,16 @@ def api_emails_agent_compose(current_user):
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT e.id, e.subject, e.from_addr, e.from_name, e.to_addrs, e.body_text, e.body_html, 
-                   e.contact_id, c.name as contact_name, c.contact_email, 
-                   c.profile_summary, c.email_count
+            SELECT e.id, e.subject, e.from_addr, e.from_name, e.to_addrs, e.body_text, e.body_html,
+                   e.contact_id, c.name as contact_name, c.contact_email,
+                   c.profile_summary, c.email_count,
+                   c.reply_greeting_template,
+                   c.reply_closing_template,
+                   c.reply_length_level,
+                   c.reply_formality_level,
+                   c.reply_salutation_mode,
+                   c.reply_persona_mode,
+                   c.reply_style_source
             FROM emails e
             LEFT JOIN contacts c ON e.contact_id = c.id
             WHERE e.id = %s AND e.user_email = %s
@@ -1103,7 +1110,71 @@ def api_emails_agent_compose(current_user):
         to_addr = email_row['to_addrs'] or ''
         plaintext = email_row['body_text']
         html_body = email_row['body_html']
-        
+
+        # Antwortstil / Reply-Preferences des Kontakts als Stil-Hinweis vorbereiten
+        def _build_reply_style_hint(row: dict) -> str:
+            try:
+                length_level = row.get('reply_length_level')
+                formality_level = row.get('reply_formality_level')
+                sal_mode = (row.get('reply_salutation_mode') or '').strip().lower() or None
+                persona_mode = (row.get('reply_persona_mode') or '').strip().lower() or None
+                style_source = (row.get('reply_style_source') or '').strip() or 'default'
+
+                parts = []
+
+                # Länge
+                if isinstance(length_level, int):
+                    if length_level <= 1:
+                        parts.append("Antwortlänge: sehr kurz (1/5)")
+                    elif length_level == 2:
+                        parts.append("Antwortlänge: kurz (2/5)")
+                    elif length_level == 3:
+                        parts.append("Antwortlänge: mittel (3/5)")
+                    elif length_level == 4:
+                        parts.append("Antwortlänge: lang (4/5)")
+                    else:
+                        parts.append("Antwortlänge: ausführlich (5/5)")
+
+                # Förmlichkeit
+                if isinstance(formality_level, int):
+                    if formality_level <= 1:
+                        parts.append("Stil: sehr locker (1/5)")
+                    elif formality_level == 2:
+                        parts.append("Stil: eher locker (2/5)")
+                    elif formality_level == 3:
+                        parts.append("Stil: neutral (3/5)")
+                    elif formality_level == 4:
+                        parts.append("Stil: eher formell (4/5)")
+                    else:
+                        parts.append("Stil: sehr formell/höflich (5/5)")
+
+                # Du/Sie
+                if sal_mode == 'du':
+                    parts.append("Anrede: Du")
+                elif sal_mode == 'sie':
+                    parts.append("Anrede: Sie")
+
+                # Ich/Wir
+                if persona_mode == 'ich':
+                    parts.append("Perspektive: Ich-Form")
+                elif persona_mode == 'wir':
+                    parts.append("Perspektive: Wir-Form (Firma)")
+
+                if not parts:
+                    return ""
+
+                return (
+                    "Antwortstil-Vorgabe (Quelle: "
+                    + style_source
+                    + "): "
+                    + "; ".join(parts)
+                    + "."
+                )
+            except Exception:
+                return ""
+
+        reply_style_hint = _build_reply_style_hint(email_row)
+
         # Quelle für den Agenten: bevorzugt Plaintext; wenn nur HTML vorhanden ist, in Text umwandeln
         def _html_to_text(s: str) -> str:
             import re, html as _html
@@ -1121,7 +1192,16 @@ def api_emails_agent_compose(current_user):
             # Whitespace normalisieren
             s = re.sub(r'\n\s*\n\s*\n+', '\n\n', s)
             return s.strip()
-        source_text = (plaintext or ( _html_to_text(html_body) if html_body else '' )).strip()
+        source_text = (plaintext or (_html_to_text(html_body) if html_body else '')).strip()
+
+        # Stil-Hinweis (falls vorhanden) vor den eigentlichen Mail-Text stellen,
+        # damit der Agent die Antwort in der gewünschten Länge/Förmlichkeit formuliert.
+        if reply_style_hint:
+            source_text = (
+                reply_style_hint
+                + "\n\n---\n\n"  # klare Trennung zwischen Stil-Hinweis und Original-Mail
+                + source_text
+            )
         
         # Intelligente Begrüßung basierend auf User-Stil und Kontakt
         from email.utils import parseaddr as _parseaddr
