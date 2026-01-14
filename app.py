@@ -1067,17 +1067,17 @@ def api_emails_agent_compose(current_user):
         # Compose-Cache Early-Return (TTL 300s) für schnelle Wiederholungen,
         # kann per force-Flag explizit umgangen werden (z.B. bei geänderten Reply-Preferences).
         if not force:
-            import time as _t
-            now = _t.time()
             cc = COMPOSE_CACHE.get(str(email_id))
-            if cc and now - cc.get('ts', 0) < 300 and not cc.get('timed_out'):
-                if cc.get('has_body') or cc.get('has_preface'):
-                    return jsonify({ 'html': cc['html'], 'to': cc['to'], 'subject': cc['subject'] })
-                else:
-                    try:
-                        del COMPOSE_CACHE[str(email_id)]
-                    except Exception:
-                        pass
+            if cc:
+                import time as _t
+                if _t.time() - cc.get('ts', 0) < 300 and not cc.get('timed_out'):
+                    if cc.get('has_body') or cc.get('has_preface'):
+                        return jsonify({ 'html': cc['html'], 'to': cc['to'], 'subject': cc['subject'] })
+                    else:
+                        try:
+                            del COMPOSE_CACHE[str(email_id)]
+                        except Exception:
+                            pass
         
         # Load email from database
         conn = get_settings_db_connection()
