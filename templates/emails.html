@@ -1805,6 +1805,9 @@ function ensureInboxContextMenu(){
       }
     }
 
+    let autoReadTimer = null;
+    let autoReadUid = null;
+
     async function selectItem(uid, rowEl){
       // Active markieren
       document.querySelectorAll('.item.active').forEach(el => el.classList.remove('active'));
@@ -3041,15 +3044,27 @@ function ensureInboxContextMenu(){
           };
         }
         
-        // Als gelesen markieren (opt-in: beim Öffnen)
-        try{
-          await fetch('/api/emails/seen', {
-            method:'POST',
-            headers:{...getAuthHeaders(), 'Content-Type':'application/json'},
-            body: JSON.stringify({uid, seen:true})
-          });
-        }catch(_){ }
-        rowEl.classList.remove('unseen');
+        // Automatisch als gelesen markieren, aber erst nach kurzer Betrachtungszeit.
+        // Idee: andere Programme markieren auch erst nach ein paar Sekunden im Lesebereich.
+        if(autoReadTimer){
+          clearTimeout(autoReadTimer);
+          autoReadTimer = null;
+        }
+        autoReadUid = uid;
+        if(rowEl && rowEl.classList.contains('unseen')){
+          autoReadTimer = setTimeout(async () => {
+            // Nur markieren, wenn in der Zwischenzeit nicht auf eine andere Mail gewechselt wurde
+            if(autoReadUid !== uid) return;
+            try{
+              await fetch('/api/emails/seen', {
+                method:'POST',
+                headers:{...getAuthHeaders(), 'Content-Type':'application/json'},
+                body: JSON.stringify({uid, seen:true})
+              });
+              rowEl.classList.remove('unseen');
+            }catch(_){ }
+          }, 2000);
+        }
       }catch(e){
         detail.innerHTML = `<div class="sub">Fehler: ${e}</div>`;
       }
