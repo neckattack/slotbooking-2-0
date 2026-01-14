@@ -522,7 +522,9 @@ def api_emails_inbox(current_user):
         M.close()
         M.logout()
         INBOX_CACHE["data"] = items
-        INBOX_CACHE["ts"] = now
+        # Zeitstempel für Inbox-Cache immer direkt neu setzen
+        import time as _t
+        INBOX_CACHE["ts"] = _t.time()
         INBOX_CACHE["key"] = cache_key
         return jsonify({'items': items})
     except Exception as e:
@@ -1761,11 +1763,12 @@ def api_emails_agent_compose(current_user):
         if (timed_out and not visible_preface_html and not (antwort_body and antwort_body.strip())):
             return jsonify({'error': 'compose_timeout'}), 504
         # In Compose-Cache legen (Timeout-Drafts nicht für Early-Return verwenden)
+        import time as _t
         COMPOSE_CACHE[str(email_id)] = {
             'html': draft_html,
             'to': reply_to,
             'subject': reply_subject,
-            'ts': now,
+            'ts': _t.time(),
             'timed_out': timed_out,
             'has_body': has_body,
             'has_preface': has_preface,
