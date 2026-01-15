@@ -2004,37 +2004,74 @@ function ensureInboxContextMenu(){
         const profileSummaryFull = t.profile_summary_full || '';
         const kpis = t.kpis || {};
         
-        // Helper: Extract real name from email or profile
+        // Helper: Extract display name from email or profile (Frontend-Heuristik
+        // passend zur Backend-Logik in _extract_real_name)
         function extractRealName(name, email, profile) {
-          // If name is an email address, extract local part
-          if (name && name.includes('@')) {
-            const localPart = name.split('@')[0];
-            name = localPart.charAt(0).toUpperCase() + localPart.slice(1);
+          const genericLocals = new Set([
+            'info','kontakt','contact','service','support','mail','office',
+            'hello','sales','booking','reservierung','no-reply','noreply',
+            'newsletter','reply','team'
+          ]);
+
+          function splitEmail(addr) {
+            if (!addr || addr.indexOf('@') === -1) return { local: null, domain: null };
+            const [local, domain] = addr.split('@');
+            return { local: (local || '').trim().toLowerCase(), domain: (domain || '').trim().toLowerCase() };
           }
-          
-          // If name is still empty or looks like email, try profile
-          if (!name || name === '–' || name.includes('@')) {
+
+          function looksGenericLocal(local) {
+            if (!local) return false;
+            const base = local.split(/[+._-]/)[0];
+            return genericLocals.has(base);
+          }
+
+          function companyFromDomain(domain) {
+            if (!domain) return null;
+            let main = domain.split(':', 1)[0];
+            if (main.includes('.')) {
+              const parts = main.split('.');
+              if (parts.length >= 2) main = parts[parts.length - 2];
+            }
+            main = main.toLowerCase().replace(/[^a-z0-9äöüß-]/g, ' ');
+            const tokens = main.split(/[-_\s]+/).filter(Boolean);
+            if (!tokens.length) return null;
+            const nice = tokens.slice(0, 2).map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(' ');
+            return nice || null;
+          }
+
+          const { local, domain } = splitEmail(email || '');
+
+          // Wenn Name wie eine E-Mail aussieht, verwerfen wir ihn und entscheiden
+          // ausschließlich über Profil/E-Mail.
+          if (name && name.includes('@')) {
+            name = null;
+          }
+
+          // 1) Profiltext auswerten ("Johanna ist..." oder "Name: Johanna")
+          if (!name || name === '–') {
             if (profile) {
-              // Try to extract name from profile: "Johanna ist..." at start
-              const match1 = profile.match(/^([A-ZÄÖÜ][a-zäöüß]+)\s+(ist|arbeitet|hat|sendet)/);
-              if (match1) {
-                name = match1[1];
+              let m = profile.match(/^([A-ZÄÖÜ][a-zäöüß]+)\s+(ist|arbeitet|hat|sendet)/);
+              if (m) {
+                name = m[1];
               } else {
-                // Pattern 2: Look for capitalized name after common phrases
-                const match2 = profile.match(/(?:Kunde|Person|Kontakt|Name):\s*([A-ZÄÖÜ][a-zäöüß]+)/);
-                if (match2) {
-                  name = match2[1];
+                m = profile.match(/(?:Kunde|Person|Kontakt|Name):\s*([A-ZÄÖÜ][a-zäöüß]+)/);
+                if (m) {
+                  name = m[1];
                 }
               }
             }
           }
-          
-          // Final fallback: extract from email
-          if (!name || name === '–' || name.includes('@')) {
-            const localPart = email.split('@')[0];
-            name = localPart.charAt(0).toUpperCase() + localPart.slice(1);
+
+          // 2) Fallback über E-Mail-Adresse
+          if (!name || name === '–') {
+            if (local && !looksGenericLocal(local)) {
+              name = local.charAt(0).toUpperCase() + local.slice(1);
+            } else {
+              const company = companyFromDomain(domain);
+              name = company || 'Kontakt';
+            }
           }
-          
+
           return name;
         }
         

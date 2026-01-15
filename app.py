@@ -1613,33 +1613,76 @@ def api_emails_agent_compose(current_user):
         
         # Helper: Extract name from profile or email address
         def _extract_real_name(name_str, email_addr, profile_summary):
-            """Extract actual name from various sources"""
-            # If name is just an email address, extract local part
+            """Extract actual display name for a contact.
+
+            Ziel:
+            - Echte Personen-Namen bevorzugen (From-Name, Profil, Signatur).
+            - Generische Funktionsadressen wie info@, support@, newsletter@ nicht
+              als "Info" o.ä. anzeigen, sondern eher einen Firmen-/Neutralnamen
+              aus der Domain ableiten.
+            """
+            import re
+
+            generic_locals = {
+                'info', 'kontakt', 'contact', 'service', 'support', 'mail',
+                'office', 'hello', 'sales', 'booking', 'reservierung',
+                'no-reply', 'noreply', 'newsletter', 'reply', 'team'
+            }
+
+            def _split_email(addr: str):
+                if not addr or '@' not in addr:
+                    return None, None
+                local, domain = addr.split('@', 1)
+                return local.strip().lower(), domain.strip().lower()
+
+            def _looks_generic_local(local: str) -> bool:
+                if not local:
+                    return False
+                base = re.split(r'[+._-]', local)[0]
+                return base in generic_locals
+
+            def _company_from_domain(domain: str) -> str | None:
+                if not domain:
+                    return None
+                main = domain.split(':', 1)[0]
+                if '.' in main:
+                    parts = main.split('.')
+                    if len(parts) >= 2:
+                        main = parts[-2]
+                main = re.sub(r'[^a-z0-9äöüß-]', ' ', main.lower())
+                tokens = [t for t in re.split(r'[-_\s]+', main) if t]
+                if not tokens:
+                    return None
+                nice = ' '.join(t.capitalize() for t in tokens[:2])
+                return nice or None
+
+            local_part, domain_part = _split_email(email_addr or '')
+
+            # 1) Wenn der aktuelle Name wie eine E-Mail aussieht, nicht einfach
+            # den Local-Part als Personen-Namen nehmen – das behandeln wir unten
             if '@' in (name_str or ''):
-                local_part = name_str.split('@')[0]
-                # Capitalize first letter
-                name_str = local_part.capitalize()
-            
-            # If name is still empty or looks like email, try profile
-            if not name_str or '@' in name_str:
+                name_str = None
+
+            # 2) Falls Name fehlt oder offensichtlich keine Person ist, Profil nutzen
+            if not name_str:
                 if profile_summary:
-                    # Try to extract name from profile: "Johanna ist..." or "Name: Johanna"
-                    import re
-                    # Pattern 1: "Johanna ist..." at start
                     match = re.search(r'^([A-ZÄÖÜ][a-zäöüß]+)\s+(ist|arbeitet|hat|sendet)', profile_summary)
                     if match:
                         name_str = match.group(1)
                     else:
-                        # Pattern 2: Look for capitalized name after common phrases
                         match = re.search(r'(?:Kunde|Person|Kontakt|Name):\s*([A-ZÄÖÜ][a-zäöüß]+)', profile_summary)
                         if match:
                             name_str = match.group(1)
-            
-            # Final fallback: extract from email
-            if not name_str or '@' in name_str:
-                local_part = email_addr.split('@')[0] if email_addr else 'Kunde'
-                name_str = local_part.capitalize()
-            
+
+            # 3) Fallback: aus E-Mail ableiten
+            if not name_str:
+                if local_part and not _looks_generic_local(local_part):
+                    name_str = local_part.capitalize()
+                else:
+                    # Funktionsadresse -> lieber Firmen-/Domainname anzeigen
+                    company = _company_from_domain(domain_part or '')
+                    name_str = company or 'Kontakt'
+
             return name_str
         
         # Extract real name before processing
