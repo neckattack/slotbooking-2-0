@@ -298,9 +298,6 @@
       <span id="status" class="sub" style="margin-right:auto;"></span>
       <button id="user_badge" style="background:#111827; display:none; padding:6px 12px; border-radius:10px; font-size:13px;">👤 Lade...</button>
       <button id="menu_btn" style="background:#111827; font-size:14px; padding:8px 14px; display:flex; align-items:center; justify-content:center; border-radius:12px;" aria-label="Menü öffnen">Menü</button>
-      <!-- Neue, explizite Buttons zum Testen der Darstellung -->
-      <button id="user_badge_alt" style="background:#111827; color:#ffffff; padding:6px 12px; border-radius:10px; font-size:13px;">👤 Profil</button>
-      <button id="menu_btn_alt" style="background:#111827; color:#ffffff; font-size:14px; padding:8px 14px; border-radius:12px;">Menü</button>
     </div>
   </header>
   <div class="container">
@@ -4434,7 +4431,6 @@ function ensureInboxContextMenu(){
     const sidebar = document.getElementById('sidebar');
     const sidebarOverlay = document.getElementById('sidebar_overlay');
     const menuBtn = document.getElementById('menu_btn');
-    const menuBtnAlt = document.getElementById('menu_btn_alt');
     const sidebarClose = document.getElementById('sidebar_close');
     
     function openSidebar(){
@@ -4454,13 +4450,6 @@ function ensureInboxContextMenu(){
       e.preventDefault(); closeSidebar();
       openProfileModal();
     });
-    const userBadgeAlt = document.getElementById('user_badge_alt');
-    if(userBadgeAlt){
-      userBadgeAlt.addEventListener('click', (e)=>{
-        e.preventDefault();
-        openProfileModal();
-      });
-    }
     document.getElementById('sidebar_agent').addEventListener('click', (e)=>{
       e.preventDefault(); closeSidebar();
       openAgentSetupModal();
