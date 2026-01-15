@@ -1404,9 +1404,11 @@ function ensureInboxContextMenu(){
         answerFiltered = baseFiltered.filter(it => !!it.is_replied);
       }
 
-      const filtered = q ? answerFiltered : answerFiltered.filter(it => {
+      const filtered = answerFiltered.filter(it => {
+        if(!q) return true;
         const fromStr = ((it.from_addr || it.from || '') + '').toLowerCase();
-        return fromStr.includes(q);
+        const subjectStr = ((it.subject || '') + '').toLowerCase();
+        return fromStr.includes(q) || subjectStr.includes(q);
       });
       if(!filtered.length){
         // Toggle-Leiste sichtbar lassen, nur darunter einen Hinweis anzeigen
