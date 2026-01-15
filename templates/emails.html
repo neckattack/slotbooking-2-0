@@ -1971,6 +1971,34 @@ function ensureInboxContextMenu(){
       document.querySelectorAll('.item.active').forEach(el => el.classList.remove('active'));
       rowEl.classList.add('active');
       currentUid = uid;
+
+      // Automatisches "Gelesen" nur nach tatsächlichem Öffnen
+      // 1) alten Timer abbrechen
+      if(autoReadTimer){
+        clearTimeout(autoReadTimer);
+        autoReadTimer = null;
+      }
+      autoReadUid = uid;
+      // 2) neuen Timer starten (z.B. 2 Sekunden Lesezeit)
+      autoReadTimer = setTimeout(async () => {
+        try{
+          // Nur wenn immer noch dieselbe Mail aktiv ist
+          if(autoReadUid !== uid) return;
+          const emailObj = (inboxEmails || []).find(e => String(e.uid) === String(uid));
+          if(!emailObj || emailObj.is_read){
+            return;
+          }
+          await fetch('/api/emails/seen', {
+            method: 'POST',
+            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid: uid, seen: true })
+          });
+          emailObj.is_read = 1;
+          if(rowEl && rowEl.classList){
+            rowEl.classList.remove('unseen');
+          }
+        }catch(_e_auto_seen){}
+      }, 2000);
       // Draft-Controls aktivieren
       document.getElementById('btn_propose').disabled = false;
       document.getElementById('btn_send').disabled = false;
