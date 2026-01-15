@@ -4087,8 +4087,9 @@ function ensureInboxContextMenu(){
       msg.textContent = 'Lade Accounts...';
       modal.style.display = 'flex';
       try{
-        // Accounts laden
-        const listRes = await fetch('/api/email-accounts/list', { headers: getAuthHeaders() });
+        // Accounts laden – getAuthHeaders defensiv verwenden, um ReferenceError in älteren Builds zu vermeiden
+        const authHeaders = (typeof getAuthHeaders === 'function') ? getAuthHeaders() : {};
+        const listRes = await fetch('/api/email-accounts/list', { headers: authHeaders });
         const listData = await parseJsonSafe(listRes);
         const select = document.getElementById('email_account_select');
         emailAccounts = (listData.accounts || []);
