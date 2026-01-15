@@ -3516,17 +3516,30 @@ function ensureInboxContextMenu(){
       const greetingHtml = `<p>${greetingWord} ${escapeHtml(displayName)},</p>`;
       const closingHtml = '<p>Viele Grüße</p>';
 
-      // Leeres Absatz-Element zwischen Begrüßung und Schluss für den eigentlichen Inhalt
-      editor.innerHTML = greetingHtml + '<p><br></p>' + closingHtml;
+      // Struktur:
+      // 0: Begrüßung
+      // 1: Leerzeile unter der Begrüßung
+      // 2: Body-Absatz (Cursor hier)
+      // 3: Leerzeile vor dem Abschluss
+      // 4: Abschluss
+      // 5: Leerzeile unter dem Abschluss
+      editor.innerHTML =
+        greetingHtml +
+        '<p><br></p>' +
+        '<p><br></p>' +
+        '<p><br></p>' +
+        closingHtml +
+        '<p><br></p>';
 
-      // Cursor in den mittleren (leeren) Absatz setzen, damit man direkt losschreiben kann.
+      // Cursor in den Body-Absatz setzen (Index 2)
       try{
         const sel = window.getSelection();
         if(!sel) return;
-        const middleP = editor.querySelectorAll('p')[1];
-        if(!middleP) return;
+        const paragraphs = editor.querySelectorAll('p');
+        const bodyP = paragraphs[2];
+        if(!bodyP) return;
         const range = document.createRange();
-        range.selectNodeContents(middleP);
+        range.selectNodeContents(bodyP);
         range.collapse(true);
         sel.removeAllRanges();
         sel.addRange(range);
