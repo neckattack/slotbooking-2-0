@@ -1408,7 +1408,8 @@ function ensureInboxContextMenu(){
         if(!q) return true;
         const fromStr = ((it.from_addr || it.from || '') + '').toLowerCase();
         const subjectStr = ((it.subject || '') + '').toLowerCase();
-        return fromStr.includes(q) || subjectStr.includes(q);
+        const toStr = ((it.to || it.to_addrs || '') + '').toLowerCase();
+        return fromStr.includes(q) || subjectStr.includes(q) || toStr.includes(q);
       });
       if(!filtered.length){
         // Toggle-Leiste sichtbar lassen, nur darunter einen Hinweis anzeigen
