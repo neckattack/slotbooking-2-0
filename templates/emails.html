@@ -1375,11 +1375,15 @@ function ensureInboxContextMenu(){
         return;
       }
       
+      const q = (inboxSearchQuery || '').trim().toLowerCase();
+
       let baseFiltered;
-      if(currentFolder !== 'inbox'){
-        // In anderen Ordnern (Gesendet, etc.) keine Bucket-Filterung anwenden
+      if(currentFolder !== 'inbox' || q){
+        // In anderen Ordnern (Gesendet, etc.) oder bei aktiver Suche
+        // keine Bucket-Filterung anwenden
         baseFiltered = inboxEmails.slice();
       } else {
+        // Nur im Posteingang ohne aktive Suche nach Buckets filtern
         baseFiltered = inboxEmails.filter(it => {
           const bucket = getImportanceBucket(it);
           if(inboxFilter === 'focus') return bucket === 'focus';
@@ -1400,11 +1404,10 @@ function ensureInboxContextMenu(){
         answerFiltered = baseFiltered.filter(it => !!it.is_replied);
       }
 
-      const q = (inboxSearchQuery || '').trim().toLowerCase();
-      const filtered = q ? answerFiltered.filter(it => {
+      const filtered = q ? answerFiltered : answerFiltered.filter(it => {
         const fromStr = ((it.from_addr || it.from || '') + '').toLowerCase();
         return fromStr.includes(q);
-      }) : answerFiltered;
+      });
       if(!filtered.length){
         // Toggle-Leiste sichtbar lassen, nur darunter einen Hinweis anzeigen
         if(toggle){
