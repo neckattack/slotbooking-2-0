@@ -71,6 +71,14 @@
       max-height:100%;
       overflow-y:auto; /* Antwortfeld intern scrollbar machen */
     }
+    /* Absatzabstände in der Antwort: etwas mehr Luft zwischen Paragraphen
+       als bei einer normalen Zeile, ohne doppelte Leerzeilen zu erzeugen. */
+    .compose .editor p {
+      margin:0 0 0.7em;
+    }
+    .compose .editor p:last-child {
+      margin-bottom:0;
+    }
     .compose .actions { margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; }
     /* Zweispaltiges Layout im Compose-Panel: links Antwort, rechts Themen (gleiche Höhe, intern scrollbar) */
     .compose-body {
