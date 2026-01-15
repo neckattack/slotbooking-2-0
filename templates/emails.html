@@ -3864,12 +3864,16 @@ function ensureInboxContextMenu(){
       } else {
         if(sidebarUsersItem) sidebarUsersItem.style.display = 'none';
       }
-      // Update user badge (Icon + Name)
+      // Update user badge (Icon + Name, mit Fallback)
       const badge = document.getElementById('user_badge');
       if(user && badge){
         const name = user.first_name ? user.first_name : user.email.split('@')[0];
         const icon = (window.getIconSvg ? window.getIconSvg('user', {size:16}) : '');
-        badge.innerHTML = icon ? `<span style="display:inline-flex; align-items:center; gap:6px;">${icon}<span>${name}</span></span>` : name;
+        if(icon){
+          badge.innerHTML = `<span style="display:inline-flex; align-items:center; gap:6px;">${icon}<span>${name}</span></span>`;
+        }else{
+          badge.textContent = `👤 ${name}`;
+        }
         badge.style.display = 'inline-block';
       }
     }
