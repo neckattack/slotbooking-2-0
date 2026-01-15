@@ -1461,55 +1461,79 @@ def api_emails_agent_compose(current_user):
         
         # Helper: Extract greeting style from sent emails
         def _learn_user_greeting_style(user_email_addr, contact_email_addr):
-            """Analyzes user's sent emails to learn their greeting style"""
+            """Analysiert gesendete E-Mails des Users, um eine typische Begrüßung zu erkennen.
+
+            Rückgabewert bei Erfolg:
+              {
+                'greeting_word': 'Hallo' / 'Guten Tag' / ...,
+                'count': <Anzahl dieses Greeting>,
+                'total': <Anzahl erkannter Greetings>
+              }
+            oder None, falls nichts Sinnvolles gefunden wurde.
+            """
             try:
                 conn_learn = get_settings_db_connection()
                 cursor_learn = conn_learn.cursor(dictionary=True)
-                
-                # Get last 10 sent emails from this user to this contact (or any contact)
+
+                # Letzte 20 gesendete E-Mails des Users betrachten (unabhängig vom Kontakt),
+                # damit wir ein robustes Bild vom Standard-Gruß bekommen.
                 cursor_learn.execute(
                     """
-                    SELECT body_text, body_html 
-                    FROM emails 
-                    WHERE user_email = %s 
+                    SELECT body_text, body_html
+                    FROM emails
+                    WHERE user_email = %s
                     AND from_addr LIKE %s
-                    ORDER BY received_at DESC 
-                    LIMIT 10
+                    ORDER BY received_at DESC
+                    LIMIT 20
                     """,
-                    (user_email, f"%{user_email_addr}%")
+                    (user_email, f"%{user_email_addr}%"),
                 )
                 sent_emails = cursor_learn.fetchall()
                 cursor_learn.close()
                 conn_learn.close()
-                
+
                 if not sent_emails:
                     return None
-                
-                # Extract greetings from email bodies
+
+                # Greetings aus den Mail-Bodies extrahieren
                 import re
-                greetings = []
+                greetings: list[str] = []
                 for em in sent_emails:
-                    text = (em['body_text'] or em['body_html'] or '')[:300]
-                    # Match common German greetings at start of email
+                    text = (em.get('body_text') or em.get('body_html') or '')[:300]
+                    if not text:
+                        continue
                     patterns = [
                         r'^(Hallo|Hi|Hey|Moin|Guten Tag|Sehr geehrte[rs]?|Liebe[rs]?)\s+([^,\n]+)',
                         r'^(Servus|Grüß Gott|Grüezi)\s+([^,\n]+)',
                     ]
                     for pattern in patterns:
-                        match = re.search(pattern, text.strip(), re.IGNORECASE | re.MULTILINE)
-                        if match:
-                            greetings.append(match.group(1))
+                        m = re.search(pattern, text.strip(), re.IGNORECASE | re.MULTILINE)
+                        if m:
+                            # Greeting auf normalisierte Schreibweise bringen (erstes Wort groß)
+                            gw = m.group(1).strip()
+                            # einfache Normalisierung: erster Buchstabe groß
+                            gw_norm = gw[0].upper() + gw[1:]
+                            greetings.append(gw_norm)
                             break
-                
-                if greetings:
-                    # Return most common greeting
-                    from collections import Counter
-                    most_common = Counter(greetings).most_common(1)[0][0]
-                    return most_common
-                
-                return None
+
+                if not greetings:
+                    return None
+
+                from collections import Counter
+                counter = Counter(greetings)
+                most_word, most_count = counter.most_common(1)[0]
+                total = sum(counter.values())
+
+                return {
+                    'greeting_word': most_word,
+                    'count': int(most_count),
+                    'total': int(total),
+                }
             except Exception as e:
-                app.logger.warning(f"[Learn Greeting] Error: {e}")
+                try:
+                    app.logger.warning(f"[Learn Greeting] Error: {e}")
+                except Exception:
+                    pass
                 return None
         
         # Helper: Determine formal vs informal address
@@ -1621,11 +1645,18 @@ def api_emails_agent_compose(current_user):
         # Extract real name before processing
         contact_name_str = _extract_real_name(contact_name_str, contact_email_addr, contact_profile_summary)
         
-        user_greeting_style = _learn_user_greeting_style(user_email, contact_email_addr)
+        user_greeting_info = _learn_user_greeting_style(user_email, contact_email_addr)
         address_info = _determine_address_style(contact_name_str, contact_email_addr, user_email)
         
+        # Falls es bereits ein gespeichertes Template gibt, dieses bevorzugen.
+        stored_greeting_word = None
+        try:
+            stored_greeting_word = (email_row.get('reply_greeting_template') or '').strip() or None
+        except Exception:
+            stored_greeting_word = None
+
         # Build personalized greeting (oben in der Antwort)
-        greeting_word = user_greeting_style or "Hallo"
+        greeting_word = stored_greeting_word or (user_greeting_info['greeting_word'] if isinstance(user_greeting_info, dict) else None) or "Hallo"
         contact_display_name = address_info['name']
         
         if address_info['is_formal'] and not address_info['use_first_name']:
@@ -1641,6 +1672,45 @@ def api_emails_agent_compose(current_user):
         # Standard-Abschluss (unten in der Antwort, Signatur kommt separat beim Versand)
         # Perspektivisch können wir diesen Text pro Kontakt in reply_closing_template hinterlegen.
         closing_html = "<p>Viele Grüße</p>"
+
+        # Wenn wir eine stabile, häufig verwendete Begrüßung gelernt haben und der Kontakt existiert,
+        # diese als reply_greeting_template in der contacts-Tabelle persistieren (Best Effort).
+        try:
+            contact_id_for_greet = email_row.get('contact_id')
+            if (
+                contact_id_for_greet
+                and isinstance(user_greeting_info, dict)
+                and not stored_greeting_word  # nichts überschreiben, was evtl. manuell gesetzt wurde
+            ):
+                gw = user_greeting_info.get('greeting_word')
+                cnt = int(user_greeting_info.get('count') or 0)
+                total = int(user_greeting_info.get('total') or 0)
+                ratio = (cnt / total) if total > 0 else 0.0
+
+                # Heuristik: mindestens 3 Vorkommen und >= 80% der erkannten Greetings
+                if gw and cnt >= 3 and ratio >= 0.8:
+                    try:
+                        conn_greet = get_settings_db_connection()
+                        cur_greet = conn_greet.cursor()
+                        cur_greet.execute(
+                            """
+                            UPDATE contacts
+                            SET reply_greeting_template = %s
+                            WHERE id = %s AND user_email = %s
+                            """,
+                            (gw, contact_id_for_greet, user_email),
+                        )
+                        conn_greet.commit()
+                        cur_greet.close()
+                        conn_greet.close()
+                    except Exception as _e_upd_greet:
+                        try:
+                            app.logger.warning(f"[ReplyGreetingTemplate] Error while updating contact {contact_id_for_greet}: {_e_upd_greet}")
+                        except Exception:
+                            pass
+        except Exception:
+            # Fehler bei der Persistierung sind nicht kritisch für den Compose-Flow
+            pass
         
         app.logger.info(f"[Greeting] Style: {greeting_word}, Formal: {address_info['is_formal']}, Name: {contact_display_name}")
         # Preface: Jobs upcoming/past (nur bei EXPLIZITER Bitte nach Jobs/Terminen)

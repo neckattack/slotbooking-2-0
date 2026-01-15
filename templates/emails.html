@@ -2075,8 +2075,8 @@ function ensureInboxContextMenu(){
                   <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" title="Profil aktualisieren" style="width:30px; height:30px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:999px; border:0; cursor:pointer; background:#111827; color:#ffffff; font-size:16px;">⚙️</button>
                 </div>
               </div>
-              <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:8px;">
-                <div id="contact_quick_card" class="sub" style="flex:1; font-size:16px; padding:10px 12px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
+              <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:8px;">
+                <div id="contact_quick_card" class="sub" style="flex:1; max-width:55%; font-size:16px; padding:10px 12px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
                   <div style="font-weight:600; margin-bottom:4px;">Überblick</div>
                   <div id="qc_name" style="margin-bottom:2px;"><span style="font-weight:500;">Name:</span> <span class="muted">Lade...</span></div>
                   <div id="qc_now" style="margin-bottom:2px;"><span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span></div>
@@ -2086,7 +2086,7 @@ function ensureInboxContextMenu(){
                   <div id="qc_tone" style="margin-bottom:2px;"><span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span></div>
                   <div id="qc_timeline" style="margin-top:4px;"><span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span></div>
                 </div>
-                <div id="reply_prep_topics" class="sub" style="flex:1; font-size:13px; padding:8px 10px; border-radius:6px; background:#f9fafb; border:1px dashed #d1d5db; max-height:260px; overflow:auto;"></div>
+                <div id="reply_prep_topics" class="sub" style="flex:0 0 340px; font-size:13px; padding:8px 10px; border-radius:6px; background:#f9fafb; border:1px dashed #d1d5db; max-height:260px; overflow:auto;"></div>
               </div>
               <div id="contact_reply_prefs_status" class="sub" style="font-size:11px; margin:4px 0 8px 0; color:#6b7280;">
                 Antwortstil: Lade Einstellungen…
@@ -3494,6 +3494,45 @@ function ensureInboxContextMenu(){
       return textNow.length === 0;
     }
 
+    function prefillComposeShell(){
+      const editor = document.getElementById('compose_editor');
+      if(!editor) return;
+      if(!isComposeEmpty()) return; // nichts überschreiben, falls schon Inhalt da ist
+
+      // Kontaktname & E-Mail aus dem aktuellen Kontext
+      const name = (currentContactName || '').trim();
+      const email = (currentContactEmail || '').trim();
+      const displayName = name || (email ? email.split('@')[0] : 'Kunde');
+
+      // Aus Reply-Prefs (falls geladen) ableiten, ob eher Du oder Sie benutzt wird.
+      let greetingWord = 'Hallo';
+      try{
+        const sal = (currentReplyPrefs && currentReplyPrefs.salutation_mode || '').toLowerCase();
+        if(sal === 'sie'){
+          greetingWord = 'Guten Tag';
+        }
+      }catch(_e_sal){}
+
+      const greetingHtml = `<p>${greetingWord} ${escapeHtml(displayName)},</p>`;
+      const closingHtml = '<p>Viele Grüße</p>';
+
+      // Leeres Absatz-Element zwischen Begrüßung und Schluss für den eigentlichen Inhalt
+      editor.innerHTML = greetingHtml + '<p><br></p>' + closingHtml;
+
+      // Cursor in den mittleren (leeren) Absatz setzen, damit man direkt losschreiben kann.
+      try{
+        const sel = window.getSelection();
+        if(!sel) return;
+        const middleP = editor.querySelectorAll('p')[1];
+        if(!middleP) return;
+        const range = document.createRange();
+        range.selectNodeContents(middleP);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }catch(_e_caret){}
+    }
+
     async function autosaveComposeReplyPrefs(){
       try{
         if(!currentContactId){ return; }
@@ -3516,6 +3555,8 @@ function ensureInboxContextMenu(){
       const composeEl = document.getElementById('compose');
       if(composeEl && !composeEl.classList.contains('open')){
         composeEl.classList.add('open');
+        // Beim ersten Öffnen einen einfachen Begrüßungs-Shell einfügen
+        prefillComposeShell();
       }
       const status = document.getElementById('compose_status');
       const toInput = document.getElementById('compose_to');
@@ -3667,6 +3708,8 @@ function ensureInboxContextMenu(){
       // Wenn Panel zu ist → öffnen. Wenn offen: nur schließen, wenn Editor leer ist.
       if(!panel.classList.contains('open')){
         panel.classList.add('open');
+        // Direkt beim manuellen Öffnen des Antwortfensters eine Begrüßung + Schluss einfügen
+        prefillComposeShell();
 
         // Empfänger + Betreff automatisch aus der aktuellen E-Mail vorbelegen
         try{
