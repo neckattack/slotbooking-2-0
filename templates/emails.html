@@ -3530,14 +3530,12 @@ function ensureInboxContextMenu(){
       const greetingHtml = `<p>${greetingWord} ${escapeHtml(displayName)},</p>`;
       const closingHtml = '<p>Viele Grüße</p>';
 
-      // Struktur (kompakter):
+      // Struktur (kompakt, typischer Absatzabstand kommt aus CSS):
       // 0: Begrüßung
       // 1: Body-Absatz (leer, Cursor hier)
-      // 2: Leerzeile vor dem Abschluss
-      // 3: Abschluss
+      // 2: Abschluss
       editor.innerHTML =
         greetingHtml +
-        '<p><br></p>' +
         '<p><br></p>' +
         closingHtml;
 
