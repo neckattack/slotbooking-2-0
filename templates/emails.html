@@ -1432,6 +1432,7 @@ function ensureInboxContextMenu(){
           status.textContent = `${filtered.length.toLocaleString('de-DE')} E-Mails in dieser Ansicht`;
         }catch(_e_stat){ }
       }
+
       for(const it of filtered){
         const div = document.createElement('div');
         div.className = 'item' + (!it.is_read ? ' unseen' : '');
