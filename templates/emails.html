@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Inbox – neckattack</title>
-    <!-- Tailwind CDN nur als Test für das Compose-Panel -->
-    <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Einfaches eingebettetes SVG-Favicon, damit kein 404 auf /favicon.ico entsteht -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' ry='6' fill='%23111827'/%3E%3Ctext x='12' y='16' text-anchor='middle' font-size='11' fill='white' font-family='system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'%3EIQ%3C/text%3E%3C/svg%3E" />
 
     <style>
     :root { --border:#e5e7eb; --sub:#6b7280; --fg:#111827; --primary:#111827; --active:#f5f6f7; --hover:#f0f2f4; }
@@ -179,7 +179,9 @@
       .toolbar { flex-wrap:wrap; width:100%; justify-content:flex-end; gap:6px; }
       .toolbar button { padding:6px 10px; font-size:13px; }
       #status { order:-1; width:100%; margin:0 0 4px 0 !important; text-align:center; }
-      
+      if(menuBtnAlt){
+      menuBtnAlt.addEventListener('click', openSidebar);
+    }
       /* Stack layout vertically on mobile */
       .container { 
         display:flex; 
@@ -296,6 +298,9 @@
       <span id="status" class="sub" style="margin-right:auto;"></span>
       <button id="user_badge" style="background:#111827; display:none; padding:6px 12px; border-radius:10px; font-size:13px;">👤 Lade...</button>
       <button id="menu_btn" style="background:#111827; font-size:14px; padding:8px 14px; display:flex; align-items:center; justify-content:center; border-radius:12px;" aria-label="Menü öffnen">Menü</button>
+      <!-- Neue, explizite Buttons zum Testen der Darstellung -->
+      <button id="user_badge_alt" style="background:#111827; color:#ffffff; padding:6px 12px; border-radius:10px; font-size:13px;">👤 Profil</button>
+      <button id="menu_btn_alt" style="background:#111827; color:#ffffff; font-size:14px; padding:8px 14px; border-radius:12px;">Menü</button>
     </div>
   </header>
   <div class="container">
@@ -307,7 +312,7 @@
       <div class="compose-inner">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
           <h3 style="margin:0;">Antwort</h3>
-          <button id="compose_close_btn" title="Antwort schließen" class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-900 text-white text-base hover:bg-slate-800 transition-colors">✕</button>
+          <button id="compose_close_btn" title="Antwort schließen" style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:999px; background:#020617; color:#ffffff; border:0; font-size:14px; cursor:pointer;">✕</button>
         </div>
         <div class="compose-body">
           <div class="compose-main">
@@ -4429,6 +4434,7 @@ function ensureInboxContextMenu(){
     const sidebar = document.getElementById('sidebar');
     const sidebarOverlay = document.getElementById('sidebar_overlay');
     const menuBtn = document.getElementById('menu_btn');
+    const menuBtnAlt = document.getElementById('menu_btn_alt');
     const sidebarClose = document.getElementById('sidebar_close');
     
     function openSidebar(){
@@ -4448,6 +4454,13 @@ function ensureInboxContextMenu(){
       e.preventDefault(); closeSidebar();
       openProfileModal();
     });
+    const userBadgeAlt = document.getElementById('user_badge_alt');
+    if(userBadgeAlt){
+      userBadgeAlt.addEventListener('click', (e)=>{
+        e.preventDefault();
+        openProfileModal();
+      });
+    }
     document.getElementById('sidebar_agent').addEventListener('click', (e)=>{
       e.preventDefault(); closeSidebar();
       openAgentSetupModal();
