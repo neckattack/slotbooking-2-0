@@ -1425,6 +1425,11 @@ function ensureInboxContextMenu(){
         } else {
           list.innerHTML = '<div class="sub" style="padding:20px; text-align:center;">Keine E-Mails in dieser Ansicht.</div>';
         }
+        if(status){
+          try{
+            status.textContent = '0 E-Mails in dieser Ansicht';
+          }catch(_e_stat0){ }
+        }
         return;
       }
       if(status){
