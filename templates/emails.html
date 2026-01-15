@@ -294,8 +294,8 @@
       </button>
       <button id="load_more_btn" style="background:#0284c7; display:none; padding:6px 10px; border-radius:8px; font-size:13px;">📥 Weitere E-Mails laden</button>
       <span id="status" class="sub" style="margin-right:auto;"></span>
-      <button id="user_badge" style="background:#111827; display:none; padding:6px 12px; border-radius:10px; font-size:13px;">👤 Lade...</button>
-      <button id="menu_btn" style="background:#111827; font-size:20px; padding:8px 14px;">☰</button>
+      <button id="user_badge" style="background:#111827; display:none; padding:6px 12px; border-radius:999px; font-size:13px; display:flex; align-items:center; justify-content:center;"></button>
+      <button id="menu_btn" style="background:#111827; padding:8px 10px; border-radius:999px; display:flex; align-items:center; justify-content:center;"></button>
     </div>
   </header>
   <div class="container">
@@ -3865,17 +3865,24 @@ function ensureInboxContextMenu(){
         if(sidebarUsersItem) sidebarUsersItem.style.display = 'none';
       }
       // Update user badge
-      const badge = document.getElementById('user_badge');
-      if(user && badge){
-        const name = user.first_name ? user.first_name : user.email.split('@')[0];
-        badge.textContent = `👤 ${name}`;
-        badge.style.display = 'inline-block';
+      const token = getAuthToken();
+      if(!token) return '';
+      try{
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.user_email || '';
+      }catch(e){
+        return '';
       }
     }
-    function getAuthHeaders(){
-      const token = getAuthToken();
-      return token ? {'Authorization': 'Bearer ' + token} : {};
+    function getCurrentUser(){
+      try{
+        const user = localStorage.getItem('current_user');
+        return user ? JSON.parse(user) : null;
+      }catch(e){
+        return null;
+      }
     }
+
     async function checkAuth(){
       const token = getAuthToken();
       if(!token){
@@ -3890,6 +3897,22 @@ function ensureInboxContextMenu(){
         if(data.__ok && data.user){
           localStorage.setItem('current_user', JSON.stringify(data.user));
           updateMenuForUser();
+
+          // Header-Icons (User-Badge & Menü) mit SVG füllen
+          try{
+            const badge = document.getElementById('user_badge');
+            if(badge && window.getIconSvg){
+              const svgUser = window.getIconSvg('user', { size: 18 });
+              badge.innerHTML = svgUser;
+              badge.title = data.user.email || 'Profil';
+            }
+            const menuBtn = document.getElementById('menu_btn');
+            if(menuBtn && window.getIconSvg){
+              const svgMenu = window.getIconSvg('menu', { size: 18 });
+              menuBtn.innerHTML = svgMenu;
+              menuBtn.title = 'Menü öffnen';
+            }
+          }catch(_e_icons){}
 
           // Wichtigkeitsregeln laden: zuerst vom Server, dann mit localStorage mergen
           try{
