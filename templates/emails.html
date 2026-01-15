@@ -2022,7 +2022,7 @@ function ensureInboxContextMenu(){
         
         detail.innerHTML = `
           <div class="detail-scroll">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 4px 8px 0; background:#f9fafb;">
               <h2 style="margin:0;">${escapeHtml(t.subject || '')}</h2>
               <button id="toggle_compose_btn" title="Antwort öffnen" style="background:#111827; color:#ffffff; border:0; padding:8px 14px; border-radius:8px; font-size:13px; white-space:nowrap;">Antwort</button>
             </div>
