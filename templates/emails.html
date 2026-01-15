@@ -3522,27 +3522,23 @@ function ensureInboxContextMenu(){
       const greetingHtml = `<p>${greetingWord} ${escapeHtml(displayName)},</p>`;
       const closingHtml = '<p>Viele Grüße</p>';
 
-      // Struktur:
+      // Struktur (kompakter):
       // 0: Begrüßung
-      // 1: Leerzeile unter der Begrüßung
-      // 2: Body-Absatz (Cursor hier)
-      // 3: Leerzeile vor dem Abschluss
-      // 4: Abschluss
-      // 5: Leerzeile unter dem Abschluss
+      // 1: Body-Absatz (leer, Cursor hier)
+      // 2: Leerzeile vor dem Abschluss
+      // 3: Abschluss
       editor.innerHTML =
         greetingHtml +
         '<p><br></p>' +
         '<p><br></p>' +
-        '<p><br></p>' +
-        closingHtml +
-        '<p><br></p>';
+        closingHtml;
 
-      // Cursor in den Body-Absatz setzen (Index 2)
+      // Cursor in den Body-Absatz setzen (Index 1)
       try{
         const sel = window.getSelection();
         if(!sel) return;
         const paragraphs = editor.querySelectorAll('p');
-        const bodyP = paragraphs[2];
+        const bodyP = paragraphs[1];
         if(!bodyP) return;
         const range = document.createRange();
         range.selectNodeContents(bodyP);
