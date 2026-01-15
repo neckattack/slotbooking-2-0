@@ -364,6 +364,17 @@
             Antwortstil: wird aus bisherigen E-Mails abgeleitet (zuerst unsere Antworten, dann die Art, wie dieser Kontakt schreibt).
           </div>
         </div>
+        <!-- Debug-Panel für das Antwortmodul: zeigt Rohwerte aus contacts.reply_* -->
+        <div id="compose_debug_block" class="sub" style="margin-top:8px; font-size:11px; color:#111827; border-radius:10px; border:1px dashed #cbd5f5; background:#eff6ff; padding:8px 10px;">
+          <div style="font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+            <span>🛠️ Debug Antwortmodul</span>
+            <span style="font-size:10px; color:#6b7280;">(Begrüßung &amp; Schluss direkt aus der contacts-Tabelle)</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <div><span class="muted">reply_greeting_template:</span> <span id="compose_debug_greeting" style="font-family:monospace; font-size:10px;">(noch nicht geladen)</span></div>
+            <div><span class="muted">reply_closing_template:</span> <span id="compose_debug_closing" style="font-family:monospace; font-size:10px;">(noch nicht geladen)</span></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -3295,6 +3306,8 @@ function ensureInboxContextMenu(){
       const blockEl = document.getElementById('compose_reply_prefs_block');
       const statusEl = document.getElementById('compose_reply_prefs_status');
       const labelEl = document.getElementById('compose_reply_prefs_label');
+      const dbgGreetingEl = document.getElementById('compose_debug_greeting');
+      const dbgClosingEl = document.getElementById('compose_debug_closing');
       const lenInput = document.getElementById('cmp_length');
       const formInput = document.getElementById('cmp_formality');
       const lenLabel = document.getElementById('cmp_length_label');
@@ -3316,6 +3329,8 @@ function ensureInboxContextMenu(){
           statusEl.textContent = 'Antwortstil: Kontakt unbekannt, es gelten globale Defaults.';
           statusEl.style.color = '#6b7280';
         }
+        if(dbgGreetingEl){ dbgGreetingEl.textContent = '(kein Kontakt / keine Daten)'; }
+        if(dbgClosingEl){ dbgClosingEl.textContent = '(kein Kontakt / keine Daten)'; }
         return;
       }
 
@@ -3332,6 +3347,8 @@ function ensureInboxContextMenu(){
             statusEl.textContent = 'Antwortstil: Fehler – ' + (data && data.error ? data.error : 'Unbekannt');
             statusEl.style.color = '#dc2626';
           }
+          if(dbgGreetingEl){ dbgGreetingEl.textContent = '(Fehler beim Laden)'; }
+          if(dbgClosingEl){ dbgClosingEl.textContent = '(Fehler beim Laden)'; }
           return;
         }
         const prefs = data.preferences || {};
@@ -3369,6 +3386,16 @@ function ensureInboxContextMenu(){
 
         if(labelEl){
           labelEl.textContent = formatReplyPrefsLabel(currentReplyPrefs, emailSummary && emailSummary.contact_name, emailSummary && emailSummary.from);
+        }
+
+        // Debug-Werte für Begrüßung/Schluss direkt aus der contacts-Tabelle anzeigen
+        if(dbgGreetingEl){
+          const v = currentReplyPrefs.greeting_template;
+          dbgGreetingEl.textContent = v ? String(v) : '(NULL / nicht gesetzt)';
+        }
+        if(dbgClosingEl){
+          const v = currentReplyPrefs.closing_template;
+          dbgClosingEl.textContent = v ? String(v) : '(NULL / nicht gesetzt)';
         }
 
         if(statusEl){
