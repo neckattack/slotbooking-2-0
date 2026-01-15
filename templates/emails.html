@@ -2170,6 +2170,10 @@ function ensureInboxContextMenu(){
           const topEl = detailEl ? detailEl.querySelector('.detail-scroll') : null;
           const bottomEl = detailEl ? detailEl.querySelector('.profile') : null;
           if(detailEl && splitter && topEl && bottomEl){
+            // Standardaufteilung bei jedem Mail-Wechsel zurücksetzen, damit der untere Bereich
+            // (Kontaktprofil) nicht "verschwindet" und der Slider stabiler wirkt.
+            topEl.style.flex = '0 0 70%';
+            bottomEl.style.flex = '0 0 30%';
             let isDragging = false;
             let startY = 0;
             let startTopHeight = 0;
