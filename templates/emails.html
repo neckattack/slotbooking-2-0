@@ -296,8 +296,8 @@
       </button>
       <button id="load_more_btn" style="background:#0284c7; display:none; padding:6px 10px; border-radius:8px; font-size:13px;">📥 Weitere E-Mails laden</button>
       <span id="status" class="sub" style="margin-right:auto;"></span>
-      <button id="user_badge" style="background:#111827; display:none; padding:6px 12px; border-radius:10px; font-size:13px;">👤 Lade...</button>
-      <button id="menu_btn" style="background:#111827; font-size:14px; padding:8px 14px; display:flex; align-items:center; justify-content:center; border-radius:12px;" aria-label="Menü öffnen">Menü</button>
+      <button id="user_badge" style="background:#111827; display:none; padding:6px 12px; border-radius:10px; font-size:13px;">👤</button>
+      <button id="menu_btn" style="background:#111827; font-size:14px; padding:8px 14px; display:flex; align-items:center; justify-content:center; border-radius:12px;" aria-label="Menü öffnen">☰</button>
     </div>
   </header>
   <div class="container">
@@ -3866,17 +3866,21 @@ function ensureInboxContextMenu(){
       } else {
         if(sidebarUsersItem) sidebarUsersItem.style.display = 'none';
       }
-      // Update user badge (Icon + Name, mit Fallback)
+      // Update user badge: nur Icon, Name als Tooltip/Fallback
       const badge = document.getElementById('user_badge');
       if(user && badge){
-        const name = user.first_name ? user.first_name : user.email.split('@')[0];
-        const icon = (window.getIconSvg ? window.getIconSvg('user', {size:16}) : '');
+        const name = user.first_name ? user.first_name : (user.email ? user.email.split('@')[0] : 'Profil');
+        const icon = (window.getIconSvg ? window.getIconSvg('user', {size:18}) : '');
         if(icon){
-          badge.innerHTML = `<span style="display:inline-flex; align-items:center; gap:6px;">${icon}<span>${name}</span></span>`;
+          badge.innerHTML = icon;
         }else{
-          badge.textContent = `👤 ${name}`;
+          badge.textContent = '👤';
         }
-        badge.style.display = 'inline-block';
+        badge.title = name;
+        badge.setAttribute('aria-label', name);
+        badge.style.display = 'inline-flex';
+        badge.style.alignItems = 'center';
+        badge.style.justifyContent = 'center';
       }
     }
     function getAuthHeaders(){
@@ -4449,9 +4453,18 @@ function ensureInboxContextMenu(){
         const svg = window.getIconSvg(name, {size:20});
         if(svg){ el.innerHTML = svg; }
       });
+      // Menü-Button in der Header-Toolbar ebenfalls mit Icon befüllen
+      if(menuBtn){
+        const menuSvg = window.getIconSvg('menu', {size:18});
+        if(menuSvg){
+          menuBtn.innerHTML = menuSvg;
+        }
+      }
     }
     
-    menuBtn.addEventListener('click', openSidebar);
+    if(menuBtn){
+      menuBtn.addEventListener('click', openSidebar);
+    }
     sidebarClose.addEventListener('click', closeSidebar);
     sidebarOverlay.addEventListener('click', closeSidebar);
     
@@ -4459,6 +4472,13 @@ function ensureInboxContextMenu(){
       e.preventDefault(); closeSidebar();
       openProfileModal();
     });
+    const headerUserBadge = document.getElementById('user_badge');
+    if(headerUserBadge){
+      headerUserBadge.addEventListener('click', (e)=>{
+        e.preventDefault();
+        openProfileModal();
+      });
+    }
     document.getElementById('sidebar_agent').addEventListener('click', (e)=>{
       e.preventDefault(); closeSidebar();
       openAgentSetupModal();
