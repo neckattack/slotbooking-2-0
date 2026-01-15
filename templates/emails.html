@@ -3864,14 +3864,10 @@ function ensureInboxContextMenu(){
       } else {
         if(sidebarUsersItem) sidebarUsersItem.style.display = 'none';
       }
-      // Update user badge
-      const token = getAuthToken();
-      if(!token) return '';
-      try{
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        return payload.user_email || '';
-      }catch(e){
-        return '';
+      // User-Badge (Icon-Button) sichtbar schalten, wenn ein User geladen ist
+      const badge = document.getElementById('user_badge');
+      if(badge){
+        badge.style.display = user ? 'inline-flex' : 'none';
       }
     }
     function getCurrentUser(){
