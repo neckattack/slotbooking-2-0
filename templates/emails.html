@@ -2038,7 +2038,7 @@ function ensureInboxContextMenu(){
               </div>
               <div id="reply_prep_status" class="sub" style="margin-bottom:4px;">Analysiere E-Mail…</div>
               <div id="reply_prep_summary" style="margin-bottom:4px;"></div>
-              <div id="reply_prep_topics"></div>
+              <!-- Topics-Container wurde ins Kontaktprofil rechts neben die Quick-Context-Box verschoben. -->
               <div id="reply_prep_debug" style="margin-top:4px;"></div>
             </div>
           </div>
@@ -2075,15 +2075,18 @@ function ensureInboxContextMenu(){
                   <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" title="Profil aktualisieren" style="width:30px; height:30px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:999px; border:0; cursor:pointer; background:#111827; color:#ffffff; font-size:16px;">⚙️</button>
                 </div>
               </div>
-              <div id="contact_quick_card" class="sub" style="font-size:16px; margin-bottom:8px; padding:10px 12px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
-                <div style="font-weight:600; margin-bottom:4px;">Überblick</div>
-                <div id="qc_name" style="margin-bottom:2px;"><span style="font-weight:500;">Name:</span> <span class="muted">Lade...</span></div>
-                <div id="qc_now" style="margin-bottom:2px;"><span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span></div>
-                <div id="qc_topics" style="margin-bottom:2px;"><span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span></div>
-                <div id="qc_reply" style="margin-bottom:2px;"><span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span></div>
-                <div id="qc_reply_mode" style="margin-bottom:2px;"><span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Lade...</span></div>
-                <div id="qc_tone" style="margin-bottom:2px;"><span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span></div>
-                <div id="qc_timeline" style="margin-top:4px;"><span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span></div>
+              <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:8px;">
+                <div id="contact_quick_card" class="sub" style="flex:1; font-size:16px; padding:10px 12px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
+                  <div style="font-weight:600; margin-bottom:4px;">Überblick</div>
+                  <div id="qc_name" style="margin-bottom:2px;"><span style="font-weight:500;">Name:</span> <span class="muted">Lade...</span></div>
+                  <div id="qc_now" style="margin-bottom:2px;"><span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span></div>
+                  <div id="qc_topics" style="margin-bottom:2px;"><span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span></div>
+                  <div id="qc_reply" style="margin-bottom:2px;"><span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span></div>
+                  <div id="qc_reply_mode" style="margin-bottom:2px;"><span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Lade...</span></div>
+                  <div id="qc_tone" style="margin-bottom:2px;"><span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span></div>
+                  <div id="qc_timeline" style="margin-top:4px;"><span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span></div>
+                </div>
+                <div id="reply_prep_topics" class="sub" style="flex:1; font-size:13px; padding:8px 10px; border-radius:6px; background:#f9fafb; border:1px dashed #d1d5db; max-height:260px; overflow:auto;"></div>
               </div>
               <div id="contact_reply_prefs_status" class="sub" style="font-size:11px; margin:4px 0 8px 0; color:#6b7280;">
                 Antwortstil: Lade Einstellungen…
