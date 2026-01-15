@@ -501,12 +501,12 @@
       <button class="sidebar-close" id="sidebar_close">✕</button>
     </div>
     <ul class="sidebar-menu">
-      <li><a href="#" id="sidebar_profile"><span class="icon">👤</span> Profil</a></li>
-      <li><a href="#" id="sidebar_agent"><span class="icon">🤖</span> Agent-Setup</a></li>
-      <li><a href="#" id="sidebar_knowledge"><span class="icon">📚</span> Wissensdatenbank</a></li>
-      <li><a href="#" id="sidebar_contacts"><span class="icon">📇</span> Kontakte</a></li>
-      <li><a href="#" id="sidebar_email"><span class="icon">✉️</span> E-Mail-Einstellungen</a></li>
-      <li id="sidebar_users_item" style="display:none;"><a href="#" id="sidebar_users"><span class="icon">👥</span> User-Verwaltung</a></li>
+      <li><a href="#" id="sidebar_profile"><span class="icon" data-icon="user"></span> Profil</a></li>
+      <li><a href="#" id="sidebar_agent"><span class="icon" data-icon="settings"></span> Agent-Setup</a></li>
+      <li><a href="#" id="sidebar_knowledge"><span class="icon" data-icon="book"></span> Wissensdatenbank</a></li>
+      <li><a href="#" id="sidebar_contacts"><span class="icon" data-icon="users"></span> Kontakte</a></li>
+      <li><a href="#" id="sidebar_email"><span class="icon" data-icon="mail"></span> E-Mail-Einstellungen</a></li>
+      <li id="sidebar_users_item" style="display:none;"><a href="#" id="sidebar_users"><span class="icon" data-icon="users"></span> User-Verwaltung</a></li>
       <li style="border-top:2px solid var(--border);"><a href="#" id="sidebar_logout" style="color:#dc2626;"><span class="icon">🚪</span> Logout</a></li>
     </ul>
   </div>
@@ -4440,6 +4440,15 @@ function ensureInboxContextMenu(){
     function closeSidebar(){
       sidebar.classList.remove('open');
       sidebarOverlay.classList.remove('open');
+    }
+    
+    // Sidebar-Icons mit Lucide-SVGs befüllen (data-icon-Attribut)
+    if(window.getIconSvg){
+      document.querySelectorAll('.sidebar-menu .icon[data-icon]').forEach(function(el){
+        const name = el.getAttribute('data-icon');
+        const svg = window.getIconSvg(name, {size:20});
+        if(svg){ el.innerHTML = svg; }
+      });
     }
     
     menuBtn.addEventListener('click', openSidebar);
