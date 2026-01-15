@@ -26,7 +26,7 @@
     .item.unseen .subject { font-weight:700; }
     .item .meta { color: var(--sub); font-size:14px; margin-top:4px; display:flex; justify-content:space-between; gap:12px; }
     .item.answer-fade-out { opacity:0; transform:translateX(12px); transition:opacity 0.2s ease-out, transform 0.2s ease-out; }
-    .detail { overflow:hidden; padding:20px 12px 20px 28px; background:#f9fafb; }
+    .detail { overflow:hidden; padding:20px 28px; background:#f9fafb; }
     .detail h2 { margin:0 0 10px; font-size:22px; }
     .detail .meta { color: var(--sub); font-size:14px; margin-bottom:16px; }
     .detail .content { background:#fff; border:1px solid var(--border); border-radius:10px; padding:20px; }
@@ -284,7 +284,7 @@
       <select id="folder_select" style="height:36px; padding:8px 16px; border-radius:8px; border:1px solid var(--border); font-size:15px; font-weight:500; min-width:150px; background:#ffffff; color:#111827;"></select>
     </div>
     <div class="toolbar">
-      <span id="build_info" class="sub" style="font-size:11px; margin-right:8px; color:#6b7280; white-space:nowrap;">Build … (dev)</span>
+      <span id="build_info" class="sub" style="font-size:11px; margin-right:8px; color:#6b7280; white-space:nowrap;">Build …</span>
       <input id="inbox_search" type="text" placeholder="🔍 Absender suchen..." style="flex:1; max-width:520px; height:44px; padding:10px 18px; border:1px solid var(--border); border-radius:999px; font-size:15px; min-width:320px;" />
       <button id="reload" title="Aktualisieren" style="width:34px; height:34px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:999px; background:#111827; color:#ffffff;">
         <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -294,8 +294,8 @@
       </button>
       <button id="load_more_btn" style="background:#0284c7; display:none; padding:6px 10px; border-radius:8px; font-size:13px;">📥 Weitere E-Mails laden</button>
       <span id="status" class="sub" style="margin-right:auto;"></span>
-      <button id="user_badge" style="background:#111827; display:none; padding:6px 12px; border-radius:999px; font-size:13px; display:flex; align-items:center; justify-content:center;"></button>
-      <button id="menu_btn" style="background:#111827; padding:8px 10px; border-radius:999px; display:flex; align-items:center; justify-content:center;"></button>
+      <button id="user_badge" style="background:#111827; display:none; padding:6px 12px; border-radius:10px; font-size:13px;">👤 Lade...</button>
+      <button id="menu_btn" style="background:#111827; font-size:20px; padding:8px 14px;">☰</button>
     </div>
   </header>
   <div class="container">
@@ -395,7 +395,7 @@
       <div class="row"><label>E‑Mail</label><input id="login_email" placeholder="you@domain.com"></div>
       <div class="row"><label>Passwort</label><input id="login_pass" type="password" placeholder="••••••••"></div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:10px;">
-        <button id="login_debug" style="background:#6b7280; display:none;">Debug</button>
+        <button id="login_debug" style="background:#6b7280;">Debug</button>
         <button id="login_submit">Login</button>
       </div>
       <div id="login_msg" class="sub" style="margin-top:8px; white-space:pre-wrap; text-align:left;"></div>
@@ -2022,7 +2022,7 @@ function ensureInboxContextMenu(){
         
         detail.innerHTML = `
           <div class="detail-scroll">
-            <div style="position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 4px 8px 0; background:#f9fafb;">
+            <div style="position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 4px 8px 0; background:#f9fafb; border-bottom:1px solid #e5e7eb;">
               <h2 style="margin:0;">${escapeHtml(t.subject || '')}</h2>
               <button id="toggle_compose_btn" title="Antwort öffnen" style="background:#111827; color:#ffffff; border:0; padding:8px 14px; border-radius:8px; font-size:13px; white-space:nowrap;">Antwort</button>
             </div>
@@ -3864,21 +3864,18 @@ function ensureInboxContextMenu(){
       } else {
         if(sidebarUsersItem) sidebarUsersItem.style.display = 'none';
       }
-      // User-Badge (Icon-Button) sichtbar schalten, wenn ein User geladen ist
+      // Update user badge
       const badge = document.getElementById('user_badge');
-      if(badge){
-        badge.style.display = user ? 'inline-flex' : 'none';
+      if(user && badge){
+        const name = user.first_name ? user.first_name : user.email.split('@')[0];
+        badge.textContent = `👤 ${name}`;
+        badge.style.display = 'inline-block';
       }
     }
-    function getCurrentUser(){
-      try{
-        const user = localStorage.getItem('current_user');
-        return user ? JSON.parse(user) : null;
-      }catch(e){
-        return null;
-      }
+    function getAuthHeaders(){
+      const token = getAuthToken();
+      return token ? {'Authorization': 'Bearer ' + token} : {};
     }
-
     async function checkAuth(){
       const token = getAuthToken();
       if(!token){
@@ -3893,22 +3890,6 @@ function ensureInboxContextMenu(){
         if(data.__ok && data.user){
           localStorage.setItem('current_user', JSON.stringify(data.user));
           updateMenuForUser();
-
-          // Header-Icons (User-Badge & Menü) mit SVG füllen
-          try{
-            const badge = document.getElementById('user_badge');
-            if(badge && window.getIconSvg){
-              const svgUser = window.getIconSvg('user', { size: 18 });
-              badge.innerHTML = svgUser;
-              badge.title = data.user.email || 'Profil';
-            }
-            const menuBtn = document.getElementById('menu_btn');
-            if(menuBtn && window.getIconSvg){
-              const svgMenu = window.getIconSvg('menu', { size: 18 });
-              menuBtn.innerHTML = svgMenu;
-              menuBtn.title = 'Menü öffnen';
-            }
-          }catch(_e_icons){}
 
           // Wichtigkeitsregeln laden: zuerst vom Server, dann mit localStorage mergen
           try{
@@ -4087,9 +4068,8 @@ function ensureInboxContextMenu(){
       msg.textContent = 'Lade Accounts...';
       modal.style.display = 'flex';
       try{
-        // Accounts laden – getAuthHeaders defensiv verwenden, um ReferenceError in älteren Builds zu vermeiden
-        const authHeaders = (typeof getAuthHeaders === 'function') ? getAuthHeaders() : {};
-        const listRes = await fetch('/api/email-accounts/list', { headers: authHeaders });
+        // Accounts laden
+        const listRes = await fetch('/api/email-accounts/list', { headers: getAuthHeaders() });
         const listData = await parseJsonSafe(listRes);
         const select = document.getElementById('email_account_select');
         emailAccounts = (listData.accounts || []);
@@ -4328,7 +4308,7 @@ function ensureInboxContextMenu(){
         try {
           const res = await fetch('/api/emails/smtp-test', {
             method: 'POST',
-            headers: { ...((typeof getAuthHeaders === 'function') ? getAuthHeaders() : {}), 'Content-Type': 'application/json' },
+            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
             body: JSON.stringify({ account_id: currentSettingsAccountId || currentAccountId })
           });
           const data = await parseJsonSafe(res);
