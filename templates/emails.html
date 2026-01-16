@@ -1689,6 +1689,23 @@ function ensureInboxContextMenu(){
           .catch(() => {});
       }catch(_e_build){ }
 
+      // Signatur für den aktuellen User (falls vorhanden) einmalig laden,
+      // damit sie später automatisch unter die Antwort gesetzt werden kann.
+      (async () => {
+        try{
+          if(typeof getUserEmail !== 'function') return;
+          const userEmail = getUserEmail();
+          if(!userEmail) return;
+          const res = await fetch(`/api/user/email-settings?user_email=${encodeURIComponent(userEmail)}`, {
+            headers: getAuthHeaders()
+          });
+          const data = await parseJsonSafe(res);
+          if(data && (data.signature_html || data.signature)){
+            currentSignatureHtml = data.signature_html || data.signature || '';
+          }
+        }catch(_e_sig){}
+      })();
+
       const searchInput = document.getElementById('inbox_search');
       if(searchInput){
         searchInput.addEventListener('input', () => {
@@ -1709,6 +1726,7 @@ function ensureInboxContextMenu(){
     let currentSearchToken = 0;
     let activeSearchToken = 0;
     let currentSearchQuery = '';
+    let currentSignatureHtml = '';
 
     async function searchInbox(query){
       const status = document.getElementById('status');
@@ -3690,14 +3708,32 @@ function ensureInboxContextMenu(){
       const greetingHtml = `<p>${greetingWord} ${escapeHtml(displayName)},</p>`;
       const closingHtml = '<p>Viele Grüße</p>';
 
+      // Optional vorbereitete Signatur aus den Einstellungen anhängen
+      let signatureBlock = '';
+      try{
+        const sigRaw = (currentSignatureHtml || '').trim();
+        if(sigRaw){
+          if(/^\s*</.test(sigRaw)){
+            // Sieht nach HTML aus – direkt übernehmen
+            signatureBlock = sigRaw;
+          } else {
+            // Plain-Text-Signatur in HTML-Absatz(e) umwandeln
+            const escaped = escapeHtml(sigRaw).replace(/\n/g, '<br>');
+            signatureBlock = `<p>${escaped}</p>`;
+          }
+        }
+      }catch(_e_sig_conv){}
+
       // Struktur (kompakt, typischer Absatzabstand kommt aus CSS):
       // 0: Begrüßung
       // 1: Body-Absatz (leer, Cursor hier)
       // 2: Abschluss
+      // 3: optionale Signatur
       editor.innerHTML =
         greetingHtml +
         '<p><br></p>' +
-        closingHtml;
+        closingHtml +
+        (signatureBlock || '');
 
       // Cursor in den Body-Absatz setzen (Index 1)
       try{
@@ -3765,7 +3801,29 @@ function ensureInboxContextMenu(){
         }
         toInput.value = data.to || '';
         subjInput.value = data.subject || '';
-        editor.innerHTML = data.html || '<div class="muted">(leer)</div>';
+
+        let html = data.html || '';
+        try{
+          const sigRaw = (currentSignatureHtml || '').trim();
+          if(sigRaw){
+            const htmlLower = html.toLowerCase();
+            const sigLower = sigRaw.toLowerCase();
+            // Nur anhängen, wenn die Signatur nicht ohnehin schon vorkommt
+            if(!htmlLower.includes(sigLower) && !htmlLower.includes('--\n') && !htmlLower.includes('--<br')){
+              let signatureBlock = '';
+              if(/^\s*</.test(sigRaw)){
+                // HTML-Signatur
+                signatureBlock = sigRaw;
+              } else {
+                const escaped = escapeHtml(sigRaw).replace(/\n/g, '<br>');
+                signatureBlock = `<p>${escaped}</p>`;
+              }
+              html = (html || '') + (signatureBlock || '');
+            }
+          }
+        }catch(_e_sig_append){}
+
+        editor.innerHTML = html || '<div class="muted">(leer)</div>';
         status.textContent = 'Vorschlag erstellt';
       }catch(e){ status.textContent = 'Fehler: ' + e; }
     }
