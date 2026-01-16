@@ -123,10 +123,13 @@
     }
     /* Antwortstil-Panel: volle Spaltenbreite für die Slider im modernen Card-Look */
     #compose_reply_prefs_block { width:100%; box-sizing:border-box; border-radius:14px; border:1px solid #e5e7eb; background:#f9fafb; padding:10px 12px 12px; }
+    #compose_reply_prefs_block label {
+      width:100%;
+    }
     #compose_reply_prefs_block input[type="range"] {
-      width:calc(100% + 16px);
+      width:100%;
       display:block;
-      margin:0 -8px; /* Slider zieht sich optisch von Card-Rand zu Card-Rand */
+      margin:0; /* Slider nutzt die komplette Card-Breite innerhalb des Paddings */
     }
     .muted { color:var(--sub); }
     .sub { color:var(--sub); font-size:13px; }
