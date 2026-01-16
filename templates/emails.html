@@ -1491,21 +1491,19 @@ function ensureInboxContextMenu(){
       <div class="meta"><span>${fromLabel}</span><span>${dateLabel}${isAnswered ? ' ↩︎' : ''}</span></div>
     </div>
     <div class="item-actions-wrapper" style="position:absolute; right:0; top:-16px; bottom:-16px; display:flex; flex-direction:row-reverse; align-items:center; gap:8px; padding:0 12px 0 8px; background:var(--hover); box-shadow:-4px 0 12px rgba(15,23,42,0.12); transform:translateX(180%); transition:transform 0.16s ease-out; pointer-events:none;">
-      <div class="importance-controls" data-bucket="${bucket}" style="display:flex; flex-direction:column; justify-content:space-between; align-items:center; gap:4px; font-size:13px; margin-right:4px;">
-        ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="border:1px solid #9ca3af; width:26px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↑</button>` : ''}
-        ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="border:1px solid #9ca3af; width:26px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↓</button>` : ''}
-        <button class="imp-up-2" type="button" title="Direkt Fokus" style="border:1px solid #9ca3af; width:26px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08); font-size:11px;">↑↑</button>
-        <button class="imp-down-2" type="button" title="Direkt Unwichtig" style="border:1px solid #9ca3af; width:26px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08); font-size:11px;">↓↓</button>
+      <div class="importance-controls" data-bucket="${bucket}" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:4px; font-size:13px; margin-right:4px;">
+        ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="border:1px solid #9ca3af; width:26px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">${window.getIconSvg ? window.getIconSvg('chevron-up', {size:16}) : '↑'}</button>` : ''}
+        ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="border:1px solid #9ca3af; width:26px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">${window.getIconSvg ? window.getIconSvg('chevron-down', {size:16}) : '↓'}</button>` : ''}
       </div>
       <div class="item-actions" style="position:relative; height:100%; display:flex; align-items:center; gap:10px;">
-        <button class="item-contact" type="button" title="Kontakt öffnen" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:17px;">
-          👤
+        <button class="item-contact" type="button" title="Kontakt öffnen" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827;">
+          ${window.getIconSvg ? window.getIconSvg('user', {size:18}) : '👤'}
         </button>
-        <button class="item-read-toggle" type="button" title="Als gelesen/ungelesen markieren" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:17px;">
-          👁️
+        <button class="item-read-toggle" type="button" title="Als gelesen/ungelesen markieren" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827;">
+          ${window.getIconSvg ? window.getIconSvg('eye', {size:18}) : '👁️'}
         </button>
-        <button class="item-archive" type="button" title="Archivieren" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:17px;">
-          📥
+        <button class="item-archive" type="button" title="Archivieren" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827;">
+          ${window.getIconSvg ? window.getIconSvg('archive', {size:18}) : '📥'}
         </button>
       </div>
     </div>
@@ -1598,8 +1596,6 @@ function ensureInboxContextMenu(){
 
           const upBtn = controls.querySelector('.imp-up');
           const downBtn = controls.querySelector('.imp-down');
-          const up2Btn = controls.querySelector('.imp-up-2');
-          const down2Btn = controls.querySelector('.imp-down-2');
           if(upBtn){
             upBtn.addEventListener('click', (ev) => {
               ev.stopPropagation();
@@ -1614,20 +1610,6 @@ function ensureInboxContextMenu(){
               const b = getImportanceBucket(it);
               const next = (b === 'focus') ? 'normal' : 'unwichtig';
               applyBucketChange(next);
-            });
-          }
-
-          // Doppelpfeile: direkter Sprung nach Fokus bzw. Unwichtig
-          if(up2Btn){
-            up2Btn.addEventListener('click', (ev) => {
-              ev.stopPropagation();
-              applyBucketChange('focus');
-            });
-          }
-          if(down2Btn){
-            down2Btn.addEventListener('click', (ev) => {
-              ev.stopPropagation();
-              applyBucketChange('unwichtig');
             });
           }
         }
