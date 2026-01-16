@@ -1490,15 +1490,15 @@ function ensureInboxContextMenu(){
       <div class="subject">${escapeHtml(it.subject || '(ohne Betreff)')}</div>
       <div class="meta flex items-center justify-between text-xs text-slate-500"><span>${fromLabel}</span><span>${dateLabel}${isAnswered ? ' ↩︎' : ''}</span></div>
     </div>
-    <div class="item-actions-wrapper absolute inset-y-[-0.75rem] right-0 flex flex-row-reverse items-center gap-2 px-3 bg-slate-50 shadow-lg translate-x-full group-hover:translate-x-0 transition-transform duration-150 ease-out pointer-events-none group-hover:pointer-events-auto">
-      <div class="importance-controls flex flex-col items-center justify-center gap-1 text-[13px] mr-1" data-bucket="${bucket}">
-        ${canUp ? `<button class="imp-up inline-flex items-center justify-center w-7 h-5 rounded-md border border-slate-300 bg-white text-slate-900 shadow-sm" type="button" title="Wichtiger">${window.getIconSvg ? window.getIconSvg('chevron-up', {size:16}) : '↑'}</button>` : ''}
-        ${canDown ? `<button class="imp-down inline-flex items-center justify-center w-7 h-5 rounded-md border border-slate-300 bg-white text-slate-900 shadow-sm" type="button" title="Unwichtiger">${window.getIconSvg ? window.getIconSvg('chevron-down', {size:16}) : '↓'}</button>` : ''}
+    <div class="item-actions-wrapper absolute inset-y-[-0.5rem] right-2 flex flex-row-reverse items-center gap-1.5 px-2 py-1 bg-white/90 border border-slate-200 rounded-xl shadow-sm translate-x-full group-hover:translate-x-0 transition-transform duration-150 ease-out pointer-events-none group-hover:pointer-events-auto">
+      <div class="importance-controls flex flex-col items-center justify-center gap-1 text-[11px] mr-0.5" data-bucket="${bucket}">
+        ${canUp ? `<button class="imp-up inline-flex items-center justify-center w-6 h-5 rounded-md border border-slate-300 bg-slate-50 text-slate-800 hover:bg-slate-100" type="button" title="Wichtiger">${window.getIconSvg ? window.getIconSvg('chevron-up', {size:14}) : '↑'}</button>` : ''}
+        ${canDown ? `<button class="imp-down inline-flex items-center justify-center w-6 h-5 rounded-md border border-slate-300 bg-slate-50 text-slate-800 hover:bg-slate-100" type="button" title="Unwichtiger">${window.getIconSvg ? window.getIconSvg('chevron-down', {size:14}) : '↓'}</button>` : ''}
       </div>
-      <div class="item-actions relative flex h-full items-center gap-2">
-        <button class="item-contact inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-900 hover:bg-slate-100" type="button" title="Kontakt öffnen"></button>
-        <button class="item-read-toggle inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-900 hover:bg-slate-100" type="button" title="Als gelesen/ungelesen markieren"></button>
-        <button class="item-archive inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-900 hover:bg-slate-100" type="button" title="Archivieren"></button>
+      <div class="item-actions relative flex h-full items-center gap-1.5">
+        <button class="item-contact inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200" type="button" title="Kontakt öffnen"></button>
+        <button class="item-read-toggle inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200" type="button" title="Als gelesen/ungelesen markieren"></button>
+        <button class="item-archive inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200" type="button" title="Archivieren"></button>
       </div>
     </div>
   </div>
