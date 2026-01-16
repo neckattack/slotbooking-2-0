@@ -1485,20 +1485,20 @@ function ensureInboxContextMenu(){
         }
 
         div.innerHTML = `
-  <div style="position:relative; display:flex; justify-content:space-between; align-items:center; gap:8px;">
-    <div style="flex:1; min-width:0; padding-right:96px;">
+  <div class="group relative flex items-center justify-between gap-2">
+    <div class="flex-1 min-w-0 pr-24">
       <div class="subject">${escapeHtml(it.subject || '(ohne Betreff)')}</div>
-      <div class="meta"><span>${fromLabel}</span><span>${dateLabel}${isAnswered ? ' ↩︎' : ''}</span></div>
+      <div class="meta flex items-center justify-between text-xs text-slate-500"><span>${fromLabel}</span><span>${dateLabel}${isAnswered ? ' ↩︎' : ''}</span></div>
     </div>
-    <div class="item-actions-wrapper" style="position:absolute; right:0; top:-16px; bottom:-16px; display:flex; flex-direction:row-reverse; align-items:center; gap:8px; padding:0 12px 0 8px; background:var(--hover); box-shadow:-4px 0 12px rgba(15,23,42,0.12); transform:translateX(180%); transition:transform 0.16s ease-out; pointer-events:none;">
-      <div class="importance-controls" data-bucket="${bucket}" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:4px; font-size:13px; margin-right:4px;">
-        ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="border:1px solid #9ca3af; width:26px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08); font-size:13px;">↑</button>` : ''}
-        ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="border:1px solid #9ca3af; width:26px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08); font-size:13px;">↓</button>` : ''}
+    <div class="item-actions-wrapper absolute inset-y-[-0.75rem] right-0 flex flex-row-reverse items-center gap-2 px-3 bg-slate-50 shadow-lg translate-x-full group-hover:translate-x-0 transition-transform duration-150 ease-out pointer-events-none group-hover:pointer-events-auto">
+      <div class="importance-controls flex flex-col items-center justify-center gap-1 text-[13px] mr-1" data-bucket="${bucket}">
+        ${canUp ? `<button class="imp-up inline-flex items-center justify-center w-7 h-5 rounded-md border border-slate-300 bg-white text-slate-900 shadow-sm" type="button" title="Wichtiger">${window.getIconSvg ? window.getIconSvg('chevron-up', {size:16}) : '↑'}</button>` : ''}
+        ${canDown ? `<button class="imp-down inline-flex items-center justify-center w-7 h-5 rounded-md border border-slate-300 bg-white text-slate-900 shadow-sm" type="button" title="Unwichtiger">${window.getIconSvg ? window.getIconSvg('chevron-down', {size:16}) : '↓'}</button>` : ''}
       </div>
-      <div class="item-actions" style="position:relative; height:100%; display:flex; align-items:center; gap:10px;">
-        <button class="item-contact" type="button" title="Kontakt öffnen" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:13px; font-weight:500;">K</button>
-        <button class="item-read-toggle" type="button" title="Als gelesen/ungelesen markieren" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:13px; font-weight:500;">L</button>
-        <button class="item-archive" type="button" title="Archivieren" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:13px; font-weight:500;">A</button>
+      <div class="item-actions relative flex h-full items-center gap-2">
+        <button class="item-contact inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-900 hover:bg-slate-100" type="button" title="Kontakt öffnen"></button>
+        <button class="item-read-toggle inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-900 hover:bg-slate-100" type="button" title="Als gelesen/ungelesen markieren"></button>
+        <button class="item-archive inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-900 hover:bg-slate-100" type="button" title="Archivieren"></button>
       </div>
     </div>
   </div>
@@ -1514,33 +1514,6 @@ function ensureInboxContextMenu(){
           }
           selectItem(it.uid, div);
         });
-
-        // Mouse-Over: gemeinsamer Wrapper (Pfeile + Icons) von rechts ein-/ausfahren
-        const actionsWrapper = div.querySelector('.item-actions-wrapper');
-        if(actionsWrapper){
-          div.addEventListener('mouseenter', () => {
-            // Alten Wrapper ohne Animation zurücksetzen, damit kein Zwischenbild entsteht
-            if(currentActionsWrapper && currentActionsWrapper !== actionsWrapper){
-              const prev = currentActionsWrapper;
-              const prevTransition = prev.style.transition;
-              prev.style.transition = 'none';
-              prev.style.transform = 'translateX(180%)';
-              prev.style.pointerEvents = 'none';
-              // Reflow erzwingen, damit der Browser den Zustand übernimmt
-              void prev.offsetWidth;
-              prev.style.transition = prevTransition || 'transform 0.16s ease-out';
-            }
-            currentActionsWrapper = actionsWrapper;
-            actionsWrapper.style.transform = 'translateX(0)';
-            actionsWrapper.style.pointerEvents = 'auto';
-          });
-          div.addEventListener('mouseleave', () => {
-            if(currentActionsWrapper === actionsWrapper){
-              actionsWrapper.style.transform = 'translateX(180%)';
-              actionsWrapper.style.pointerEvents = 'none';
-            }
-          });
-        }
 
         // Rechtsklick: kleines Kontextmenü öffnen
         div.addEventListener('contextmenu', (ev) => {
@@ -1610,6 +1583,13 @@ function ensureInboxContextMenu(){
 
         // Aktions-Icons: Kontakt öffnen und gelesen/ungelesen toggeln
         const contactBtn = div.querySelector('.item-contact');
+        if(contactBtn){
+          if(window.getIconSvg){
+            contactBtn.innerHTML = window.getIconSvg('user', {size:18});
+          } else {
+            contactBtn.textContent = '👤';
+          }
+        }
         if(contactBtn && it.contact_id){
           contactBtn.addEventListener('click', (ev) => {
             ev.stopPropagation();
@@ -1621,6 +1601,11 @@ function ensureInboxContextMenu(){
 
         const readToggleBtn = div.querySelector('.item-read-toggle');
         if(readToggleBtn){
+          if(window.getIconSvg){
+            readToggleBtn.innerHTML = window.getIconSvg('eye', {size:18});
+          } else {
+            readToggleBtn.textContent = '👁️';
+          }
           readToggleBtn.addEventListener('click', async (ev) => {
             ev.stopPropagation();
             const newSeen = !it.is_read;
@@ -1642,6 +1627,13 @@ function ensureInboxContextMenu(){
         }
 
         const archiveBtn = div.querySelector('.item-archive');
+        if(archiveBtn){
+          if(window.getIconSvg){
+            archiveBtn.innerHTML = window.getIconSvg('archive', {size:18});
+          } else {
+            archiveBtn.textContent = '📥';
+          }
+        }
         if(archiveBtn && currentFolder === 'inbox'){
           archiveBtn.addEventListener('click', async (ev) => {
             ev.stopPropagation();
