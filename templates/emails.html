@@ -1807,9 +1807,10 @@ function ensureInboxContextMenu(){
         const totalInDB = data.total || 0;
         if(data.can_sync_more && !isAutoSyncRunning && !autoSyncFinishedOnce){
           if(loadMoreBtn){
-            loadMoreBtn.style.display = 'inline-block';
+            loadMoreBtn.style.display = 'inline-flex';
             loadMoreBtn.disabled = false;
-            loadMoreBtn.textContent = '❌ Synchronisierung abbrechen';
+            loadMoreBtn.innerHTML = window.getIconSvg ? window.getIconSvg('circle-x', {size:18}) : '✕';
+            loadMoreBtn.title = 'Hintergrund-Sync abbrechen';
             loadMoreBtn.onclick = () => {
               autoSyncAbort = true;
               loadMoreBtn.disabled = true;
