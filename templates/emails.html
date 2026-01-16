@@ -1698,11 +1698,17 @@ function ensureInboxContextMenu(){
     });
 
     let isLoadingMore = false;
+    let currentSearchToken = 0;
+    let activeSearchToken = 0;
+    let currentSearchQuery = '';
 
     async function searchInbox(query){
       const status = document.getElementById('status');
       const list = document.getElementById('list');
-      if(status) status.textContent = 'sucht …';
+      currentSearchQuery = (query || '').trim();
+      const myToken = ++currentSearchToken;
+      activeSearchToken = myToken;
+      if(status) status.textContent = `Suche nach "${currentSearchQuery}" …`;
       try{
         if(!currentAccountId){
           await ensureEmailAccountsLoaded();
@@ -1712,7 +1718,7 @@ function ensureInboxContextMenu(){
             return;
           }
         }
-        const res = await fetch(`/api/emails/search?folder=${encodeURIComponent(currentFolder)}&account_id=${encodeURIComponent(currentAccountId)}&q=${encodeURIComponent(query)}`, {
+        const res = await fetch(`/api/emails/search?folder=${encodeURIComponent(currentFolder)}&account_id=${encodeURIComponent(currentAccountId)}&q=${encodeURIComponent(currentSearchQuery)}`, {
           headers: getAuthHeaders()
         });
         const data = await parseJsonSafe(res);
@@ -1720,11 +1726,16 @@ function ensureInboxContextMenu(){
           if(status) status.textContent = data && data.error ? data.error : 'Fehler bei der Suche';
           return;
         }
+        // Nur noch die Antwort der aktuellsten Suche übernehmen
+        if(myToken !== activeSearchToken){
+          return;
+        }
         inboxEmails = data.emails || [];
         renderInboxList();
         if(status){
           try{
-            status.textContent = `${(data.total || inboxEmails.length).toLocaleString('de-DE')} E-Mails in dieser Ansicht`;
+            const total = (data.total || inboxEmails.length) || 0;
+            status.textContent = `${total.toLocaleString('de-DE')} Treffer für "${currentSearchQuery}"`;
           }catch(_e_total){}
         }
       }catch(_e_search){
@@ -1735,7 +1746,10 @@ function ensureInboxContextMenu(){
     async function loadInbox(){
       const status = document.getElementById('status');
       const list = document.getElementById('list');
-      status.textContent = 'lädt …';
+      const hasActiveSearch = !!(currentSearchQuery && currentSearchQuery.trim());
+      if(status && !hasActiveSearch){
+        status.textContent = 'lädt …';
+      }
       // Kleine Ladeanzeige nur, wenn noch keine E-Mails gerendert sind
       if(list && (!inboxEmails || !inboxEmails.length)){
         list.innerHTML = '<div class="sub" style="padding:8px 12px;">Lade E-Mails …</div>';
@@ -1779,15 +1793,17 @@ function ensureInboxContextMenu(){
           return;
         }
         
-        // Store emails for filtering and render list
-        inboxEmails = data.emails || [];
-        setupInboxFilterToggle();
-        renderInboxList();
+        // Store emails für Grundansicht nur aktualisieren, wenn keine aktive Suche läuft
+        if(!hasActiveSearch){
+          inboxEmails = data.emails || [];
+          setupInboxFilterToggle();
+          renderInboxList();
+        }
         
         // Automatischer Hintergrund-Sync: Button als "Abbrechen" verwenden
         const loadMoreBtn = document.getElementById('load_more_btn');
         const totalInDB = data.total || 0;
-        if(data.can_sync_more && !isAutoSyncRunning && !autoSyncFinishedOnce){
+        if(!hasActiveSearch && data.can_sync_more && !isAutoSyncRunning && !autoSyncFinishedOnce){
           if(loadMoreBtn){
             loadMoreBtn.style.display = 'inline-flex';
             loadMoreBtn.disabled = false;
