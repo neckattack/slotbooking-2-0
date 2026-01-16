@@ -1702,8 +1702,16 @@ function ensureInboxContextMenu(){
           const data = await parseJsonSafe(res);
           if(data && (data.signature_html || data.signature)){
             currentSignatureHtml = data.signature_html || data.signature || '';
+            try{ localStorage.setItem('email_signature_html', currentSignatureHtml || ''); }catch(_e_ls0){}
+            return;
           }
         }catch(_e_sig){}
+
+        // Fallback: Signatur aus localStorage laden, falls Server nichts liefert
+        try{
+          const cachedSig = localStorage.getItem('email_signature_html') || '';
+          if(cachedSig){ currentSignatureHtml = cachedSig; }
+        }catch(_e_ls_fallback){}
       })();
 
       const searchInput = document.getElementById('inbox_search');
@@ -4359,11 +4367,25 @@ function ensureInboxContextMenu(){
         const sigField = document.getElementById('email_signature_html');
         if(sigData && sigData.signature_html && sigField){
           sigField.value = sigData.signature_html;
-        } else if(sigField && !sigField.value){
-          sigField.value = '';
+          try{ localStorage.setItem('email_signature_html', sigData.signature_html || ''); }catch(_e_ls1){}
+        } else if(sigField){
+          // Fallback: lokale Signatur aus localStorage verwenden, falls vorhanden
+          try{
+            const cachedSig = localStorage.getItem('email_signature_html') || '';
+            sigField.value = cachedSig;
+          }catch(_e_ls2){
+            if(!sigField.value){ sigField.value = ''; }
+          }
         }
       }catch(e){
         console.warn('Signatur konnte nicht geladen werden', e);
+        // Fallback bei Fehler: lokale Signatur aus localStorage ziehen
+        try{
+          const sigField = document.getElementById('email_signature_html');
+          if(sigField && !sigField.value){
+            sigField.value = localStorage.getItem('email_signature_html') || '';
+          }
+        }catch(_e_ls_fail){}
       }
 
       // Bild-Upload für Signatur
