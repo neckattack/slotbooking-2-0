@@ -90,12 +90,25 @@
       overflow:hidden;
     }
     .compose-main,
-    .compose-side {
-      flex:1;
+    .compose-side,
+    .compose-style {
       min-width:0;
       display:flex;
       flex-direction:column;
       min-height:0; /* wichtig für korrektes Scrollen der Inhalte */
+    }
+    /* Spaltenreihenfolge im Compose-Bereich: links Antwortstil, Mitte Editor, rechts Themen */
+    .compose-style {
+      flex:0 0 260px; /* fixe, schlanke Spalte wie im Mockup */
+      order:0;
+    }
+    .compose-main {
+      flex:2 1 0;
+      order:1;
+    }
+    .compose-side {
+      flex:1 1 0;
+      order:2;
     }
     /* Editor nutzt den verfügbaren Platz in der linken Spalte, Aktionen bleiben unten */
     .compose-main .editor {
@@ -320,28 +333,8 @@
           <button id="compose_close_btn" title="Antwort schließen" style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:999px; background:#020617; color:#ffffff; border:0; font-size:14px; cursor:pointer;">✕</button>
         </div>
         <div class="compose-body">
-          <div class="compose-main">
-            <div class="row"><label>Empf.</label><input id="compose_to" placeholder="Empfänger" /></div>
-            <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
-            <div id="compose_editor" class="editor" contenteditable="true"><div class="muted">Hier erscheint der Vorschlag …</div></div>
-            <div class="actions" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <button id="btn_propose" disabled class="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Antwort vorschlagen</button>
-              <button id="btn_send" disabled class="px-4 py-2 rounded-full bg-emerald-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Senden</button>
-              <button id="btn_reload_reply" title="Antwort neu laden" class="border-0 px-3 py-2 rounded-full text-sm cursor-pointer bg-slate-900 text-white inline-flex items-center gap-1 hover:bg-slate-800 transition-colors">
-                <span>
-                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M12 4a7 7 0 0 1 6.32 4H16.5a.75.75 0 0 0 0 1.5H21a.75.75 0 0 0 .75-.75V4.5a.75.75 0 0 0-1.5 0v1.46A8.5 8.5 0 0 0 12 2.5 8.25 8.25 0 0 0 4.3 7.09a.75.75 0 1 0 1.33.67A6.75 6.75 0 0 1 12 4Z" fill="white"/>
-                    <path d="M12 20a7 7 0 0 1-6.32-4H7.5a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0-.75.75V19.5a.75.75 0 0 0 1.5 0v-1.46A8.5 8.5 0 0 0 12 21.5a8.25 8.25 0 0 0 7.7-4.59.75.75 0 0 0-1.33-.67A6.75 6.75 0 0 0 12 20Z" fill="white"/>
-                  </svg>
-                </span>
-                <span>Neu laden</span>
-              </button>
-              <span id="compose_status" class="sub" style="margin-left:auto; font-size:11px;"></span>
-            </div>
-          </div>
-          <div class="compose-side">
-            <div id="compose_topics_mirror" class="sub" style="margin-top:0; font-size:11px; overflow:auto;"></div>
-            <div id="compose_reply_prefs_block" class="sub" style="margin-top:12px; font-size:11px; color:#111827;">
+          <div class="compose-style">
+            <div id="compose_reply_prefs_block" class="sub" style="margin-top:0; font-size:11px; color:#111827;">
           <div style="display:flex; justify-content:flex-start; align-items:center; gap:6px; margin-bottom:4px; font-weight:600; font-size:12px;">
             <span>✉️ Antwortstil</span>
           </div>
@@ -372,6 +365,28 @@
             Antwortstil: wird aus bisherigen E-Mails abgeleitet (zuerst unsere Antworten, dann die Art, wie dieser Kontakt schreibt).
           </div>
         </div>
+          </div>
+          <div class="compose-main">
+            <div class="row"><label>Empf.</label><input id="compose_to" placeholder="Empfänger" /></div>
+            <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
+            <div id="compose_editor" class="editor" contenteditable="true"><div class="muted">Hier erscheint der Vorschlag …</div></div>
+            <div class="actions" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <button id="btn_propose" disabled class="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Antwort vorschlagen</button>
+              <button id="btn_send" disabled class="px-4 py-2 rounded-full bg-emerald-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Senden</button>
+              <button id="btn_reload_reply" title="Antwort neu laden" class="border-0 px-3 py-2 rounded-full text-sm cursor-pointer bg-slate-900 text-white inline-flex items-center gap-1 hover:bg-slate-800 transition-colors">
+                <span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M12 4a7 7 0 0 1 6.32 4H16.5a.75.75 0 0 0 0 1.5H21a.75.75 0 0 0 .75-.75V4.5a.75.75 0 0 0-1.5 0v1.46A8.5 8.5 0 0 0 12 2.5 8.25 8.25 0 0 0 4.3 7.09a.75.75 0 1 0 1.33.67A6.75 6.75 0 0 1 12 4Z" fill="white"/>
+                    <path d="M12 20a7 7 0 0 1-6.32-4H7.5a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0-.75.75V19.5a.75.75 0 0 0 1.5 0v-1.46A8.5 8.5 0 0 0 12 21.5a8.25 8.25 0 0 0 7.7-4.59.75.75 0 0 0-1.33-.67A6.75 6.75 0 0 0 12 20Z" fill="white"/>
+                  </svg>
+                </span>
+                <span>Neu laden</span>
+              </button>
+              <span id="compose_status" class="sub" style="margin-left:auto; font-size:11px;"></span>
+            </div>
+          </div>
+          <div class="compose-side">
+            <div id="compose_topics_mirror" class="sub" style="margin-top:0; font-size:11px; overflow:auto;"></div>
           </div>
         </div>
         <!-- Debug-Panel für das Antwortmodul: zeigt Rohwerte aus contacts.reply_* -->
