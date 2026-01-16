@@ -532,6 +532,103 @@ def api_emails_inbox(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/emails/search', methods=['GET'])
+@require_auth
+def api_emails_search(current_user):
+    """Volltextsuche über alle bereits synchronisierten E-Mails in der DB.
+
+    Sucht innerhalb des aktuellen Ordners (oder 'sent'-Gruppe) nach einem Query
+    in From/To/Subject/Body. Nutzt dieselbe Struktur wie api_emails_list.
+    """
+    user_email = current_user.get('user_email')
+    folder = request.args.get('folder', 'inbox')
+    account_id = request.args.get('account_id', type=int)
+    q = (request.args.get('q') or '').strip()
+    if not account_id:
+        return jsonify({'error': 'account_id erforderlich'}), 400
+    if not q:
+        return jsonify({'emails': [], 'total': 0}), 200
+
+    like = f"%{q}%"
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Folder-Filter wie in api_emails_list, aber ohne Limit (oder hohes Limit)
+        base_where = ["e.user_email = %s", "e.account_id = %s"]
+        params = [user_email, account_id]
+
+        if folder == 'all':
+            pass
+        else:
+            if folder == 'sent':
+                folder_values = ('sent', 'inbox.sent', 'sent items')
+                base_where.append("e.folder IN (%s, %s, %s)")
+                params.extend(folder_values)
+            else:
+                base_where.append("e.folder = %s")
+                params.append(folder)
+
+        # Suchbedingungen
+        base_where.append(
+            "(e.from_addr LIKE %s OR e.from_name LIKE %s OR e.to_addrs LIKE %s OR e.subject LIKE %s OR e.body_text LIKE %s)"
+        )
+        params.extend([like, like, like, like, like])
+
+        where_sql = " AND ".join(base_where)
+
+        # Begrenze die Anzahl der zurückgegebenen Zeilen hart, damit die UI performant bleibt
+        cursor.execute(
+            f"""
+            SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
+                   e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.is_replied, e.starred,
+                   e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
+            FROM emails e
+            LEFT JOIN contacts c ON e.contact_id = c.id
+            WHERE {where_sql}
+            ORDER BY e.received_at DESC
+            LIMIT 500
+            """,
+            params,
+        )
+        emails = cursor.fetchall()
+
+        # Gesamtanzahl der Treffer (ohne Limit) ermitteln
+        cursor.execute(
+            f"SELECT COUNT(*) AS total FROM emails e LEFT JOIN contacts c ON e.contact_id = c.id WHERE {where_sql}",
+            params,
+        )
+        total = cursor.fetchone()["total"]
+
+        cursor.close()
+        conn.close()
+
+        formatted_emails = []
+        for email_row in emails:
+            formatted_emails.append({
+                'id': email_row['id'],
+                'uid': str(email_row['id']),
+                'from': email_row['from_name'] or email_row['from_addr'],
+                'from_addr': email_row['from_addr'],
+                'subject': email_row['subject'] or '(Kein Betreff)',
+                'date': email_row['received_at'].strftime('%d.%m.%Y %H:%M') if email_row['received_at'] else '',
+                'body_preview': (email_row['body_text'] or '')[:200],
+                'is_read': email_row['is_read'],
+                'is_replied': email_row.get('is_replied', 0),
+                'starred': email_row['starred'],
+                'has_attachments': email_row['has_attachments'],
+                'contact_name': email_row['contact_name'],
+                'contact_email': email_row['contact_email'],
+                'contact_email_count': email_row['contact_email_count'],
+            })
+
+        return jsonify({'emails': formatted_emails, 'total': total}), 200
+
+    except Exception as e:
+        app.logger.error(f"[Search Emails] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/contacts/<int:contact_id>/topics/<int:topic_id>/detail', methods=['GET'])
 @require_auth
 def api_contact_topic_detail(current_user, contact_id, topic_id):

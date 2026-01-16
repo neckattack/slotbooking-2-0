@@ -1492,8 +1492,10 @@ function ensureInboxContextMenu(){
     </div>
     <div class="item-actions-wrapper" style="position:absolute; right:0; top:-16px; bottom:-16px; display:flex; flex-direction:row-reverse; align-items:center; gap:8px; padding:0 12px 0 8px; background:var(--hover); box-shadow:-4px 0 12px rgba(15,23,42,0.12); transform:translateX(180%); transition:transform 0.16s ease-out; pointer-events:none;">
       <div class="importance-controls" data-bucket="${bucket}" style="display:flex; flex-direction:column; justify-content:space-between; align-items:center; gap:4px; font-size:13px; margin-right:4px;">
-        ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="border:1px solid #9ca3af; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↑</button>` : ''}
-        ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="border:1px solid #9ca3af; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↓</button>` : ''}
+        ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="border:1px solid #9ca3af; width:26px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↑</button>` : ''}
+        ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="border:1px solid #9ca3af; width:26px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">↓</button>` : ''}
+        <button class="imp-up-2" type="button" title="Direkt Fokus" style="border:1px solid #9ca3af; width:26px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08); font-size:11px;">↑↑</button>
+        <button class="imp-down-2" type="button" title="Direkt Unwichtig" style="border:1px solid #9ca3af; width:26px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08); font-size:11px;">↓↓</button>
       </div>
       <div class="item-actions" style="position:relative; height:100%; display:flex; align-items:center; gap:10px;">
         <button class="item-contact" type="button" title="Kontakt öffnen" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:17px;">
@@ -1596,6 +1598,8 @@ function ensureInboxContextMenu(){
 
           const upBtn = controls.querySelector('.imp-up');
           const downBtn = controls.querySelector('.imp-down');
+          const up2Btn = controls.querySelector('.imp-up-2');
+          const down2Btn = controls.querySelector('.imp-down-2');
           if(upBtn){
             upBtn.addEventListener('click', (ev) => {
               ev.stopPropagation();
@@ -1610,6 +1614,20 @@ function ensureInboxContextMenu(){
               const b = getImportanceBucket(it);
               const next = (b === 'focus') ? 'normal' : 'unwichtig';
               applyBucketChange(next);
+            });
+          }
+
+          // Doppelpfeile: direkter Sprung nach Fokus bzw. Unwichtig
+          if(up2Btn){
+            up2Btn.addEventListener('click', (ev) => {
+              ev.stopPropagation();
+              applyBucketChange('focus');
+            });
+          }
+          if(down2Btn){
+            down2Btn.addEventListener('click', (ev) => {
+              ev.stopPropagation();
+              applyBucketChange('unwichtig');
             });
           }
         }
@@ -1685,12 +1703,52 @@ function ensureInboxContextMenu(){
       if(searchInput){
         searchInput.addEventListener('input', () => {
           inboxSearchQuery = searchInput.value || '';
-          renderInboxList();
+          const q = (inboxSearchQuery || '').trim();
+          if(!q){
+            // Zurück zur normalen Listenansicht
+            loadInbox();
+          } else {
+            // DB-basierte Suche über alle synchronisierten Mails im aktuellen Ordner
+            searchInbox(q);
+          }
         });
       }
     });
 
     let isLoadingMore = false;
+
+    async function searchInbox(query){
+      const status = document.getElementById('status');
+      const list = document.getElementById('list');
+      if(status) status.textContent = 'sucht …';
+      try{
+        if(!currentAccountId){
+          await ensureEmailAccountsLoaded();
+          if(!currentAccountId){
+            if(list) list.innerHTML = '<div class="sub" style="padding:20px; text-align:center;">Kein E-Mail-Account konfiguriert.</div>';
+            if(status) status.textContent = '';
+            return;
+          }
+        }
+        const res = await fetch(`/api/emails/search?folder=${encodeURIComponent(currentFolder)}&account_id=${encodeURIComponent(currentAccountId)}&q=${encodeURIComponent(query)}`, {
+          headers: getAuthHeaders()
+        });
+        const data = await parseJsonSafe(res);
+        if(!data || data.error){
+          if(status) status.textContent = data && data.error ? data.error : 'Fehler bei der Suche';
+          return;
+        }
+        inboxEmails = data.emails || [];
+        renderInboxList();
+        if(status){
+          try{
+            status.textContent = `${(data.total || inboxEmails.length).toLocaleString('de-DE')} E-Mails in dieser Ansicht`;
+          }catch(_e_total){}
+        }
+      }catch(_e_search){
+        if(status) status.textContent = 'Fehler bei der Suche';
+      }
+    }
 
     async function loadInbox(){
       const status = document.getElementById('status');
