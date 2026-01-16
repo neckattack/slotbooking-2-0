@@ -1490,15 +1490,15 @@ function ensureInboxContextMenu(){
       <div class="subject">${escapeHtml(it.subject || '(ohne Betreff)')}</div>
       <div class="meta flex items-center justify-between text-xs text-slate-500"><span>${fromLabel}</span><span>${dateLabel}${isAnswered ? ' ↩︎' : ''}</span></div>
     </div>
-    <div class="item-actions-wrapper absolute right-2 top-1/2 -translate-y-1/2 flex flex-row-reverse items-center gap-1.5 px-2 py-1 bg-white/90 border border-slate-200 rounded-xl shadow-sm transition-transform duration-150 ease-out">
-      <div class="importance-controls flex flex-col items-center justify-center gap-1 text-[11px] mr-0.5" data-bucket="${bucket}">
-        ${canUp ? `<button class="imp-up inline-flex items-center justify-center w-6 h-5 rounded-md border border-slate-300 bg-slate-50 text-slate-800 hover:bg-slate-100" type="button" title="Wichtiger">${window.getIconSvg ? window.getIconSvg('chevron-up', {size:14}) : '↑'}</button>` : ''}
-        ${canDown ? `<button class="imp-down inline-flex items-center justify-center w-6 h-5 rounded-md border border-slate-300 bg-slate-50 text-slate-800 hover:bg-slate-100" type="button" title="Unwichtiger">${window.getIconSvg ? window.getIconSvg('chevron-down', {size:14}) : '↓'}</button>` : ''}
+    <div class="item-actions-wrapper absolute right-2 top-1/2 -translate-y-1/2 flex flex-row-reverse items-center gap-1 px-1.5 py-0.5 bg-white/95 border border-slate-200 rounded-xl transition-transform duration-150 ease-out" style="box-shadow:-4px 0 10px rgba(15,23,42,0.18);">
+      <div class="importance-controls flex flex-col items-center justify-center gap-0.5 text-[10px] mr-0.5" data-bucket="${bucket}">
+        ${canUp ? `<button class="imp-up inline-flex items-center justify-center w-5 h-4 rounded-md border border-slate-300 bg-slate-50 text-slate-800 hover:bg-slate-100" type="button" title="Wichtiger">${window.getIconSvg ? window.getIconSvg('chevron-up', {size:12}) : '↑'}</button>` : ''}
+        ${canDown ? `<button class="imp-down inline-flex items-center justify-center w-5 h-4 rounded-md border border-slate-300 bg-slate-50 text-slate-800 hover:bg-slate-100" type="button" title="Unwichtiger">${window.getIconSvg ? window.getIconSvg('chevron-down', {size:12}) : '↓'}</button>` : ''}
       </div>
       <div class="item-actions relative flex h-full items-center gap-1.5">
-        <button class="item-contact inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200" type="button" title="Kontakt öffnen"></button>
-        <button class="item-read-toggle inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200" type="button" title="Als gelesen/ungelesen markieren"></button>
-        <button class="item-archive inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200" type="button" title="Archivieren"></button>
+        <button class="item-contact inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200" type="button" title="Kontakt öffnen"></button>
+        <button class="item-read-toggle inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200" type="button" title="Als gelesen/ungelesen markieren"></button>
+        <button class="item-archive inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200" type="button" title="Archivieren"></button>
       </div>
     </div>
   </div>
