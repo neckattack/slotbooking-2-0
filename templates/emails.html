@@ -1515,6 +1515,18 @@ function ensureInboxContextMenu(){
           selectItem(it.uid, div);
         });
 
+        // Hover: Aktions-Wrapper per JS ein-/ausblenden
+        const actionsWrapper = div.querySelector('.item-actions-wrapper');
+        if(actionsWrapper){
+          actionsWrapper.style.display = 'none';
+          div.addEventListener('mouseenter', () => {
+            actionsWrapper.style.display = 'flex';
+          });
+          div.addEventListener('mouseleave', () => {
+            actionsWrapper.style.display = 'none';
+          });
+        }
+
         // Rechtsklick: kleines Kontextmenü öffnen
         div.addEventListener('contextmenu', (ev) => {
           ev.preventDefault();
