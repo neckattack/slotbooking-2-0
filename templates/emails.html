@@ -4515,6 +4515,20 @@ function ensureInboxContextMenu(){
           if(result.__ok){
             currentSettingsAccountId = result.id;
             msg.textContent = '✅ Account gespeichert! E-Mails werden geladen...';
+
+            // Signatur zusätzlich explizit in user_email_settings persistieren,
+            // damit sie beim nächsten Reload sicher über /api/user/email-settings
+            // zur Verfügung steht (Best-Effort).
+            try{
+              const userEmail = getUserEmail && getUserEmail();
+              if(userEmail && typeof fetch !== 'undefined'){
+                fetch('/api/user/email-settings', {
+                  method: 'POST',
+                  headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+                  body: JSON.stringify({ user_email: userEmail, signature_html: signatureHtml })
+                }).catch(() => {});
+              }
+            }catch(_e_sig_post){}
             setTimeout(() => {
               cleanup();
               // Globalen Account ggf. auf den eben gespeicherten setzen
