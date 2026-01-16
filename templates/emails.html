@@ -3721,8 +3721,8 @@ function ensureInboxContextMenu(){
       try{
         const sigRaw = (currentSignatureHtml || '').trim();
         if(sigRaw){
-          if(/^\s*</.test(sigRaw)){
-            // Sieht nach HTML aus – direkt übernehmen
+          if(/</.test(sigRaw)){
+            // Enthält HTML (z.B. <img>-Tag) – direkt übernehmen
             signatureBlock = sigRaw;
           } else {
             // Plain-Text-Signatur in HTML-Absatz(e) umwandeln
@@ -3819,8 +3819,8 @@ function ensureInboxContextMenu(){
             // Nur anhängen, wenn die Signatur nicht ohnehin schon vorkommt
             if(!htmlLower.includes(sigLower) && !htmlLower.includes('--\n') && !htmlLower.includes('--<br')){
               let signatureBlock = '';
-              if(/^\s*</.test(sigRaw)){
-                // HTML-Signatur
+              if(/</.test(sigRaw)){
+                // HTML-Signatur (enthält z.B. <img>-Tag)
                 signatureBlock = sigRaw;
               } else {
                 const escaped = escapeHtml(sigRaw).replace(/\n/g, '<br>');
