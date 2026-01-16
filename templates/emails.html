@@ -929,6 +929,7 @@ function ensureInboxContextMenu(){
         <button id="filter_focus" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:#fff; color:#111827; font-weight:600;">Fokus</button>
         <button id="filter_normal" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Normal</button>
         <button id="filter_other" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Unwichtig</button>
+        <button id="filter_all" type="button" style="border:0; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; background:transparent; color:#4b5563;">Alle</button>
       </div>
       <div style="position:relative; margin-left:auto;">
         <button id="answer_filter_toggle" type="button" style="border:0; display:inline-flex; align-items:center; justify-content:center; padding:0 10px; height:28px; border-radius:999px; cursor:pointer; background:#e5e7eb; color:#111827;">
@@ -966,6 +967,7 @@ function ensureInboxContextMenu(){
       const btnFocus = document.getElementById('filter_focus');
       const btnNormal = document.getElementById('filter_normal');
       const btnOther = document.getElementById('filter_other');
+      const btnAll = document.getElementById('filter_all');
       const answerToggle = document.getElementById('answer_filter_toggle');
       const answerLabel = document.getElementById('answer_filter_label');
       const answerMenu = document.getElementById('answer_filter_menu');
@@ -1002,6 +1004,19 @@ function ensureInboxContextMenu(){
           btnOther.style.fontWeight = '400';
         }
 
+        // Alle Buckets
+        if(inboxFilter === 'all'){
+          if(btnAll){
+            btnAll.style.background = '#fff';
+            btnAll.style.color = '#111827';
+            btnAll.style.fontWeight = '600';
+          }
+        } else if(btnAll){
+          btnAll.style.background = 'transparent';
+          btnAll.style.color = '#4b5563';
+          btnAll.style.fontWeight = '400';
+        }
+
         // Antwort-Filter (Alle E-Mails vs. Unbeantwortet) im Dropdown markieren
         if(answerMenu){
           const options = answerMenu.querySelectorAll('button[data-answer-value]');
@@ -1019,6 +1034,9 @@ function ensureInboxContextMenu(){
       btnFocus.addEventListener('click', () => { inboxFilter = 'focus'; updateButtons(); renderInboxList(); });
       btnNormal.addEventListener('click', () => { inboxFilter = 'normal'; updateButtons(); renderInboxList(); });
       btnOther.addEventListener('click', () => { inboxFilter = 'unwichtig'; updateButtons(); renderInboxList(); });
+      if(btnAll){
+        btnAll.addEventListener('click', () => { inboxFilter = 'all'; updateButtons(); renderInboxList(); });
+      }
 
       if(answerToggle && answerMenu){
         // Icon öffnet/schließt das Dropdown
@@ -1378,9 +1396,9 @@ function ensureInboxContextMenu(){
       const q = (inboxSearchQuery || '').trim().toLowerCase();
 
       let baseFiltered;
-      if(currentFolder !== 'inbox' || q){
-        // In anderen Ordnern (Gesendet, etc.) oder bei aktiver Suche
-        // keine Bucket-Filterung anwenden
+      if(currentFolder !== 'inbox' || q || inboxFilter === 'all'){
+        // In anderen Ordnern (Gesendet, etc.), bei aktiver Suche
+        // oder explizit gewähltem "Alle" keine Bucket-Filterung anwenden
         baseFiltered = inboxEmails.slice();
       } else {
         // Nur im Posteingang ohne aktive Suche nach Buckets filtern
