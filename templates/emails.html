@@ -97,13 +97,13 @@
       flex-direction:column;
       min-height:0; /* wichtig für korrektes Scrollen der Inhalte */
     }
-    /* Spaltenreihenfolge im Compose-Bereich: links Antwortstil, Mitte Editor, rechts Themen */
+    /* Spaltenreihenfolge im Compose-Bereich: links Antwortstil, Mitte Editor (breiter), rechts Themen */
     .compose-style {
-      flex:0 0 260px; /* fixe, schlanke Spalte wie im Mockup */
+      flex:0 0 230px; /* etwas schmaler, damit der Editor mehr Platz bekommt */
       order:0;
     }
     .compose-main {
-      flex:2 1 0;
+      flex:3 1 0; /* mittlere Spalte dominiert die Breite */
       order:1;
     }
     .compose-side {
@@ -122,11 +122,11 @@
       overflow:auto;
     }
     /* Antwortstil-Panel: volle Spaltenbreite für die Slider im modernen Card-Look */
-    #compose_reply_prefs_block { width:100%; box-sizing:border-box; border-radius:14px; border:1px solid #e5e7eb; background:#f9fafb; padding:10px 12px; }
+    #compose_reply_prefs_block { width:100%; box-sizing:border-box; border-radius:14px; border:1px solid #e5e7eb; background:#f9fafb; padding:10px 10px 12px; }
     #compose_reply_prefs_block input[type="range"] {
-      width:calc(100% + 12px);
+      width:100%;
       display:block;
-      margin:0 -6px; /* optisch volle Breite, ohne das Layout zu sprengen */
+      margin:0; /* Slider folgt exakt der Card-Breite */
     }
     .muted { color:var(--sub); }
     .sub { color:var(--sub); font-size:13px; }
