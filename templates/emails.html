@@ -1492,19 +1492,13 @@ function ensureInboxContextMenu(){
     </div>
     <div class="item-actions-wrapper" style="position:absolute; right:0; top:-16px; bottom:-16px; display:flex; flex-direction:row-reverse; align-items:center; gap:8px; padding:0 12px 0 8px; background:var(--hover); box-shadow:-4px 0 12px rgba(15,23,42,0.12); transform:translateX(180%); transition:transform 0.16s ease-out; pointer-events:none;">
       <div class="importance-controls" data-bucket="${bucket}" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:4px; font-size:13px; margin-right:4px;">
-        ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="border:1px solid #9ca3af; width:26px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">${window.getIconSvg ? window.getIconSvg('chevron-up', {size:16}) : '↑'}</button>` : ''}
-        ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="border:1px solid #9ca3af; width:26px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);">${window.getIconSvg ? window.getIconSvg('chevron-down', {size:16}) : '↓'}</button>` : ''}
+        ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="border:1px solid #9ca3af; width:26px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);"></button>` : ''}
+        ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="border:1px solid #9ca3af; width:26px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:transparent; color:#111827; box-shadow:0 1px 2px rgba(15,23,42,0.08);"></button>` : ''}
       </div>
       <div class="item-actions" style="position:relative; height:100%; display:flex; align-items:center; gap:10px;">
-        <button class="item-contact" type="button" title="Kontakt öffnen" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:17px;">
-          👤
-        </button>
-        <button class="item-read-toggle" type="button" title="Als gelesen/ungelesen markieren" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:17px;">
-          👁️
-        </button>
-        <button class="item-archive" type="button" title="Archivieren" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827; font-size:17px;">
-          📥
-        </button>
+        <button class="item-contact" type="button" title="Kontakt öffnen" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827;"></button>
+        <button class="item-read-toggle" type="button" title="Als gelesen/ungelesen markieren" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827;"></button>
+        <button class="item-archive" type="button" title="Archivieren" style="border:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; background:transparent; color:#111827;"></button>
       </div>
     </div>
   </div>
@@ -1596,6 +1590,12 @@ function ensureInboxContextMenu(){
 
           const upBtn = controls.querySelector('.imp-up');
           const downBtn = controls.querySelector('.imp-down');
+          if(upBtn && window.getIconSvg){
+            upBtn.innerHTML = window.getIconSvg('chevron-up', {size:16});
+          }
+          if(downBtn && window.getIconSvg){
+            downBtn.innerHTML = window.getIconSvg('chevron-down', {size:16});
+          }
           if(upBtn){
             upBtn.addEventListener('click', (ev) => {
               ev.stopPropagation();
@@ -1616,6 +1616,9 @@ function ensureInboxContextMenu(){
 
         // Aktions-Icons: Kontakt öffnen und gelesen/ungelesen toggeln
         const contactBtn = div.querySelector('.item-contact');
+        if(contactBtn && window.getIconSvg){
+          contactBtn.innerHTML = window.getIconSvg('user', {size:18});
+        }
         if(contactBtn && it.contact_id){
           contactBtn.addEventListener('click', (ev) => {
             ev.stopPropagation();
@@ -1626,6 +1629,9 @@ function ensureInboxContextMenu(){
         }
 
         const readToggleBtn = div.querySelector('.item-read-toggle');
+        if(readToggleBtn && window.getIconSvg){
+          readToggleBtn.innerHTML = window.getIconSvg('eye', {size:18});
+        }
         if(readToggleBtn){
           readToggleBtn.addEventListener('click', async (ev) => {
             ev.stopPropagation();
@@ -1648,6 +1654,9 @@ function ensureInboxContextMenu(){
         }
 
         const archiveBtn = div.querySelector('.item-archive');
+        if(archiveBtn && window.getIconSvg){
+          archiveBtn.innerHTML = window.getIconSvg('archive', {size:18});
+        }
         if(archiveBtn && currentFolder === 'inbox'){
           archiveBtn.addEventListener('click', async (ev) => {
             ev.stopPropagation();
