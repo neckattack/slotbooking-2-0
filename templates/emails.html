@@ -4506,6 +4506,11 @@ function ensureInboxContextMenu(){
         const smtpSecurity = document.getElementById('smtp_security').value;
         const signatureHtml = document.getElementById('email_signature_html').value;
 
+        // Signatur sofort im Frontend übernehmen, damit sie auch dann
+        // direkt im Reply erscheint, wenn der Server-Call fehlschlägt.
+        currentSignatureHtml = signatureHtml || '';
+        try{ localStorage.setItem('email_signature_html', currentSignatureHtml); }catch(_e_ls_save){}
+
         // Account-E-Mail/Label aus SMTP- oder IMAP-Benutzername ableiten
         const accountEmail = smtpUser || imapUser || userEmail;
 
