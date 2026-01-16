@@ -1491,14 +1491,14 @@ function ensureInboxContextMenu(){
       <div class="meta flex items-center justify-between text-xs text-slate-500"><span>${fromLabel}</span><span>${dateLabel}${isAnswered ? ' ↩︎' : ''}</span></div>
     </div>
     <div class="item-actions-wrapper absolute right-4 top-1/2 -translate-y-1/2 flex flex-row-reverse items-center gap-1.5 px-2 py-1 bg-white/95 border border-slate-200 rounded-xl shadow-sm transition-transform duration-150 ease-out">
-      <div class="importance-controls flex flex-col items-center justify-center gap-0.5 text-[10px] mr-0.5" data-bucket="${bucket}">
-        ${canUp ? `<button class="imp-up inline-flex items-center justify-center w-5 h-5 rounded-md border border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100" type="button" title="Wichtiger">${window.getIconSvg ? window.getIconSvg('chevron-up', {size:12}) : '↑'}</button>` : ''}
-        ${canDown ? `<button class="imp-down inline-flex items-center justify-center w-5 h-5 rounded-md border border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100" type="button" title="Unwichtiger">${window.getIconSvg ? window.getIconSvg('chevron-down', {size:12}) : '↓'}</button>` : ''}
+      <div class="importance-controls" data-bucket="${bucket}" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:10px; margin-right:4px;">
+        ${canUp ? `<button class="imp-up" type="button" title="Wichtiger" style="display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; color:#0f172a; padding:0; cursor:pointer;">${window.getIconSvg ? window.getIconSvg('chevron-up', {size:12}) : '↑'}</button>` : ''}
+        ${canDown ? `<button class="imp-down" type="button" title="Unwichtiger" style="display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; color:#0f172a; padding:0; cursor:pointer;">${window.getIconSvg ? window.getIconSvg('chevron-down', {size:12}) : '↓'}</button>` : ''}
       </div>
-      <div class="item-actions relative flex h-full items-center gap-1">
-        <button class="item-contact inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200" type="button" title="Kontakt öffnen"></button>
-        <button class="item-read-toggle inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200" type="button" title="Als gelesen/ungelesen markieren"></button>
-        <button class="item-archive inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200" type="button" title="Archivieren"></button>
+      <div class="item-actions" style="position:relative; display:flex; align-items:center; gap:4px; height:100%;">
+        <button class="item-contact" type="button" title="Kontakt öffnen" style="display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; color:#0f172a; padding:0; cursor:pointer;"></button>
+        <button class="item-read-toggle" type="button" title="Als gelesen/ungelesen markieren" style="display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; color:#0f172a; padding:0; cursor:pointer;"></button>
+        <button class="item-archive" type="button" title="Archivieren" style="display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:999px; border:1px solid #d1d5db; background:#f9fafb; color:#0f172a; padding:0; cursor:pointer;"></button>
       </div>
     </div>
   </div>
