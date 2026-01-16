@@ -97,17 +97,17 @@
       flex-direction:column;
       min-height:0; /* wichtig für korrektes Scrollen der Inhalte */
     }
-    /* Spaltenreihenfolge im Compose-Bereich: links Antwortstil, Mitte Editor (breiter), rechts Themen */
+    /* Spaltenreihenfolge im Compose-Bereich: links Antwortstil, Mitte Editor (größte Spalte), rechts Themen (etwas breiter) */
     .compose-style {
-      flex:0 0 230px; /* etwas schmaler, damit der Editor mehr Platz bekommt */
+      flex:0 0 230px; /* feste, schmale Stil-Spalte */
       order:0;
     }
     .compose-main {
-      flex:3 1 0; /* mittlere Spalte dominiert die Breite */
+      flex:3 1 0; /* Editor bleibt klar dominant */
       order:1;
     }
     .compose-side {
-      flex:1 1 0;
+      flex:2 1 0; /* Themen-Spalte bekommt mehr Platz */
       order:2;
     }
     /* Editor nutzt den verfügbaren Platz in der linken Spalte, Aktionen bleiben unten */
@@ -122,11 +122,11 @@
       overflow:auto;
     }
     /* Antwortstil-Panel: volle Spaltenbreite für die Slider im modernen Card-Look */
-    #compose_reply_prefs_block { width:100%; box-sizing:border-box; border-radius:14px; border:1px solid #e5e7eb; background:#f9fafb; padding:10px 10px 12px; }
+    #compose_reply_prefs_block { width:100%; box-sizing:border-box; border-radius:14px; border:1px solid #e5e7eb; background:#f9fafb; padding:10px 12px 12px; }
     #compose_reply_prefs_block input[type="range"] {
-      width:100%;
+      width:calc(100% + 16px);
       display:block;
-      margin:0; /* Slider folgt exakt der Card-Breite */
+      margin:0 -8px; /* Slider zieht sich optisch von Card-Rand zu Card-Rand */
     }
     .muted { color:var(--sub); }
     .sub { color:var(--sub); font-size:13px; }
