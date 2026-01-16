@@ -3722,8 +3722,9 @@ function ensureInboxContextMenu(){
         const sigRaw = (currentSignatureHtml || '').trim();
         if(sigRaw){
           if(/</.test(sigRaw)){
-            // Enthält HTML (z.B. <img>-Tag) – direkt übernehmen
-            signatureBlock = sigRaw;
+            // Enthält HTML (z.B. <img>-Tag) – Zeilenumbrüche in <br> umwandeln
+            // damit der Text unterhalb des Bildes im Editor wie im Textfeld wirkt.
+            signatureBlock = sigRaw.replace(/\n/g, '<br>');
           } else {
             // Plain-Text-Signatur in HTML-Absatz(e) umwandeln
             const escaped = escapeHtml(sigRaw).replace(/\n/g, '<br>');
@@ -3820,8 +3821,8 @@ function ensureInboxContextMenu(){
             if(!htmlLower.includes(sigLower) && !htmlLower.includes('--\n') && !htmlLower.includes('--<br')){
               let signatureBlock = '';
               if(/</.test(sigRaw)){
-                // HTML-Signatur (enthält z.B. <img>-Tag)
-                signatureBlock = sigRaw;
+                // HTML-Signatur (enthält z.B. <img>-Tag) – Zeilenumbrüche beibehalten
+                signatureBlock = sigRaw.replace(/\n/g, '<br>');
               } else {
                 const escaped = escapeHtml(sigRaw).replace(/\n/g, '<br>');
                 signatureBlock = `<p>${escaped}</p>`;
