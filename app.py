@@ -813,6 +813,147 @@ def api_contact_topic_set_status(current_user, contact_id, topic_id):
         return jsonify({'__ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/emails/translate-draft', methods=['POST'])
+@require_auth
+def api_emails_translate_draft(current_user):
+    """Übersetzt einen vorhandenen Antwortentwurf in die Sprache des Kontakts.
+
+    Request-JSON:
+      { html: string, uid?: int, timeout_s?: int }
+
+    - html: aktueller Entwurf (HTML)
+    - uid: optionale E-Mail-ID aus der DB, um Kontaktsprache zu bestimmen
+
+    Response-JSON:
+      { __ok: bool, html?: string, error?: string }
+    """
+    data = request.get_json(silent=True) or {}
+    raw_html = data.get('html') or ''
+    if not raw_html:
+        return jsonify({'__ok': False, 'error': 'html fehlt'}), 400
+
+    try:
+        req_timeout = int(data.get('timeout_s')) if 'timeout_s' in data else None
+    except Exception:
+        req_timeout = None
+    timeout_s = max(4, min(30, req_timeout or 15))
+
+    user_email = current_user.get('user_email') or ''
+
+    # 1) Bevorzugte User-Sprache laden (Quellsprache)
+    source_lang = None
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT preferred_language FROM user_email_settings WHERE user_email=%s",
+            (user_email,),
+        )
+        row = cursor.fetchone()
+        if row and row.get('preferred_language'):
+            source_lang = (row['preferred_language'] or '').lower()
+        cursor.close()
+        conn.close()
+    except Exception:
+        source_lang = None
+
+    # 2) Kontaktsprache ermitteln (Zielsprache) aus E-Mail/Kontakt, falls uid mitgegeben ist
+    target_lang = None
+    uid = data.get('uid')
+    if uid is not None:
+        try:
+            conn = get_settings_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT contact_id FROM emails WHERE id=%s AND user_email=%s",
+                (uid, user_email),
+            )
+            row_e = cursor.fetchone()
+            if row_e and row_e.get('contact_id'):
+                contact_id = row_e['contact_id']
+                cursor.execute(
+                    "SELECT language_code FROM contacts WHERE id=%s AND user_email=%s",
+                    (contact_id, user_email),
+                )
+                row_c = cursor.fetchone()
+                if row_c and row_c.get('language_code'):
+                    target_lang = (row_c['language_code'] or '').lower()
+            cursor.close()
+            conn.close()
+        except Exception:
+            target_lang = None
+
+    # Fallbacks
+    if not source_lang:
+        source_lang = 'de'
+    if not target_lang:
+        # Wenn keine Kontaktsprache vorliegt, Übersetzung in dieselbe Sprache wie Quelle anstoßen,
+        # damit zumindest kein Fehler erzeugt wird.
+        target_lang = source_lang
+
+    # HTML grob in Text umwandeln, damit der Agent mit Klartext arbeitet
+    try:
+        import re as _re, html as _html
+
+        def _html_to_text_simple(s: str) -> str:
+            s = _html.unescape(s or '')
+            s = _re.sub(r'<br\s*/?>', '\n', s, flags=_re.I)
+            s = _re.sub(r'</p\s*>', '\n\n', s, flags=_re.I)
+            s = _re.sub(r'<[^>]+>', '', s)
+            s = _re.sub(r'\n{3,}', '\n\n', s)
+            return s.strip()
+
+        source_text = _html_to_text_simple(raw_html)
+    except Exception:
+        source_text = raw_html
+
+    # Systemanweisung für saubere Übersetzung
+    system_prefix = (
+        "Du bist ein professioneller Übersetzer für geschäftliche E-Mails. "
+        "Du bekommst einen vollständigen Antwortentwurf und übersetzt ihn möglichst präzise. "
+        "\n- Erhalte Höflichkeitsgrad, Du/Sie-Form und Tonfall soweit sinnvoll."
+        "\n- Lasse keine Informationen weg und erfinde nichts Neues."
+        "\n- Antworte ausschließlich im Zieltext, ohne Erklärungen."
+        f"\n- Quellsprache: {source_lang.upper()}"
+        f"\n- Zielsprache: {target_lang.upper()}"
+    )
+
+    try:
+        antwort_body, timed_out = _agent_respond_with_timeout(
+            source_text,
+            channel="email_translate",
+            user_email=user_email,
+            timeout_s=timeout_s,
+            agent_settings={
+                'role': 'Übersetzer',
+                'instructions': system_prefix,
+            },
+            contact_profile=None,
+        )
+
+        if not antwort_body:
+            return jsonify({'__ok': False, 'error': 'Leere Antwort vom Übersetzer'}), 502
+
+        # Antwort in einfaches HTML überführen: Absätze und Zeilenumbrüche
+        import html as _html2
+        text = antwort_body.replace('\r', '')
+        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+        html_parts = []
+        for p in paragraphs:
+            p_esc = _html2.escape(p)
+            p_esc = p_esc.replace('\n', '<br>')
+            html_parts.append(f"<p>{p_esc}</p>")
+        final_html = '\n'.join(html_parts) or _html2.escape(text)
+
+        return jsonify({'__ok': True, 'html': final_html}), 200
+    except Exception as e:
+        try:
+            app.logger.error(f"[TRANSLATE-DRAFT] error: {e}")
+        except Exception:
+            pass
+        return jsonify({'__ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/emails/importance-rules', methods=['GET', 'POST'])
 @require_auth
 def api_email_importance_rules(current_user):
@@ -6874,10 +7015,14 @@ def api_user_email_settings_post():
                 f"UPDATE user_email_settings SET {', '.join(update_fields)} WHERE user_email=%s",
                 tuple(params),
             )
+
+            # Falls es noch keinen Datensatz gibt, einen Minimal-Eintrag anlegen
             if cursor.rowcount == 0:
-                cursor.close()
-                conn.close()
-                return jsonify({'error': 'Email settings must be created before updating signature'}), 400
+                cursor.execute(
+                    "INSERT INTO user_email_settings (user_email, signature_html, preferred_language, created_at, updated_at) "
+                    "VALUES (%s, %s, %s, NOW(), NOW())",
+                    (user_email, signature_html or '', preferred_language or None),
+                )
 
         conn.commit()
         cursor.close()
