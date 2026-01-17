@@ -124,9 +124,9 @@
     /* Antwortstil-Panel: volle Spaltenbreite für die Slider im modernen Card-Look */
     #compose_reply_prefs_block { width:100%; box-sizing:border-box; border-radius:14px; border:1px solid #e5e7eb; background:#f9fafb; padding:10px 14px 12px; }
     #compose_reply_prefs_block input[type="range"] {
-      width:calc(100% + 28px);
+      width:100%;
       display:block;
-      margin:0 -14px; /* Slider zieht sich optisch von Card-Rand zu Card-Rand */
+      margin:0; /* leichter Innenabstand links/rechts durch Padding der Card */
     }
     #compose_reply_prefs_block label > span {
       display:block;
@@ -365,9 +365,7 @@
               </div>
             </div>
           </div>
-          <div id="compose_reply_prefs_label" class="sub" style="margin-top:6px; font-size:11px; color:#6b7280;">
-            Antwortstil: wird aus bisherigen E-Mails abgeleitet (zuerst unsere Antworten, dann die Art, wie dieser Kontakt schreibt).
-          </div>
+          <div id="compose_reply_prefs_label" class="sub" style="margin-top:6px; font-size:11px; color:#6b7280; display:none;"></div>
         </div>
           </div>
           <div class="compose-main">
@@ -3662,11 +3660,12 @@ function ensureInboxContextMenu(){
         // Debug-Felder: Rohwerte aus Kontakt + Reply-Prefs anzeigen
         const contactName = (emailSummary && emailSummary.contact_name) || '';
         const fromAddr = (emailSummary && emailSummary.from) || '';
-        const fromEmailMatch = /<([^>]+)>/.exec(fromAddr);
-        const fromEmail = fromEmailMatch ? fromEmailMatch[1] : (fromAddr || '');
+        const fromEmailMatch = fromAddr.match(/<([^>]+)>/);
+        const fromEmail = fromEmailMatch ? fromEmailMatch[1] : '';
+        const contactEmail = (prefs && prefs.contact_email) || (emailSummary && emailSummary.contact_email) || fromEmail || fromAddr || '';
 
         if(dbgContactIdEl){ dbgContactIdEl.textContent = String(contactId); }
-        if(dbgContactEmailEl){ dbgContactEmailEl.textContent = fromEmail || '(unbekannt)'; }
+        if(dbgContactEmailEl){ dbgContactEmailEl.textContent = contactEmail || '(unbekannt)'; }
         if(dbgContactNameEl){ dbgContactNameEl.textContent = contactName || '(unbekannt)'; }
         if(dbgStyleSourceEl){ dbgStyleSourceEl.textContent = currentReplyPrefs.style_source || '(unbekannt)'; }
         if(dbgLengthEl){ dbgLengthEl.textContent = (currentReplyPrefs.length_level != null ? String(currentReplyPrefs.length_level) : '(NULL)'); }
