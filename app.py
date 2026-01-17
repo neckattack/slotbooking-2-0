@@ -3059,7 +3059,11 @@ def api_emails_sync(current_user):
                     raw_email = tup
 
                 # Gelesen-Status und Beantwortet-Status aus FLAGS extrahieren
-                is_read = 1 if ('\\Seen' in meta_raw) else 0
+                # WICHTIG: is_read wird in der Web-App ausschließlich durch explizite
+                # Aktionen (2s-Timer im Lesebereich / manueller Toggle) gesetzt.
+                # Daher übernehmen wir den IMAP-"Seen"-Status NICHT mehr in die DB,
+                # sondern initialisieren neue Mails immer als ungelesen (0).
+                is_read = 0
                 is_replied = 1 if ('\\Answered' in meta_raw) else 0
                 msg = email.message_from_bytes(raw_email)
 
@@ -3108,8 +3112,8 @@ def api_emails_sync(current_user):
                         # darf durch fehlendes IMAP-Flag (\\Answered) nicht wieder auf 0 fallen.
                         # Daher is_replied immer als Maximum aus bestehendem Wert und IMAP-Wert setzen.
                         cursor_db.execute(
-                            "UPDATE emails SET is_read=%s, is_replied=GREATEST(is_replied, %s) WHERE user_email=%s AND account_id=%s AND message_id=%s AND folder=%s",
-                            (is_read, is_replied, user_email, account_id, message_id, folder_db_key)
+                            "UPDATE emails SET is_replied=GREATEST(is_replied, %s) WHERE user_email=%s AND account_id=%s AND message_id=%s AND folder=%s",
+                            (is_replied, user_email, account_id, message_id, folder_db_key)
                         )
                     except Exception as _upd_err:
                         app.logger.warning(f"[Sync] Could not update flags for message_id={message_id}: {_upd_err}")
@@ -3262,7 +3266,7 @@ def api_emails_sync(current_user):
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                     (message_id, in_reply_to, references_raw, thread_id, user_email, account_id, contact_id, from_email, from_name, to_addrs,
                      subject, body_text[:50000] if body_text else '', body_html[:100000] if body_html else '',
-                     received_at, folder_db, has_attachments, is_read, is_replied)
+                     received_at, folder_db, has_attachments, 0, is_replied)
                 )
 
                 synced_count += 1
