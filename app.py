@@ -487,7 +487,10 @@ def api_emails_inbox(current_user):
         ids = ids[-limit:] if limit and len(ids) > limit else ids
         items = []
         for mid in reversed(ids):  # neueste zuerst
-            typ, msgdata = M.uid('fetch', mid, '(FLAGS RFC822.HEADER)')
+            # Wichtig: BODY.PEEK[HEADER] verwenden, damit das reine Laden des
+            # Headers (für Subject/From/To usw.) nicht automatisch das
+            # IMAP-Flag \\Seen setzt. FLAGS holen wir weiterhin mit.
+            typ, msgdata = M.uid('fetch', mid, '(FLAGS BODY.PEEK[HEADER])')
             if typ != 'OK' or not msgdata or not msgdata[0]:
                 continue
             # msgdata kann ein Tupel oder Liste sein
