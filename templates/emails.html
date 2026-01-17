@@ -371,18 +371,21 @@
             <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
             <div id="compose_editor" class="editor" contenteditable="true"><div class="muted">Hier erscheint der Vorschlag …</div></div>
             <div class="actions" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <button id="btn_propose" disabled class="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Antwort vorschlagen</button>
-              <button id="btn_send" disabled class="px-4 py-2 rounded-full bg-emerald-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Senden</button>
-              <button id="btn_reload_reply" title="Antwort neu laden" class="border-0 px-3 py-2 rounded-full text-sm cursor-pointer bg-slate-900 text-white inline-flex items-center gap-1 hover:bg-slate-800 transition-colors">
-                <span>
-                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M12 4a7 7 0 0 1 6.32 4H16.5a.75.75 0 0 0 0 1.5H21a.75.75 0 0 0 .75-.75V4.5a.75.75 0 0 0-1.5 0v1.46A8.5 8.5 0 0 0 12 2.5 8.25 8.25 0 0 0 4.3 7.09a.75.75 0 1 0 1.33.67A6.75 6.75 0 0 1 12 4Z" fill="white"/>
-                    <path d="M12 20a7 7 0 0 1-6.32-4H7.5a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0-.75.75V19.5a.75.75 0 0 0 1.5 0v-1.46A8.5 8.5 0 0 0 12 21.5a8.25 8.25 0 0 0 7.7-4.59.75.75 0 0 0-1.33-.67A6.75 6.75 0 0 0 12 20Z" fill="white"/>
-                  </svg>
-                </span>
-                <span>Neu laden</span>
+              <button id="btn_propose" disabled class="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <polyline points="23 4 23 10 17 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
+                  <polyline points="1 20 1 14 7 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+                <span>Antwort vorschlagen / neu formulieren</span>
               </button>
-              <span id="compose_status" class="sub" style="margin-left:auto; font-size:11px;"></span>
+              <button id="btn_send" disabled class="px-3 py-2 rounded-full bg-emerald-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed" style="margin-left:auto; display:inline-flex; align-items:center; justify-content:center;">
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M3 12L21 3 14 21 12 13 3 12Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <span id="compose_status" class="sub" style="font-size:11px;"></span>
             </div>
           </div>
           <div class="compose-side">
@@ -2478,14 +2481,39 @@ function ensureInboxContextMenu(){
                   const selector = `.reply-snippet[data-topic-id="${tId}"][data-opt-id="${oId}"]`;
                   const existing = editor.querySelector(selector);
                   if(existing){
+                    const parent = existing.parentElement;
                     existing.remove();
+                    if(parent && !parent.textContent.trim()){
+                      parent.remove();
+                    }
                   }
                   if(!snippet) return;
-                  const isPlaceholder = editor.innerText === 'Hier erscheint der Vorschlag …';
-                  const currentHtml = isPlaceholder ? '' : editor.innerHTML;
+
+                  // Platzhalter entfernen, falls noch vorhanden
+                  const textNow = (editor.textContent || '').trim();
+                  if(/Hier erscheint der Vorschlag/i.test(textNow)){
+                    editor.innerHTML = '';
+                  }
+
                   const esc = snippet.replace(/\n/g, '<br>');
                   const wrapped = `<span class="reply-snippet" data-topic-id="${tId}" data-opt-id="${oId}">${esc}</span>`;
-                  editor.innerHTML = (currentHtml ? currentHtml + '<br><br>' : '') + wrapped;
+
+                  // Versuchen, die Antwort zwischen Begrüßung und Abschluss zu platzieren.
+                  // Wir suchen nach einem Absatz mit typischer Abschlussformel und fügen
+                  // das Snippet direkt DAVOR ein. Falls nichts gefunden wird, ans Ende anhängen.
+                  let inserted = false;
+                  const paras = editor.querySelectorAll('p');
+                  for(const p of paras){
+                    const txt = (p.textContent || '').toLowerCase();
+                    if(txt.includes('viele grüße') || txt.includes('mit freundlichen grüßen')){
+                      p.insertAdjacentHTML('beforebegin', `<p>${wrapped}</p>`);
+                      inserted = true;
+                      break;
+                    }
+                  }
+                  if(!inserted){
+                    editor.insertAdjacentHTML('beforeend', `<p>${wrapped}</p>`);
+                  }
                 }
 
                 let topicsHtml = '';
@@ -2516,9 +2544,9 @@ function ensureInboxContextMenu(){
                         <div style="margin-bottom:4px;">${optHtml}</div>
                         <div style="margin-top:4px; border-top:1px dashed #e5e7eb; padding-top:4px;">
                           <div class="sub" style="font-size:10px; margin-bottom:2px;">Manuelle Antwort (Stichworte):</div>
-                          <div style="display:flex; gap:4px; align-items:flex-start;">
-                            <textarea class="reply-manual-note" data-topic-label="${escapeHtml(ct.label || '')}" data-topic-expl="${ct.explanation ? escapeHtml(ct.explanation) : ''}" rows="2" placeholder="Eigene Stichworte zur Antwort..." style="flex:1; font-size:11px; padding:4px 6px; border-radius:4px; border:1px solid #e5e7eb; resize:vertical;"></textarea>
-                            <button class="reply-manual-btn" data-kind="current" style="border:0; padding:6px 10px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; background:#6366f1; color:#ffffff; white-space:nowrap;">Manuell formulieren</button>
+                          <div style="display:flex; flex-direction:column; gap:4px; align-items:stretch;">
+                            <textarea class="reply-manual-note" data-topic-label="${escapeHtml(ct.label || '')}" data-topic-expl="${ct.explanation ? escapeHtml(ct.explanation) : ''}" rows="2" placeholder="Eigene Stichworte zur Antwort..." style="width:100%; font-size:11px; padding:4px 6px; border-radius:4px; border:1px solid #e5e7eb; resize:vertical;"></textarea>
+                            <button class="reply-manual-btn" data-kind="current" style="align-self:flex-end; border:0; padding:6px 10px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; background:#6366f1; color:#ffffff; white-space:nowrap;">Manuell formulieren</button>
                           </div>
                         </div>
                       </div>
@@ -3980,23 +4008,28 @@ function ensureInboxContextMenu(){
     }
     document.getElementById('reload').addEventListener('click', refreshInbox);
     document.getElementById('load_more_btn').addEventListener('click', loadMoreEmails);
-    document.getElementById('btn_propose').addEventListener('click', proposeDraft);
-    document.getElementById('btn_send').addEventListener('click', sendDraft);
-    const reloadReplyBtn = document.getElementById('btn_reload_reply');
-    if(reloadReplyBtn){
-      reloadReplyBtn.addEventListener('click', async () => {
+    const proposeBtn = document.getElementById('btn_propose');
+    const sendBtn = document.getElementById('btn_send');
+    if(sendBtn){
+      sendBtn.addEventListener('click', sendDraft);
+    }
+    if(proposeBtn){
+      proposeBtn.addEventListener('click', async () => {
         const status = document.getElementById('compose_status');
         const editor = document.getElementById('compose_editor');
         if(!editor){ return; }
         const htmlNow = (editor.innerHTML || '').trim();
         const textNow = (editor.textContent || '').trim();
-        if(!htmlNow || !textNow){
-          // Wenn noch kein Inhalt vorhanden ist, stattdessen normalen Vorschlag erzeugen
+
+        // Wenn noch kein Inhalt vorhanden ist, normalen Vorschlag erzeugen
+        if(!htmlNow || !textNow || /Hier erscheint der Vorschlag/i.test(textNow)){
           await proposeDraft();
           return;
         }
+
+        // Sonst bestehenden Text neu formulieren
         if(status){ status.textContent = 'Formuliere neu …'; }
-        reloadReplyBtn.disabled = true;
+        proposeBtn.disabled = true;
         try{
           const res = await fetch('/api/emails/rewrite-draft', {
             method: 'POST',
@@ -4013,7 +4046,7 @@ function ensureInboxContextMenu(){
         } catch(e){
           if(status){ status.textContent = 'Fehler beim Neuformulieren: ' + e; }
         } finally {
-          reloadReplyBtn.disabled = false;
+          proposeBtn.disabled = false;
         }
       });
     }
