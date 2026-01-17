@@ -1245,10 +1245,12 @@ def api_emails_agent_compose(current_user):
                 cur_h = conn_h.cursor(dictionary=True)
 
                 # Letzte 20 E-Mails dieses Users mit diesem Kontakt (hin und zurück)
+                # Wir holen sowohl body_text als auch body_html, weil viele Mails nur als HTML
+                # gespeichert sind. Falls kein Plaintext vorhanden ist, wandeln wir HTML in Text um.
                 like_addr = f"%{contact_email}%" if contact_email else '%'
                 cur_h.execute(
                     """
-                    SELECT body_text, from_addr, to_addrs, received_at
+                    SELECT body_text, body_html, from_addr, to_addrs, received_at
                     FROM emails
                     WHERE user_email = %s
                       AND (to_addrs LIKE %s OR from_addr LIKE %s)
@@ -1264,9 +1266,28 @@ def api_emails_agent_compose(current_user):
                     return {}
 
                 # Texte und Meta-Daten aufbereiten
+                import re as _re_hist
+                import html as _html_hist
+
+                def _html_to_text_hist(s: str) -> str:
+                    if not s:
+                        return ''
+                    s = _re_hist.sub(r'<\s*br\s*/?>', '\n', s, flags=_re_hist.IGNORECASE)
+                    s = _re_hist.sub(r'</\s*p\s*>', '\n\n', s, flags=_re_hist.IGNORECASE)
+                    s = _re_hist.sub(r'</\s*div\s*>', '\n', s, flags=_re_hist.IGNORECASE)
+                    s = _re_hist.sub(r'</\s*li\s*>', '\n', s, flags=_re_hist.IGNORECASE)
+                    s = _re_hist.sub(r'<[^>]+>', '', s)
+                    s = _html_hist.unescape(s)
+                    s = _re_hist.sub(r'\n\s*\n\s*\n+', '\n\n', s)
+                    return s.strip()
+
                 snippets = []
                 for r in rows:
                     body = (r.get('body_text') or '').strip()
+                    if not body:
+                        html_body = (r.get('body_html') or '').strip()
+                        if html_body:
+                            body = _html_to_text_hist(html_body)
                     if not body:
                         continue
                     from_a = (r.get('from_addr') or '').strip()
