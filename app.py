@@ -2895,8 +2895,11 @@ def api_emails_sync(current_user):
                 if key in synced_ids:
                     # Flags (gelesen/beantwortet) in der bestehenden Zeile aktualisieren
                     try:
+                        # Wichtig: Ein lokal gesetztes is_replied=1 (z.B. nach Versand einer Antwort)
+                        # darf durch fehlendes IMAP-Flag (\\Answered) nicht wieder auf 0 fallen.
+                        # Daher is_replied immer als Maximum aus bestehendem Wert und IMAP-Wert setzen.
                         cursor_db.execute(
-                            "UPDATE emails SET is_read=%s, is_replied=%s WHERE user_email=%s AND account_id=%s AND message_id=%s AND folder=%s",
+                            "UPDATE emails SET is_read=%s, is_replied=GREATEST(is_replied, %s) WHERE user_email=%s AND account_id=%s AND message_id=%s AND folder=%s",
                             (is_read, is_replied, user_email, account_id, message_id, folder_db_key)
                         )
                     except Exception as _upd_err:
