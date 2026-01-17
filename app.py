@@ -1213,8 +1213,8 @@ def api_emails_agent_compose(current_user):
         html_body = email_row['body_html']
 
         # Falls noch keine Reply-Preferences für diesen Kontakt gesetzt sind,
-        # versuchen wir einmalig, sie grob aus der Historie abzuleiten und in
-        # contacts.reply_* zu speichern (style_source = 'history').
+        # versuchen wir einmalig, sie aus der Historie abzuleiten und in
+        # contacts.reply_* zu speichern (style_source = 'history' bzw. 'history_llm').
         def _maybe_initialize_reply_prefs_from_history(row: dict) -> dict:
             try:
                 contact_id = row.get('contact_id')
@@ -1230,7 +1230,7 @@ def api_emails_agent_compose(current_user):
                 like_addr = f"%{contact_email}%" if contact_email else '%'
                 cur_h.execute(
                     """
-                    SELECT body_text
+                    SELECT body_text, from_addr, to_addrs, received_at
                     FROM emails
                     WHERE user_email = %s
                       AND (to_addrs LIKE %s OR from_addr LIKE %s)
@@ -1245,51 +1245,145 @@ def api_emails_agent_compose(current_user):
                     conn_h.close()
                     return {}
 
-                texts = [
-                    (r.get('body_text') or '').strip()
-                    for r in rows
-                    if (r.get('body_text') or '').strip()
-                ]
-                if not texts:
+                # Texte und Meta-Daten aufbereiten
+                snippets = []
+                for r in rows:
+                    body = (r.get('body_text') or '').strip()
+                    if not body:
+                        continue
+                    from_a = (r.get('from_addr') or '').strip()
+                    to_a = (r.get('to_addrs') or '').strip()
+                    direction = 'outgoing' if user_email and user_email in (from_a or '') else 'incoming'
+                    # Nur einen Ausschnitt, damit der Prompt schlank bleibt
+                    short = body[:800]
+                    snippets.append({
+                        'direction': direction,
+                        'from': from_a,
+                        'to': to_a,
+                        'text': short,
+                    })
+
+                if not snippets:
                     cur_h.close()
                     conn_h.close()
                     return {}
 
-                # Grobe Längen- und Förmlichkeitsschätzung
-                import re
+                # Zuerst versuchen wir, mit dem bestehenden Agenten eine präzisere Einschätzung
+                # zu bekommen. Falls das fehlschlägt, verwenden wir die alte Regex-Heuristik.
+                import json, re
 
-                total_len = sum(len(t) for t in texts)
-                avg_len = total_len / max(len(texts), 1)
-                if avg_len < 400:
-                    length_level = 2  # eher kurz
-                elif avg_len < 900:
-                    length_level = 3  # mittel
-                elif avg_len < 1500:
-                    length_level = 4  # länger
-                else:
-                    length_level = 5  # sehr ausführlich
+                length_level = None
+                formality_level = None
+                salutation_mode = None
+                persona_mode = None
+                greeting_template = None
+                closing_template = None
 
-                all_text = "\n".join(texts).lower()
-                du_hits = 0
-                sie_hits = 0
+                try:
+                    contact_hint = contact_email or 'Kontakt'
+                    # Kompakter Verlaufstext für den Agenten
+                    lines = [
+                        "Analysiere den folgenden Auszug einer E-Mail-Konversation zwischen UNS (wir/unser Team) und dem Kontakt " + contact_hint + ".",
+                        "Bestimme bitte:",
+                        "- ob wir den Kontakt typischerweise mit Du oder Sie anreden (salutation_mode)",
+                        "- ob wir eher in Ich- oder Wir-Form schreiben (persona_mode)",
+                        "- wie lang unsere Antworten typischerweise sind (length_level 1-5)",
+                        "- wie formell der Stil ist (formality_level 1-5)",
+                        "- einen typischen Begruessungssatz (greeting_template)",
+                        "- einen typischen Abschlusssatz (closing_template).",
+                        "Gib NUR ein JSON-Objekt ohne Erklaertext zurueck, z.B.:",
+                        '{"salutation_mode":"du","persona_mode":"ich","length_level":3,"formality_level":3,"greeting_template":"Hallo <Name>,","closing_template":"Viele Gruesse"}',
+                        "",
+                        "Konversation (neueste zuerst):",
+                    ]
+                    for s in snippets[:8]:
+                        prefix = "OUTGOING" if s['direction'] == 'outgoing' else "INCOMING"
+                        lines.append(f"[{prefix}] {s['text']}")
 
-                # Sehr vereinfachte Heuristiken für Du/Sie und Förmlichkeit
-                for pattern in [r"hallo ", r"hi ", r"hey ", r"liebe*r? "]:
-                    du_hits += len(re.findall(pattern, all_text, flags=re.IGNORECASE))
-                for pattern in [r"sehr geehrte", r"sehr geehrter", r"sehr geehrten", r"sie "]:
-                    sie_hits += len(re.findall(pattern, all_text, flags=re.IGNORECASE))
+                    prompt_text = "\n\n".join(lines)
 
-                if sie_hits > du_hits:
-                    salutation_mode = 'sie'
-                    formality_level = 4 if sie_hits - du_hits < 3 else 5
-                elif du_hits > sie_hits:
-                    salutation_mode = 'du'
-                    formality_level = 2 if du_hits - sie_hits < 3 else 1
-                else:
-                    salutation_mode = None
-                    formality_level = 3
+                    analysis_text, timed_out = _agent_respond_with_timeout(
+                        prompt_text,
+                        channel="email_style",
+                        user_email=user_email,
+                        timeout_s=10,
+                        agent_settings=None,
+                        contact_profile=None,
+                    )
 
-                persona_mode = 'ich'
+                    if not timed_out and analysis_text:
+                        try:
+                            parsed = json.loads(analysis_text.strip())
+                        except Exception:
+                            # Versuchen, JSON aus freier Antwort zu extrahieren
+                            m = re.search(r"\{.*\}", analysis_text, flags=re.DOTALL)
+                            parsed = json.loads(m.group(0)) if m else {}
+
+                        if isinstance(parsed, dict):
+                            sm = (parsed.get('salutation_mode') or '').lower() or None
+                            if sm in ('du', 'sie'):
+                                salutation_mode = sm
+                            pm = (parsed.get('persona_mode') or '').lower() or None
+                            if pm in ('ich', 'wir'):
+                                persona_mode = pm
+                            ll = parsed.get('length_level')
+                            if isinstance(ll, int) and 1 <= ll <= 5:
+                                length_level = ll
+                            fl = parsed.get('formality_level')
+                            if isinstance(fl, int) and 1 <= fl <= 5:
+                                formality_level = fl
+                            greeting_template = (parsed.get('greeting_template') or '').strip() or None
+                            closing_template = (parsed.get('closing_template') or '').strip() or None
+
+                except Exception as e_llm:
+                    try:
+                        app.logger.warning(f"[ReplyPrefsHistory-LLM] Error: {e_llm}")
+                    except Exception:
+                        pass
+
+                # Fallback: falls der Agent nichts Sinnvolles geliefert hat, alte Regex-Heuristik nutzen
+                if length_level is None or formality_level is None:
+                    texts = [s['text'] for s in snippets]
+                    total_len = sum(len(t) for t in texts)
+                    avg_len = total_len / max(len(texts), 1)
+                    if avg_len < 400:
+                        length_level = 2  # eher kurz
+                    elif avg_len < 900:
+                        length_level = 3  # mittel
+                    elif avg_len < 1500:
+                        length_level = 4  # länger
+                    else:
+                        length_level = 5  # sehr ausführlich
+
+                    all_text = "\n".join(texts).lower()
+                    du_hits = 0
+                    sie_hits = 0
+
+                    for pattern in [r"hallo ", r"hi ", r"hey ", r"liebe*r? "]:
+                        du_hits += len(re.findall(pattern, all_text, flags=re.IGNORECASE))
+                    for pattern in [r"sehr geehrte", r"sehr geehrter", r"sehr geehrten", r"sie "]:
+                        sie_hits += len(re.findall(pattern, all_text, flags=re.IGNORECASE))
+
+                    if sie_hits > du_hits:
+                        salutation_mode = salutation_mode or 'sie'
+                        formality_level = formality_level or (4 if sie_hits - du_hits < 3 else 5)
+                    elif du_hits > sie_hits:
+                        salutation_mode = salutation_mode or 'du'
+                        formality_level = formality_level or (2 if du_hits - sie_hits < 3 else 1)
+                    else:
+                        salutation_mode = salutation_mode or None
+                        formality_level = formality_level or 3
+
+                if persona_mode is None:
+                    # Einfache Heuristik: wenn in unseren ausgehenden Mails haeufig "wir" vorkommt,
+                    # sonst Standard "ich".
+                    outgoing_texts = "\n".join(
+                        s['text'] for s in snippets if s['direction'] == 'outgoing'
+                    ).lower()
+                    if re.search(r"\bwir\b", outgoing_texts):
+                        persona_mode = 'wir'
+                    else:
+                        persona_mode = 'ich'
 
                 cur_h.close()
 
@@ -1302,14 +1396,18 @@ def api_emails_agent_compose(current_user):
                         reply_formality_level = %s,
                         reply_salutation_mode = %s,
                         reply_persona_mode = %s,
-                        reply_style_source = 'history'
+                        reply_greeting_template = COALESCE(reply_greeting_template, %s),
+                        reply_closing_template = COALESCE(reply_closing_template, %s),
+                        reply_style_source = %s
                     WHERE id = %s AND user_email = %s
                     """,
                     (
                         length_level,
                         formality_level,
                         salutation_mode,
-                        persona_mode,
+                        greeting_template,
+                        closing_template,
+                        'history_llm' if greeting_template or closing_template else 'history',
                         contact_id,
                         user_email,
                     ),
