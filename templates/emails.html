@@ -3541,6 +3541,12 @@ function ensureInboxContextMenu(){
 
       if(!blockEl){ return; }
 
+      // Lange Erklärung unter den Buttons im Produktivmodus ausblenden –
+      // die Slider/Statuszeile erklären den Stil bereits ausreichend.
+      if(labelEl){
+        labelEl.style.display = 'none';
+      }
+
       // Basis-Initialisierung der Slider-Labels
       if(lenInput && lenLabel){ lenLabel.textContent = cmpLabelForLength(lenInput.value); }
       if(formInput && formLabel){ formLabel.textContent = cmpLabelForFormality(formInput.value); }
@@ -3584,6 +3590,28 @@ function ensureInboxContextMenu(){
           style_source: prefs.style_source || 'default'
         };
 
+        // Falls keine explizite Anrede/Perspektive gespeichert ist, heuristisch
+        // aus den Templates ableiten, damit die Toggles trotzdem "voreingestellt"
+        // sichtbar sind.
+        try{
+          if(!currentReplyPrefs.salutation_mode){
+            const gt = (currentReplyPrefs.greeting_template || '').toLowerCase();
+            if(gt.includes('sehr geehr') || gt.includes('guten tag')){
+              currentReplyPrefs.salutation_mode = 'sie';
+            } else if(gt.includes('hallo') || gt.includes('hey ') || gt.includes('hi ')){
+              currentReplyPrefs.salutation_mode = 'du';
+            }
+          }
+          if(!currentReplyPrefs.persona_mode){
+            const ct = (currentReplyPrefs.closing_template || '').toLowerCase();
+            if(ct.includes('wir')){
+              currentReplyPrefs.persona_mode = 'wir';
+            } else if(ct){
+              currentReplyPrefs.persona_mode = 'ich';
+            }
+          }
+        }catch(_e_infer){}
+
         // Slider-Werte setzen
         if(lenInput){
           const v = currentReplyPrefs.length_level || 3;
@@ -3596,7 +3624,7 @@ function ensureInboxContextMenu(){
           if(formLabel) formLabel.textContent = cmpLabelForFormality(v);
         }
 
-        // Toggles setzen
+        // Toggles setzen (inkl. evtl. heuristisch abgeleitetem Wert)
         cmpSelectedSal = (currentReplyPrefs.salutation_mode || '').toLowerCase() || null;
         cmpSetToggleActive(salDu, cmpSelectedSal === 'du');
         cmpSetToggleActive(salSie, cmpSelectedSal === 'sie');
@@ -3605,18 +3633,23 @@ function ensureInboxContextMenu(){
         cmpSetToggleActive(persIch, cmpSelectedPers === 'ich');
         cmpSetToggleActive(persWir, cmpSelectedPers === 'wir');
 
-        if(labelEl){
-          labelEl.textContent = formatReplyPrefsLabel(currentReplyPrefs, emailSummary && emailSummary.contact_name, emailSummary && emailSummary.from);
-        }
+        // Debug-Werte für Begrüßung/Schluss anzeigen – falls keine Templates
+        // in der contacts-Tabelle hinterlegt sind, eine sinnvolle Vorschau
+        // aus den aktuellen Einstellungen bauen.
+        const contactName = (emailSummary && emailSummary.contact_name) || '';
+        const fromAddr = (emailSummary && emailSummary.from) || '';
+        const fallbackName = contactName || (fromAddr.split('<')[0] || '').trim() || 'Kunde';
 
-        // Debug-Werte für Begrüßung/Schluss direkt aus der contacts-Tabelle anzeigen
+        const salMode = (currentReplyPrefs.salutation_mode || '').toLowerCase();
+        const greetingWord = salMode === 'sie' ? 'Guten Tag' : 'Hallo';
+
         if(dbgGreetingEl){
-          const v = currentReplyPrefs.greeting_template;
-          dbgGreetingEl.textContent = v ? String(v) : '(NULL / nicht gesetzt)';
+          const v = (currentReplyPrefs.greeting_template || '').trim();
+          dbgGreetingEl.textContent = v || `${greetingWord} ${fallbackName},`;
         }
         if(dbgClosingEl){
-          const v = currentReplyPrefs.closing_template;
-          dbgClosingEl.textContent = v ? String(v) : '(NULL / nicht gesetzt)';
+          const v = (currentReplyPrefs.closing_template || '').trim();
+          dbgClosingEl.textContent = v || 'Viele Grüße';
         }
 
         if(statusEl){
