@@ -2316,6 +2316,7 @@ function ensureInboxContextMenu(){
                 <div class="kv"><span>Name</span><b>${escapeHtml(contactName)}</b></div>
                 <div class="kv"><span>E‑Mail</span><b>${escapeHtml(contactEmail)}</b></div>
                 <div class="kv"><span>E-Mails</span><b><a href="#" id="view_all_contact_emails" data-contact-id="${t.contact_id || ''}" style="color:#0369a1; text-decoration:underline;">${emailCount} Nachricht${emailCount !== 1 ? 'en' : ''} anzeigen</a></b></div>
+                <div class="kv"><span>Sprache</span><b id="contact_language_text">–</b></div>
               </div>
               <!-- Rechte Spalte: Relevanz, Typ, Stimmung, Anrede als Textliste (gleiches Muster wie links) -->
               <div class="kv" style="justify-content:flex-start; text-align:left; flex-direction:column; align-items:flex-start; gap:2px;">
@@ -2377,6 +2378,7 @@ function ensureInboxContextMenu(){
           const typeEl = document.getElementById('contact_type_badge');
           const sentimentEl = document.getElementById('contact_sentiment_text');
           const salutationEl = document.getElementById('contact_salutation_text');
+          const langEl = document.getElementById('contact_language_text');
 
           // Relevanz aus Bucket ableiten
           if (importanceEl) {
@@ -2414,6 +2416,19 @@ function ensureInboxContextMenu(){
           if (salutationEl) {
             const sal = (kpis.salutation || '').toString().trim();
             salutationEl.textContent = sal || 'Unklar';
+          }
+
+          // Sprache (optional, aus KPIs falls vorhanden)
+          if(langEl){
+            const code = (kpis.language_code || '').toString().trim().toLowerCase();
+            const label = (kpis.language_label || '').toString().trim();
+            if(label){
+              langEl.textContent = label;
+            } else if(code){
+              langEl.textContent = code;
+            } else {
+              langEl.textContent = '–';
+            }
           }
         } catch (_e_badge) {}
 
@@ -3164,8 +3179,22 @@ function ensureInboxContextMenu(){
             const timeline = data.timeline || [];
             const role = data.role || '';
             const importanceBucket = (data.importance_bucket || '').toLowerCase();
+            const langCode = (data.language_code || '').toLowerCase();
+            const langLabel = data.language_label || '';
 
             qcBox.style.display = 'block';
+
+            // Sprache im Kundenprofil-Header aktualisieren (falls Element vorhanden)
+            try{
+              const langEl = document.getElementById('contact_language_text');
+              if(langEl){
+                if(langLabel){
+                  langEl.textContent = langLabel;
+                } else if(langCode){
+                  langEl.textContent = langCode;
+                }
+              }
+            }catch(_e_lang_qc){}
 
             // Kopfzeile: Name – Rolle (Kontakt-Typ)
             const emailLower = (contactEmail || '').toLowerCase();

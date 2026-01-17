@@ -5232,10 +5232,11 @@ def api_contacts_quick_card(current_user, contact_id):
                     conn.close()
                     return jsonify({**cached_data, 'from_cache': True}), 200
 
-        # Basis-Kontaktdaten laden
+        # Basis-Kontaktdaten laden (inkl. erkannter Sprache)
         cursor.execute(
             """
-            SELECT id, name, contact_email, category, salutation, sentiment, profile_summary_full
+            SELECT id, name, contact_email, category, salutation, sentiment, profile_summary_full,
+                   language_code, language_confidence, language_source
             FROM contacts
             WHERE id = %s AND user_email = %s
             """,
@@ -5541,6 +5542,30 @@ def api_contacts_quick_card(current_user, contact_id):
             except Exception:
                 pass
 
+        # Sprache für Payload aufbereiten
+        lang_code = (contact.get('language_code') or '').lower() if contact.get('language_code') else ''
+        lang_conf = contact.get('language_confidence')
+        lang_source = contact.get('language_source') or ''
+
+        lang_label = None
+        if lang_code:
+            mapping = {
+                'de': 'Deutsch',
+                'en': 'Englisch',
+                'fr': 'Französisch',
+                'es': 'Spanisch',
+                'it': 'Italienisch',
+                'nl': 'Niederländisch',
+                'pl': 'Polnisch',
+                'pt': 'Portugiesisch',
+                'sv': 'Schwedisch',
+                'da': 'Dänisch',
+                'tr': 'Türkisch',
+                'ja': 'Japanisch',
+                'zh': 'Chinesisch (vereinfacht)',
+            }
+            lang_label = mapping.get(lang_code, lang_code)
+
         payload = {
             'contact_id': contact_id,
             'name': display_name,
@@ -5554,6 +5579,10 @@ def api_contacts_quick_card(current_user, contact_id):
             'timeline_topics': timeline_topics,
             'profile_text_raw': quick_profile_text,
             'importance_bucket': importance_bucket,
+            'language_code': lang_code,
+            'language_confidence': lang_conf,
+            'language_source': lang_source,
+            'language_label': lang_label,
         }
 
         # Kurzprofil in contact_profile_cache.short_profile_json cachen (best effort)
