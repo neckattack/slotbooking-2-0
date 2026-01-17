@@ -539,7 +539,7 @@
       <li><a href="#" id="sidebar_contacts"><span class="icon" data-icon="users"></span> Kontakte</a></li>
       <li><a href="#" id="sidebar_email"><span class="icon" data-icon="mail"></span> E-Mail-Einstellungen</a></li>
       <li id="sidebar_users_item" style="display:none;"><a href="#" id="sidebar_users"><span class="icon" data-icon="users"></span> User-Verwaltung</a></li>
-      <li style="border-top:2px solid var(--border);"><a href="#" id="sidebar_logout" style="color:#dc2626;"><span class="icon" data-icon="log-out"></span> Logout</a></li>
+      <li style="border-top:2px solid var(--border);"><a href="#" id="sidebar_logout" style="color:#dc2626;">Logout</a></li>
     </ul>
   </div>
 
@@ -2264,7 +2264,7 @@ function ensureInboxContextMenu(){
           </div>
           <div class="detail-splitter" id="detail_splitter">⋮⋮</div>
           <div class="profile" id="profile_panel" data-contact-id="${t.contact_id || ''}">
-            <h3>👤 KONTAKT-PROFIL</h3>
+            <h3>Kundenprofil</h3>
             <div class="grid">
               <!-- Linke Spalte: Stammdaten zum Kontakt -->
               <div>
@@ -2290,9 +2290,9 @@ function ensureInboxContextMenu(){
             </div>
             <div style="margin-top:16px; font-size:16px; border-top:1px solid var(--border); padding-top:12px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px;">
-                <div style="display:flex; align-items:center; gap:6px; font-weight:600;">
-                  <span>🤖 KI-Kundenprofil</span>
-                  <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" title="Profil aktualisieren" style="width:30px; height:30px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:999px; border:0; cursor:pointer; background:#111827; color:#ffffff; font-size:16px;">⚙️</button>
+                <div style="font-weight:600; font-size:13px; color:#6b7280; display:flex; align-items:center; gap:6px;">
+                  <span>KI-Zusammenfassung</span>
+                  <button id="generate_profile_btn" data-contact-id="${t.contact_id || ''}" title="Profil aktualisieren" style="width:24px; height:24px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:999px; border:0; cursor:pointer; background:#111827; color:#ffffff; font-size:14px;">⚙️</button>
                 </div>
               </div>
               <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:8px;">

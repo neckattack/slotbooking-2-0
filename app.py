@@ -1221,11 +1221,24 @@ def api_emails_agent_compose(current_user):
                 contact_email = row.get('contact_email') or row.get('from_addr') or ''
                 style_source_raw = (row.get('reply_style_source') or '').strip()
                 style_source = style_source_raw.lower()
-                # Nur abbrechen, wenn bereits eine echte Quelle gesetzt wurde.
-                # Werte wie "" oder "default" bedeuten: noch keine History/Manual-Werte vorhanden.
+
                 if not contact_id:
                     return {}
-                if style_source in ('history', 'history_llm', 'manual'):
+
+                # Prüfen, ob bereits echte Werte im Kontakt stehen. Nur wenn mindestens
+                # ein Kernfeld gesetzt ist, respektieren wir eine vorhandene style_source
+                # (z.B. 'history', 'history_llm', 'manual') und brechen ab.
+                has_any_value = any([
+                    row.get('reply_length_level') is not None,
+                    row.get('reply_formality_level') is not None,
+                    bool((row.get('reply_salutation_mode') or '').strip()),
+                    bool((row.get('reply_persona_mode') or '').strip()),
+                    bool((row.get('reply_greeting_template') or '').strip()),
+                    bool((row.get('reply_closing_template') or '').strip()),
+                ])
+
+                if has_any_value and style_source in ('history', 'history_llm', 'manual'):
+                    # Es existieren bereits sinnvolle Werte, nicht erneut initialisieren.
                     return {}
 
                 conn_h = get_settings_db_connection()
