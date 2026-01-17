@@ -3606,9 +3606,229 @@ def api_contacts_emails(current_user, contact_id):
             },
             'emails': formatted_emails
         }), 200
-        
     except Exception as e:
         app.logger.error(f"[Contact Emails] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/contacts/<int:contact_id>/reply-prefs/debug', methods=['GET'])
+@require_auth
+def api_contacts_reply_prefs_debug(current_user, contact_id):
+    """Debug-Endpoint: zeigt, was die History-/LLM-Analyse für einen Kontakt
+    sehen und ableiten würde, ohne etwas in der DB zu speichern.
+    """
+    user_email = current_user.get('user_email')
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute(
+            """
+            SELECT id, contact_email, name,
+                   reply_greeting_template,
+                   reply_closing_template,
+                   reply_length_level,
+                   reply_formality_level,
+                   reply_salutation_mode,
+                   reply_persona_mode,
+                   reply_style_source
+            FROM contacts
+            WHERE id=%s AND user_email=%s
+            """,
+            (contact_id, user_email),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not row:
+            return jsonify({'error': 'Contact not found'}), 404
+
+        contact_email = row.get('contact_email') or ''
+        style_source = (row.get('reply_style_source') or '').strip()
+
+        contact_info = {
+            'contact_id': row['id'],
+            'contact_email': contact_email,
+            'contact_name': row.get('name'),
+            'reply_greeting_template': row.get('reply_greeting_template'),
+            'reply_closing_template': row.get('reply_closing_template'),
+            'reply_length_level': row.get('reply_length_level'),
+            'reply_formality_level': row.get('reply_formality_level'),
+            'reply_salutation_mode': row.get('reply_salutation_mode'),
+            'reply_persona_mode': row.get('reply_persona_mode'),
+            'reply_style_source': style_source,
+        }
+
+        # History-Mails wie in _maybe_initialize_reply_prefs_from_history holen
+        conn_h = get_settings_db_connection()
+        cur_h = conn_h.cursor(dictionary=True)
+        like_addr = f"%{contact_email}%" if contact_email else '%'
+        cur_h.execute(
+            """
+            SELECT body_text, body_html, from_addr, to_addrs, received_at
+            FROM emails
+            WHERE user_email = %s
+              AND (to_addrs LIKE %s OR from_addr LIKE %s)
+            ORDER BY received_at DESC
+            LIMIT 20
+            """,
+            (user_email, like_addr, like_addr),
+        )
+        rows = cur_h.fetchall()
+
+        import re as _re_hist
+        import html as _html_hist
+        import json as _json_hist
+
+        def _html_to_text_hist(s: str) -> str:
+            if not s:
+                return ''
+            s = _re_hist.sub(r'<\s*br\s*/?>', '\n', s, flags=_re_hist.IGNORECASE)
+            s = _re_hist.sub(r'</\s*p\s*>', '\n\n', s, flags=_re_hist.IGNORECASE)
+            s = _re_hist.sub(r'</\s*div\s*>', '\n', s, flags=_re_hist.IGNORECASE)
+            s = _re_hist.sub(r'</\s*li\s*>', '\n', s, flags=_re_hist.IGNORECASE)
+            s = _re_hist.sub(r'<[^>]+>', '', s)
+            s = _html_hist.unescape(s)
+            s = _re_hist.sub(r'\n\s*\n\s*\n+', '\n\n', s)
+            return s.strip()
+
+        snippets = []
+        for r in rows or []:
+            body = (r.get('body_text') or '').strip()
+            if not body:
+                html_body = (r.get('body_html') or '').strip()
+                if html_body:
+                    body = _html_to_text_hist(html_body)
+            if not body:
+                continue
+            from_a = (r.get('from_addr') or '').strip()
+            to_a = (r.get('to_addrs') or '').strip()
+            direction = 'outgoing' if user_email and user_email in (from_a or '') else 'incoming'
+            snippets.append({
+                'direction': direction,
+                'from': from_a,
+                'to': to_a,
+                'text': body,
+            })
+
+        history_info = {
+            'email_count': len(rows or []),
+            'snippet_count': len(snippets),
+            'snippets_preview': [
+                {
+                    'direction': s['direction'],
+                    'from': s['from'],
+                    'to': s['to'],
+                    'text_preview': (s['text'][:240] + '…') if len(s['text']) > 240 else s['text'],
+                }
+                for s in snippets[:5]
+            ],
+        }
+
+        llm_info = {
+            'timed_out': False,
+            'raw_preview': '',
+            'parse_error': None,
+            'parsed': {},
+        }
+        would_update = {
+            'length_level': None,
+            'formality_level': None,
+            'salutation_mode': None,
+            'persona_mode': None,
+            'greeting_template': None,
+            'closing_template': None,
+        }
+
+        if snippets:
+            try:
+                contact_hint = contact_email or 'Kontakt'
+                lines = [
+                    "Analysiere den folgenden Auszug einer E-Mail-Konversation zwischen UNS (wir/unser Team) und dem Kontakt " + contact_hint + ".",
+                    "Bestimme bitte:",
+                    "- ob wir den Kontakt typischerweise mit Du oder Sie anreden (salutation_mode)",
+                    "- ob wir eher in Ich- oder Wir-Form schreiben (persona_mode)",
+                    "- wie lang unsere Antworten typischerweise sind (length_level 1-5)",
+                    "- wie formell der Stil ist (formality_level 1-5)",
+                    "- einen typischen Begruessungssatz (greeting_template)",
+                    "- einen typischen Abschlusssatz (closing_template).",
+                    "Gib NUR ein JSON-Objekt ohne Erklaertext zurueck, z.B.:",
+                    '{"salutation_mode":"du","persona_mode":"ich","length_level":3,"formality_level":3,"greeting_template":"Hallo <Name>,","closing_template":"Viele Gruesse"}',
+                    "",
+                    "Konversation (neueste zuerst):",
+                ]
+                for s in snippets[:8]:
+                    prefix = "OUTGOING" if s['direction'] == 'outgoing' else "INCOMING"
+                    lines.append(f"[{prefix}] {s['text']}")
+
+                prompt_text = "\n\n".join(lines)
+
+                analysis_text, timed_out = _agent_respond_with_timeout(
+                    prompt_text,
+                    channel="email_style",
+                    user_email=user_email,
+                    timeout_s=10,
+                    agent_settings=None,
+                    contact_profile=None,
+                )
+
+                llm_info['timed_out'] = bool(timed_out)
+                llm_info['raw_preview'] = (analysis_text or '')[:600]
+
+                parsed = {}
+                if analysis_text and not timed_out:
+                    try:
+                        parsed = _json_hist.loads(analysis_text.strip())
+                    except Exception:
+                        m = _re_hist.search(r"\{.*\}", analysis_text, flags=_re_hist.DOTALL)
+                        if m:
+                            parsed = _json_hist.loads(m.group(0))
+                    if not isinstance(parsed, dict):
+                        parsed = {}
+                llm_info['parsed'] = parsed
+
+                if parsed:
+                    sm = (parsed.get('salutation_mode') or '').lower() or None
+                    if sm in ('du', 'sie'):
+                        would_update['salutation_mode'] = sm
+                    pm = (parsed.get('persona_mode') or '').lower() or None
+                    if pm in ('ich', 'wir'):
+                        would_update['persona_mode'] = pm
+                    ll = parsed.get('length_level')
+                    if isinstance(ll, int) and 1 <= ll <= 5:
+                        would_update['length_level'] = ll
+                    fl = parsed.get('formality_level')
+                    if isinstance(fl, int) and 1 <= fl <= 5:
+                        would_update['formality_level'] = fl
+                    gt = (parsed.get('greeting_template') or '').strip() or None
+                    ct = (parsed.get('closing_template') or '').strip() or None
+                    would_update['greeting_template'] = gt
+                    would_update['closing_template'] = ct
+
+            except Exception as e_llm:
+                llm_info['parse_error'] = str(e_llm)
+                try:
+                    app.logger.warning(f"[Contact Reply Prefs DEBUG] LLM error: {e_llm}")
+                except Exception:
+                    pass
+
+        cur_h.close()
+        conn_h.close()
+
+        return jsonify({
+            'ok': True,
+            'contact': contact_info,
+            'history': history_info,
+            'llm': llm_info,
+            'would_update': would_update,
+        }), 200
+
+    except Exception as e:
+        try:
+            app.logger.error(f"[Contact Reply Prefs DEBUG] Error: {e}")
+        except Exception:
+            pass
         return jsonify({'error': str(e)}), 500
 
 

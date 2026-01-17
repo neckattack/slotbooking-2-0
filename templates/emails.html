@@ -397,6 +397,7 @@
           <div style="font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
             <span>🛠️ Debug Antwortmodul</span>
             <span style="font-size:10px; color:#6b7280;">(Rohwerte aus contacts / reply_prefs)</span>
+            <button id="compose_debug_history_btn" type="button" style="margin-left:auto; border:0; padding:3px 8px; border-radius:999px; font-size:10px; cursor:pointer; background:#e5e7eb; color:#374151;">History-Debug</button>
           </div>
           <div style="display:flex; flex-direction:column; gap:2px; font-size:10px; font-family:monospace;">
             <div><span class="muted">contact_id:</span> <span id="compose_debug_contact_id">(noch nicht geladen)</span></div>
@@ -411,6 +412,7 @@
             <div><span class="muted">reply_closing_template:</span> <span id="compose_debug_closing">(noch nicht geladen)</span></div>
           </div>
           <div id="compose_debug_warnings" style="margin-top:4px; font-size:10px; color:#b45309; white-space:pre-wrap;"></div>
+          <pre id="compose_debug_history" style="margin-top:4px; font-size:10px; font-family:monospace; max-height:140px; overflow:auto; white-space:pre-wrap; background:#dbeafe; border-radius:6px; padding:6px; display:none;"></pre>
         </div>
       </div>
     </div>
@@ -2546,7 +2548,7 @@ function ensureInboxContextMenu(){
                           <div class="sub" style="font-size:10px; margin-bottom:2px;">Manuelle Antwort (Stichworte):</div>
                           <div style="display:flex; flex-direction:column; gap:4px; align-items:stretch;">
                             <textarea class="reply-manual-note" data-topic-label="${escapeHtml(ct.label || '')}" data-topic-expl="${ct.explanation ? escapeHtml(ct.explanation) : ''}" rows="2" placeholder="Eigene Stichworte zur Antwort..." style="width:100%; font-size:11px; padding:4px 6px; border-radius:4px; border:1px solid #e5e7eb; resize:vertical;"></textarea>
-                            <button class="reply-manual-btn" data-kind="current" style="align-self:flex-end; border:0; padding:6px 10px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; background:#6366f1; color:#ffffff; white-space:nowrap;">Manuell formulieren</button>
+                            <button class="reply-manual-btn" data-kind="current" style="width:100%; border:0; padding:6px 10px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; background:#6366f1; color:#ffffff; white-space:nowrap;">Einfügen</button>
                           </div>
                         </div>
                       </div>
@@ -3572,6 +3574,7 @@ function ensureInboxContextMenu(){
       const dbgSalutationEl = document.getElementById('compose_debug_salutation');
       const dbgPersonaEl = document.getElementById('compose_debug_persona');
       const dbgWarningsEl = document.getElementById('compose_debug_warnings');
+      const dbgHistoryEl = document.getElementById('compose_debug_history');
       const lenInput = document.getElementById('cmp_length');
       const formInput = document.getElementById('cmp_formality');
       const lenLabel = document.getElementById('cmp_length_label');
@@ -3705,6 +3708,22 @@ function ensureInboxContextMenu(){
           }
 
           dbgWarningsEl.textContent = warnings.length ? warnings.join('\n') : '';
+        }
+
+        // History-Debug-Button: ruft den neuen Debug-Endpoint auf und zeigt das JSON an
+        const historyBtn = document.getElementById('compose_debug_history_btn');
+        if(historyBtn && dbgHistoryEl && contactId){
+          historyBtn.onclick = async () => {
+            dbgHistoryEl.style.display = 'block';
+            dbgHistoryEl.textContent = 'Lade History-Debug…';
+            try{
+              const res = await fetch(`/api/contacts/${contactId}/reply-prefs/debug`, { headers: getAuthHeaders() });
+              const data = await parseJsonSafe(res);
+              dbgHistoryEl.textContent = JSON.stringify(data, null, 2);
+            }catch(e_dbg){
+              dbgHistoryEl.textContent = 'Fehler beim Laden des History-Debug: ' + e_dbg;
+            }
+          };
         }
 
         function scheduleComposePrefsAutosave(){
