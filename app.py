@@ -6716,7 +6716,7 @@ def api_user_email_settings_get():
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             "SELECT user_email, imap_host, imap_port, imap_user, imap_security, "
-            "smtp_host, smtp_port, smtp_user, smtp_security, signature_html, created_at, updated_at "
+            "smtp_host, smtp_port, smtp_user, smtp_security, signature_html, preferred_language, created_at, updated_at "
             "FROM user_email_settings WHERE user_email=%s",
             (user_email,)
         )
@@ -6738,6 +6738,7 @@ def api_user_email_settings_get():
             'smtp_user': row['smtp_user'],
             'smtp_security': row['smtp_security'],
             'signature_html': row.get('signature_html'),
+            'preferred_language': row.get('preferred_language'),
             'created_at': str(row['created_at']),
             'updated_at': str(row['updated_at'])
         }), 200
@@ -6758,8 +6759,9 @@ def api_user_email_settings_post():
     user_email = data.get('user_email', '').strip()
     if not user_email:
         return jsonify({'error': 'user_email required'}), 400
-    # Signatur kann auch alleine geschickt werden
+    # Signatur und bevorzugte Sprache koennen auch alleine geschickt werden
     signature_html = data.get('signature_html')
+    preferred_language = data.get('preferred_language')
 
     imap_host = (data.get('imap_host') or '').strip()
     imap_port = int(data.get('imap_port', 993)) if 'imap_port' in data else 993
@@ -6774,8 +6776,8 @@ def api_user_email_settings_post():
 
     full_update = bool(imap_host and imap_user and smtp_host and smtp_user)
 
-    if not full_update and signature_html is None:
-        return jsonify({'error': 'Either full IMAP/SMTP config or signature_html required'}), 400
+    if not full_update and signature_html is None and preferred_language is None:
+        return jsonify({'error': 'Either full IMAP/SMTP config or signature_html/preferred_language required'}), 400
     try:
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
@@ -6805,8 +6807,8 @@ def api_user_email_settings_post():
             sql = """
                 INSERT INTO user_email_settings
                 (user_email, imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security,
-                 smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_security, signature_html)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_security, signature_html, preferred_language)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON DUPLICATE KEY UPDATE
                     imap_host=VALUES(imap_host), imap_port=VALUES(imap_port),
                     imap_user=VALUES(imap_user), imap_pass_encrypted=VALUES(imap_pass_encrypted),
@@ -6814,17 +6816,34 @@ def api_user_email_settings_post():
                     smtp_host=VALUES(smtp_host), smtp_port=VALUES(smtp_port),
                     smtp_user=VALUES(smtp_user), smtp_pass_encrypted=VALUES(smtp_pass_encrypted),
                     smtp_security=VALUES(smtp_security),
-                    signature_html=VALUES(signature_html)
+                    signature_html=VALUES(signature_html),
+                    preferred_language=VALUES(preferred_language)
             """
             cursor.execute(sql, (
                 user_email, imap_host, imap_port, imap_user, imap_pass_enc, imap_security,
-                smtp_host, smtp_port, smtp_user, smtp_pass_enc, smtp_security, signature_html,
+                smtp_host, smtp_port, smtp_user, smtp_pass_enc, smtp_security, signature_html, preferred_language,
             ))
         else:
-            # Nur Signatur aktualisieren
+            # Teil-Update: Signatur und/oder bevorzugte Sprache aktualisieren
+            update_fields = []
+            params = []
+            if signature_html is not None:
+                update_fields.append("signature_html=%s")
+                params.append(signature_html)
+            if preferred_language is not None:
+                update_fields.append("preferred_language=%s")
+                params.append(preferred_language)
+
+            if not update_fields:
+                cursor.close()
+                conn.close()
+                return jsonify({'error': 'No updatable fields provided'}), 400
+
+            update_fields.append("updated_at=NOW()")
+            params.append(user_email)
             cursor.execute(
-                "UPDATE user_email_settings SET signature_html=%s, updated_at=NOW() WHERE user_email=%s",
-                (signature_html, user_email),
+                f"UPDATE user_email_settings SET {', '.join(update_fields)} WHERE user_email=%s",
+                tuple(params),
             )
             if cursor.rowcount == 0:
                 cursor.close()

@@ -578,6 +578,24 @@
       <div class="row"><label style="width:100px;">Vorname</label><input id="profile_first" placeholder="Vorname"></div>
       <div class="row"><label style="width:100px;">Nachname</label><input id="profile_last" placeholder="Nachname"></div>
       <div class="row"><label style="width:100px;">Rolle</label><input id="profile_role" disabled style="background:#f3f4f6;"></div>
+      <div class="row"><label style="width:100px;">Sprache</label>
+        <select id="profile_language" style="flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px;">
+          <option value="">(nicht gesetzt)</option>
+          <option value="de">Deutsch</option>
+          <option value="en">Englisch</option>
+          <option value="fr">Französisch</option>
+          <option value="es">Spanisch</option>
+          <option value="it">Italienisch</option>
+          <option value="nl">Niederländisch</option>
+          <option value="pl">Polnisch</option>
+          <option value="pt">Portugiesisch</option>
+          <option value="sv">Schwedisch</option>
+          <option value="da">Dänisch</option>
+          <option value="tr">Türkisch</option>
+          <option value="ja">Japanisch</option>
+          <option value="zh">Chinesisch (vereinfacht)</option>
+        </select>
+      </div>
       <div style="border-top:1px solid var(--border); margin:16px 0; padding-top:16px;">
         <h4 style="margin:0 0 8px; font-size:14px;">🔒 Passwort ändern (optional)</h4>
         <div class="row"><label style="width:100px;">Neu</label><input id="profile_new_pass" type="password" placeholder="min. 6 Zeichen"></div>
@@ -4891,6 +4909,27 @@ function ensureInboxContextMenu(){
       document.getElementById('profile_role').value = user.role || 'user';
       document.getElementById('profile_new_pass').value = '';
       document.getElementById('profile_confirm_pass').value = '';
+      const langSelect = document.getElementById('profile_language');
+      if(langSelect){
+        langSelect.value = '';
+        // Bevorzugte Sprache aus user_email_settings laden
+        try{
+          const userEmail = user.email || '';
+          if(userEmail){
+            fetch(`/api/user/email-settings?user_email=${encodeURIComponent(userEmail)}`)
+              .then(res => parseJsonSafe(res))
+              .then(data => {
+                if(data && (data.preferred_language || data.preferred_language === '')){
+                  const code = data.preferred_language || '';
+                  // Nur setzen, wenn Option existiert
+                  const hasOption = Array.from(langSelect.options).some(opt => opt.value === code);
+                  langSelect.value = hasOption ? code : '';
+                }
+              })
+              .catch(() => {});
+          }
+        }catch(_e_lang){}
+      }
       
       const cleanup = () => { modal.style.display = 'none'; };
       document.getElementById('profile_cancel').onclick = cleanup;
@@ -4899,6 +4938,8 @@ function ensureInboxContextMenu(){
         const last = document.getElementById('profile_last').value.trim();
         const newPass = document.getElementById('profile_new_pass').value;
         const confirmPass = document.getElementById('profile_confirm_pass').value;
+        const langSelect = document.getElementById('profile_language');
+        const preferredLang = langSelect ? (langSelect.value || '') : '';
         
         // Validate password if provided
         if(newPass || confirmPass){
@@ -4934,6 +4975,17 @@ function ensureInboxContextMenu(){
             user.last_name = last;
             localStorage.setItem('current_user', JSON.stringify(user));
             updateMenuForUser();
+            // Bevorzugte Sprache separat in user_email_settings speichern (Best Effort)
+            try{
+              const userEmail = user.email || '';
+              if(userEmail && typeof fetch !== 'undefined'){
+                fetch('/api/user/email-settings', {
+                  method: 'POST',
+                  headers: {...getAuthHeaders(), 'Content-Type': 'application/json'},
+                  body: JSON.stringify({ user_email: userEmail, preferred_language: preferredLang || null })
+                }).catch(() => {});
+              }
+            }catch(_e_lang_save){}
             msg.textContent = '✅ Profil gespeichert!';
             setTimeout(cleanup, 1500);
           } else {
