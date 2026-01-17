@@ -375,6 +375,10 @@
             <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
             <div id="compose_editor" class="editor" contenteditable="true"><div class="muted">Hier erscheint der Vorschlag …</div></div>
             <div class="actions" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <button id="btn_attach" type="button" class="px-2 py-2 rounded-full border border-slate-300 bg-white text-slate-800 text-sm inline-flex items-center justify-center" title="Anhang hinzufügen">
+                <span>${window.getIconSvg ? window.getIconSvg('paperclip', { size: 16 }) : '📎'}</span>
+              </button>
+              <input id="compose_attachments" type="file" multiple style="display:none;" />
               <button id="btn_propose" disabled class="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1">
                 <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <polyline points="23 4 23 10 17 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
@@ -391,6 +395,7 @@
               </button>
               <span id="compose_status" class="sub" style="font-size:11px;"></span>
             </div>
+            <div id="compose_attachments_list" class="sub" style="margin-top:4px; font-size:11px; color:#6b7280;"></div>
           </div>
           <div class="compose-side">
             <div id="compose_topics_mirror" class="sub" style="margin-top:0; font-size:11px; overflow:auto;"></div>
@@ -4000,11 +4005,28 @@ function ensureInboxContextMenu(){
       const toInput = document.getElementById('compose_to');
       const subjInput = document.getElementById('compose_subject');
       const editor = document.getElementById('compose_editor');
+      const attachInput = document.getElementById('compose_attachments');
       if(!toInput.value){ status.textContent = 'Empfänger fehlt.'; return; }
       if(!currentAccountId){ status.textContent = 'Kein E-Mail-Account ausgewählt.'; return; }
       status.textContent = 'Sende …';
       try{
-        const res = await fetch('/api/emails/send', { method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body: JSON.stringify({to: toInput.value, subject: subjInput.value, html: editor.innerHTML, account_id: currentAccountId, reply_to_uid: currentUid}) });
+        const formData = new FormData();
+        formData.append('to', toInput.value);
+        formData.append('subject', subjInput.value || '');
+        formData.append('html', editor.innerHTML || '');
+        formData.append('account_id', String(currentAccountId));
+        if(currentUid){ formData.append('reply_to_uid', String(currentUid)); }
+        if(attachInput && attachInput.files && attachInput.files.length){
+          Array.from(attachInput.files).forEach((file) => {
+            formData.append('attachments', file);
+          });
+        }
+
+        const res = await fetch('/api/emails/send', {
+          method:'POST',
+          headers: getAuthHeaders(),
+          body: formData
+        });
         const data = await parseJsonSafe(res);
         if(!data.__ok && data.error){ throw new Error(data.error); }
         status.textContent = 'Gesendet';
@@ -4068,8 +4090,23 @@ function ensureInboxContextMenu(){
     document.getElementById('load_more_btn').addEventListener('click', loadMoreEmails);
     const proposeBtn = document.getElementById('btn_propose');
     const sendBtn = document.getElementById('btn_send');
+    const attachBtn = document.getElementById('btn_attach');
+    const attachInput = document.getElementById('compose_attachments');
+    const attachList = document.getElementById('compose_attachments_list');
     if(sendBtn){
       sendBtn.addEventListener('click', sendDraft);
+    }
+    if(attachBtn && attachInput){
+      attachBtn.addEventListener('click', () => attachInput.click());
+      attachInput.addEventListener('change', () => {
+        if(!attachList) return;
+        const files = Array.from(attachInput.files || []);
+        if(!files.length){
+          attachList.textContent = '';
+          return;
+        }
+        attachList.textContent = files.map(f => `📎 ${f.name}`).join('  ·  ');
+      });
     }
     if(proposeBtn){
       proposeBtn.addEventListener('click', async () => {

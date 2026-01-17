@@ -2265,16 +2265,38 @@ def api_emails_rewrite_draft(current_user):
 @app.route('/api/emails/send', methods=['POST'])
 @require_auth
 def api_emails_send(current_user):
-    """Versendet eine Mail (HTML). Request: { to, subject, html, account_id } """
+    """Versendet eine Mail (HTML) optional mit Anhängen.
+
+    Erwartet multipart/form-data oder JSON mit Feldern:
+      - to
+      - subject
+      - html
+      - account_id
+      - reply_to_uid (optional)
+      - attachments (0..n Dateien)
+    """
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
-    data = request.get_json(silent=True) or {}
-    to_addr = data.get('to')
-    subject = data.get('subject') or ''
-    html = data.get('html') or ''
-    account_id = data.get('account_id')
-    reply_to_uid = data.get('reply_to_uid')
+    from email.mime.base import MIMEBase
+    from email import encoders
+
+    if request.content_type and request.content_type.startswith('multipart/form-data'):
+        form = request.form
+        to_addr = form.get('to')
+        subject = form.get('subject') or ''
+        html = form.get('html') or ''
+        account_id = form.get('account_id')
+        reply_to_uid = form.get('reply_to_uid')
+        files = request.files.getlist('attachments') or []
+    else:
+        data = request.get_json(silent=True) or {}
+        to_addr = data.get('to')
+        subject = data.get('subject') or ''
+        html = data.get('html') or ''
+        account_id = data.get('account_id')
+        reply_to_uid = data.get('reply_to_uid')
+        files = []
     if not to_addr or not html:
         return jsonify({'error': 'to und html sind erforderlich'}), 400
     
@@ -2360,12 +2382,23 @@ def api_emails_send(current_user):
         app.logger.warning(f"[Send] Could not load/apply signature: {e}")
 
     try:
-        msg = MIMEMultipart('alternative')
+        msg = MIMEMultipart('mixed')
         msg['Subject'] = subject
         msg['From'] = from_addr
         msg['To'] = to_addr
         part = MIMEText(html, 'html', 'utf-8')
         msg.attach(part)
+
+        # Anhänge anfügen
+        for f in files:
+            try:
+                payload = MIMEBase('application', 'octet-stream')
+                payload.set_payload(f.read())
+                encoders.encode_base64(payload)
+                payload.add_header('Content-Disposition', 'attachment', filename=f.filename)
+                msg.attach(payload)
+            except Exception as e_att:
+                app.logger.warning(f"[Send] Attachment '{getattr(f, 'filename', '?')}' could not be attached: {e_att}")
 
         def _send_ssl():
             app.logger.debug(f"[Send] Trying SSL on {smtp_host}:{smtp_port}")
