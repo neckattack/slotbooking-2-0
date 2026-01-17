@@ -123,13 +123,10 @@
     }
     /* Antwortstil-Panel: volle Spaltenbreite für die Slider im modernen Card-Look */
     #compose_reply_prefs_block { width:100%; box-sizing:border-box; border-radius:14px; border:1px solid #e5e7eb; background:#f9fafb; padding:10px 12px 12px; }
-    #compose_reply_prefs_block label {
-      width:100%;
-    }
     #compose_reply_prefs_block input[type="range"] {
-      width:100%;
+      width:calc(100% + 16px);
       display:block;
-      margin:0; /* Slider nutzt die komplette Card-Breite innerhalb des Paddings */
+      margin:0 -8px; /* Slider zieht sich optisch von Card-Rand zu Card-Rand */
     }
     .muted { color:var(--sub); }
     .sub { color:var(--sub); font-size:13px; }
@@ -392,16 +389,25 @@
             <div id="compose_topics_mirror" class="sub" style="margin-top:0; font-size:11px; overflow:auto;"></div>
           </div>
         </div>
-        <!-- Debug-Panel für das Antwortmodul: zeigt Rohwerte aus contacts.reply_* -->
+        <!-- Debug-Panel für das Antwortmodul: zeigt Rohwerte aus contacts und reply_prefs -->
         <div id="compose_debug_block" class="sub" style="margin-top:8px; font-size:11px; color:#111827; border-radius:10px; border:1px dashed #cbd5f5; background:#eff6ff; padding:8px 10px;">
           <div style="font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
             <span>🛠️ Debug Antwortmodul</span>
-            <span style="font-size:10px; color:#6b7280;">(Begrüßung &amp; Schluss direkt aus der contacts-Tabelle)</span>
+            <span style="font-size:10px; color:#6b7280;">(Rohwerte aus contacts / reply_prefs)</span>
           </div>
-          <div style="display:flex; flex-direction:column; gap:2px;">
-            <div><span class="muted">reply_greeting_template:</span> <span id="compose_debug_greeting" style="font-family:monospace; font-size:10px;">(noch nicht geladen)</span></div>
-            <div><span class="muted">reply_closing_template:</span> <span id="compose_debug_closing" style="font-family:monospace; font-size:10px;">(noch nicht geladen)</span></div>
+          <div style="display:flex; flex-direction:column; gap:2px; font-size:10px; font-family:monospace;">
+            <div><span class="muted">contact_id:</span> <span id="compose_debug_contact_id">(noch nicht geladen)</span></div>
+            <div><span class="muted">contact_email:</span> <span id="compose_debug_contact_email">(noch nicht geladen)</span></div>
+            <div><span class="muted">contact_name:</span> <span id="compose_debug_contact_name">(noch nicht geladen)</span></div>
+            <div><span class="muted">style_source:</span> <span id="compose_debug_style_source">(noch nicht geladen)</span></div>
+            <div><span class="muted">length_level:</span> <span id="compose_debug_length">(noch nicht geladen)</span></div>
+            <div><span class="muted">formality_level:</span> <span id="compose_debug_formality">(noch nicht geladen)</span></div>
+            <div><span class="muted">salutation_mode:</span> <span id="compose_debug_salutation">(noch nicht geladen)</span></div>
+            <div><span class="muted">persona_mode:</span> <span id="compose_debug_persona">(noch nicht geladen)</span></div>
+            <div><span class="muted">reply_greeting_template:</span> <span id="compose_debug_greeting">(noch nicht geladen)</span></div>
+            <div><span class="muted">reply_closing_template:</span> <span id="compose_debug_closing">(noch nicht geladen)</span></div>
           </div>
+          <div id="compose_debug_warnings" style="margin-top:4px; font-size:10px; color:#b45309; white-space:pre-wrap;"></div>
         </div>
       </div>
     </div>
@@ -3529,6 +3535,15 @@ function ensureInboxContextMenu(){
       const labelEl = document.getElementById('compose_reply_prefs_label');
       const dbgGreetingEl = document.getElementById('compose_debug_greeting');
       const dbgClosingEl = document.getElementById('compose_debug_closing');
+      const dbgContactIdEl = document.getElementById('compose_debug_contact_id');
+      const dbgContactEmailEl = document.getElementById('compose_debug_contact_email');
+      const dbgContactNameEl = document.getElementById('compose_debug_contact_name');
+      const dbgStyleSourceEl = document.getElementById('compose_debug_style_source');
+      const dbgLengthEl = document.getElementById('compose_debug_length');
+      const dbgFormalityEl = document.getElementById('compose_debug_formality');
+      const dbgSalutationEl = document.getElementById('compose_debug_salutation');
+      const dbgPersonaEl = document.getElementById('compose_debug_persona');
+      const dbgWarningsEl = document.getElementById('compose_debug_warnings');
       const lenInput = document.getElementById('cmp_length');
       const formInput = document.getElementById('cmp_formality');
       const lenLabel = document.getElementById('cmp_length_label');
@@ -3541,12 +3556,6 @@ function ensureInboxContextMenu(){
 
       if(!blockEl){ return; }
 
-      // Lange Erklärung unter den Buttons im Produktivmodus ausblenden –
-      // die Slider/Statuszeile erklären den Stil bereits ausreichend.
-      if(labelEl){
-        labelEl.style.display = 'none';
-      }
-
       // Basis-Initialisierung der Slider-Labels
       if(lenInput && lenLabel){ lenLabel.textContent = cmpLabelForLength(lenInput.value); }
       if(formInput && formLabel){ formLabel.textContent = cmpLabelForFormality(formInput.value); }
@@ -3556,8 +3565,10 @@ function ensureInboxContextMenu(){
           statusEl.textContent = 'Antwortstil: Kontakt unbekannt, es gelten globale Defaults.';
           statusEl.style.color = '#6b7280';
         }
+        if(dbgContactIdEl){ dbgContactIdEl.textContent = '(kein Kontakt)'; }
         if(dbgGreetingEl){ dbgGreetingEl.textContent = '(kein Kontakt / keine Daten)'; }
         if(dbgClosingEl){ dbgClosingEl.textContent = '(kein Kontakt / keine Daten)'; }
+        if(dbgWarningsEl){ dbgWarningsEl.textContent = 'Hinweis: Kein Kontakt verknüpft – Reply-Prefs können nicht geladen werden.'; }
         return;
       }
 
@@ -3590,28 +3601,6 @@ function ensureInboxContextMenu(){
           style_source: prefs.style_source || 'default'
         };
 
-        // Falls keine explizite Anrede/Perspektive gespeichert ist, heuristisch
-        // aus den Templates ableiten, damit die Toggles trotzdem "voreingestellt"
-        // sichtbar sind.
-        try{
-          if(!currentReplyPrefs.salutation_mode){
-            const gt = (currentReplyPrefs.greeting_template || '').toLowerCase();
-            if(gt.includes('sehr geehr') || gt.includes('guten tag')){
-              currentReplyPrefs.salutation_mode = 'sie';
-            } else if(gt.includes('hallo') || gt.includes('hey ') || gt.includes('hi ')){
-              currentReplyPrefs.salutation_mode = 'du';
-            }
-          }
-          if(!currentReplyPrefs.persona_mode){
-            const ct = (currentReplyPrefs.closing_template || '').toLowerCase();
-            if(ct.includes('wir')){
-              currentReplyPrefs.persona_mode = 'wir';
-            } else if(ct){
-              currentReplyPrefs.persona_mode = 'ich';
-            }
-          }
-        }catch(_e_infer){}
-
         // Slider-Werte setzen
         if(lenInput){
           const v = currentReplyPrefs.length_level || 3;
@@ -3624,7 +3613,7 @@ function ensureInboxContextMenu(){
           if(formLabel) formLabel.textContent = cmpLabelForFormality(v);
         }
 
-        // Toggles setzen (inkl. evtl. heuristisch abgeleitetem Wert)
+        // Toggles setzen
         cmpSelectedSal = (currentReplyPrefs.salutation_mode || '').toLowerCase() || null;
         cmpSetToggleActive(salDu, cmpSelectedSal === 'du');
         cmpSetToggleActive(salSie, cmpSelectedSal === 'sie');
@@ -3633,29 +3622,61 @@ function ensureInboxContextMenu(){
         cmpSetToggleActive(persIch, cmpSelectedPers === 'ich');
         cmpSetToggleActive(persWir, cmpSelectedPers === 'wir');
 
-        // Debug-Werte für Begrüßung/Schluss anzeigen – falls keine Templates
-        // in der contacts-Tabelle hinterlegt sind, eine sinnvolle Vorschau
-        // aus den aktuellen Einstellungen bauen.
+        if(labelEl){
+          labelEl.textContent = formatReplyPrefsLabel(currentReplyPrefs, emailSummary && emailSummary.contact_name, emailSummary && emailSummary.from);
+        }
+
+        // Debug-Felder: Rohwerte aus Kontakt + Reply-Prefs anzeigen
         const contactName = (emailSummary && emailSummary.contact_name) || '';
         const fromAddr = (emailSummary && emailSummary.from) || '';
-        const fallbackName = contactName || (fromAddr.split('<')[0] || '').trim() || 'Kunde';
+        const fromEmailMatch = /<([^>]+)>/.exec(fromAddr);
+        const fromEmail = fromEmailMatch ? fromEmailMatch[1] : (fromAddr || '');
 
-        const salMode = (currentReplyPrefs.salutation_mode || '').toLowerCase();
-        const greetingWord = salMode === 'sie' ? 'Guten Tag' : 'Hallo';
+        if(dbgContactIdEl){ dbgContactIdEl.textContent = String(contactId); }
+        if(dbgContactEmailEl){ dbgContactEmailEl.textContent = fromEmail || '(unbekannt)'; }
+        if(dbgContactNameEl){ dbgContactNameEl.textContent = contactName || '(unbekannt)'; }
+        if(dbgStyleSourceEl){ dbgStyleSourceEl.textContent = currentReplyPrefs.style_source || '(unbekannt)'; }
+        if(dbgLengthEl){ dbgLengthEl.textContent = (currentReplyPrefs.length_level != null ? String(currentReplyPrefs.length_level) : '(NULL)'); }
+        if(dbgFormalityEl){ dbgFormalityEl.textContent = (currentReplyPrefs.formality_level != null ? String(currentReplyPrefs.formality_level) : '(NULL)'); }
+        if(dbgSalutationEl){ dbgSalutationEl.textContent = currentReplyPrefs.salutation_mode || '(NULL)'; }
+        if(dbgPersonaEl){ dbgPersonaEl.textContent = currentReplyPrefs.persona_mode || '(NULL)'; }
 
         if(dbgGreetingEl){
-          const v = (currentReplyPrefs.greeting_template || '').trim();
-          dbgGreetingEl.textContent = v || `${greetingWord} ${fallbackName},`;
+          const v = currentReplyPrefs.greeting_template;
+          dbgGreetingEl.textContent = v ? String(v) : '(NULL / nicht gesetzt)';
         }
         if(dbgClosingEl){
-          const v = (currentReplyPrefs.closing_template || '').trim();
-          dbgClosingEl.textContent = v || 'Viele Grüße';
+          const v = currentReplyPrefs.closing_template;
+          dbgClosingEl.textContent = v ? String(v) : '(NULL / nicht gesetzt)';
         }
 
         if(statusEl){
           const src = currentReplyPrefs.style_source || 'default/auto';
           statusEl.textContent = `Quelle: ${src}`;
           statusEl.style.color = '#6b7280';
+        }
+
+        // Wichtige Hinweise/Warnungen für die manuelle Kontrolle sammeln
+        if(dbgWarningsEl){
+          const warnings = [];
+          if(!fromEmail){
+            warnings.push('- Kein Absender / keine Kontakt-E-Mail erkannt.');
+          }
+          if(currentReplyPrefs.length_level == null && currentReplyPrefs.formality_level == null &&
+             !currentReplyPrefs.salutation_mode && !currentReplyPrefs.persona_mode){
+            warnings.push('- Keine Reply-Prefs gesetzt (alle Werte NULL).');
+          }
+          if(currentReplyPrefs.salutation_mode && !['du','sie'].includes(currentReplyPrefs.salutation_mode.toLowerCase())){
+            warnings.push(`- salutation_mode hat einen unerwarteten Wert: "${currentReplyPrefs.salutation_mode}"`);
+          }
+          if(currentReplyPrefs.persona_mode && !['ich','wir'].includes(currentReplyPrefs.persona_mode.toLowerCase())){
+            warnings.push(`- persona_mode hat einen unerwarteten Wert: "${currentReplyPrefs.persona_mode}"`);
+          }
+          if(!currentReplyPrefs.greeting_template && !currentReplyPrefs.closing_template){
+            warnings.push('- Weder greeting_template noch closing_template gesetzt.');
+          }
+
+          dbgWarningsEl.textContent = warnings.length ? warnings.join('\n') : '';
         }
 
         function scheduleComposePrefsAutosave(){
