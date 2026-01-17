@@ -6439,7 +6439,10 @@ def api_emails_thread(current_user):
         M = imaplib.IMAP4_SSL(host, port)
         M.login(user, pw)
         M.select(mailbox)
-        typ, msgdata = M.uid('fetch', uid, '(RFC822)')
+        # Wichtig: BODY.PEEK[] verwenden, damit das reine Lesen der Nachricht
+        # nicht automatisch das IMAP-Flag \\Seen setzt. Das Gelesen-Flag wird
+        # in unserer App ausschließlich über /api/emails/seen gesteuert.
+        typ, msgdata = M.uid('fetch', uid, '(BODY.PEEK[])')
         if typ != 'OK' or not msgdata or not msgdata[0]:
             raise RuntimeError('Fetch fehlgeschlagen')
         raw = msgdata[0][1] if isinstance(msgdata[0], tuple) else msgdata[0]
