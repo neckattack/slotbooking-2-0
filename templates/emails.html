@@ -2314,13 +2314,10 @@ function ensureInboxContextMenu(){
               </div>
               <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:8px;">
                 <div id="contact_quick_card" class="sub" style="flex:1; max-width:48%; font-size:16px; padding:10px 12px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
-                  <div style="font-weight:600; margin-bottom:4px;">Überblick</div>
-                  <div id="qc_name" style="margin-bottom:2px;"><span style="font-weight:500;">Name:</span> <span class="muted">Lade...</span></div>
                   <div id="qc_now" style="margin-bottom:2px;"><span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span></div>
                   <div id="qc_topics" style="margin-bottom:2px;"><span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span></div>
                   <div id="qc_reply" style="margin-bottom:2px;"><span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span></div>
                   <div id="qc_reply_mode" style="margin-bottom:2px;"><span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Lade...</span></div>
-                  <div id="qc_tone" style="margin-bottom:2px;"><span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span></div>
                   <div id="qc_timeline" style="margin-top:4px;"><span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span></div>
                 </div>
                 <div id="reply_prep_topics" class="sub" style="flex:0 0 380px; font-size:13px; padding:8px 10px; border-radius:6px; background:#f9fafb; border:1px dashed #d1d5db; max-height:260px; overflow:auto;"></div>
@@ -3109,26 +3106,22 @@ function ensureInboxContextMenu(){
           window.quickCardCache = window.quickCardCache || {};
 
           const qcBox = document.getElementById('contact_quick_card');
-          const qcName = document.getElementById('qc_name');
           const qcNow = document.getElementById('qc_now');
           const qcTopics = document.getElementById('qc_topics');
           const qcReply = document.getElementById('qc_reply');
           const qcReplyMode = document.getElementById('qc_reply_mode');
-          const qcTone = document.getElementById('qc_tone');
           const qcTimeline = document.getElementById('qc_timeline');
           const topicDetailPanel = document.getElementById('contact_topic_detail_panel');
 
           function renderQuickCard(data){
-            if(!qcBox || !qcName || !qcNow || !qcTopics || !qcReply || !qcTone || !qcTimeline){
+            if(!qcBox || !qcNow || !qcTopics || !qcReply || !qcReplyMode || !qcTimeline){
               return;
             }
             if(!data.__ok){
-              qcName.innerHTML = '<span class="muted">Keine Profildaten verfügbar</span>';
               qcNow.innerHTML = '<span class="muted">Keine aktuellen Hinweise</span>';
               qcTopics.innerHTML = '<span class="muted">Keine offenen Themen</span>';
               qcReply.style.display = 'none';
-              qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Unklar</span>';
-              qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Unbekannt</span>';
+              qcReplyMode.style.display = 'none';
               qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Keine Einträge</span>';
               return;
             }
@@ -3213,14 +3206,18 @@ function ensureInboxContextMenu(){
               qcTopics.innerHTML = '<div style="margin-top:8px;"><span style="font-weight:600;">Offene Themen:</span> <span class="muted">Keine offenen Themen</span></div>';
             }
 
-            // Antwortmodus und Ton wie bisher
-            let replyModeLabel = 'Unklar';
-            if(replyMode === 'last_only') replyModeLabel = 'Nur letzte E-Mail beantworten';
-            else if(replyMode === 'last_plus_reminder') replyModeLabel = 'Letzte E-Mail + kurzes Erinnern an ein offenes Thema';
-            else if(replyMode === 'follow_up_old_issue') replyModeLabel = 'Altes offenes Thema proaktiv aufgreifen';
-            qcReplyMode.innerHTML = `<div style="margin-top:8px;"><span style="font-weight:600;">Antwort-Modus:</span> <span>${escapeHtml(replyModeLabel)}</span></div>`;
-            qcReply.style.display = 'none';
-            qcTone.innerHTML = `<div style="margin-top:4px;"><span style="font-weight:600;">Ton &amp; Stil:</span> <span>${tone ? escapeHtml(tone) : '<span class=\"muted\">Unbekannt</span>'}</span></div>`;
+            // Antwort-Modus nur anzeigen, wenn das Backend einen sinnvollen Wert liefert.
+            if(replyMode){
+              let replyModeLabel = '';
+              if(replyMode === 'last_only') replyModeLabel = 'Nur letzte E-Mail beantworten';
+              else if(replyMode === 'last_plus_reminder') replyModeLabel = 'Letzte E-Mail + kurzes Erinnern an ein offenes Thema';
+              else if(replyMode === 'follow_up_old_issue') replyModeLabel = 'Altes offenes Thema proaktiv aufgreifen';
+              else replyModeLabel = replyMode;
+              qcReplyMode.style.display = 'block';
+              qcReplyMode.innerHTML = `<div style="margin-top:8px;"><span style="font-weight:600;">Antwort-Modus:</span> <span>${escapeHtml(replyModeLabel)}</span></div>`;
+            } else {
+              qcReplyMode.style.display = 'none';
+            }
 
             // Timeline (Kurz)
             if(timelineTopics.length){
@@ -3305,7 +3302,7 @@ function ensureInboxContextMenu(){
             }
           }
 
-          if(qcBox && qcName && qcNow && qcTopics && qcReply && qcTone && qcTimeline){
+          if(qcBox && qcNow && qcTopics && qcReplyMode && qcTimeline){
             qcBox.style.display = 'block';
 
             const cached = window.quickCardCache[contactIdStr];
@@ -3314,7 +3311,6 @@ function ensureInboxContextMenu(){
               renderQuickCard(cached);
             } else {
               // Erstladen: Platzhalter anzeigen und Quick-Card vom Server holen
-              qcName.innerHTML = '<span style="font-weight:500;">Name:</span> <span class="muted">Lade...</span>';
               qcNow.innerHTML = '<span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span>';
               qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span>';
               qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span>';
