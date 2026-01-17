@@ -1219,8 +1219,13 @@ def api_emails_agent_compose(current_user):
             try:
                 contact_id = row.get('contact_id')
                 contact_email = row.get('contact_email') or row.get('from_addr') or ''
-                style_source = (row.get('reply_style_source') or '').strip()
-                if not contact_id or style_source:
+                style_source_raw = (row.get('reply_style_source') or '').strip()
+                style_source = style_source_raw.lower()
+                # Nur abbrechen, wenn bereits eine echte Quelle gesetzt wurde.
+                # Werte wie "" oder "default" bedeuten: noch keine History/Manual-Werte vorhanden.
+                if not contact_id:
+                    return {}
+                if style_source in ('history', 'history_llm', 'manual'):
                     return {}
 
                 conn_h = get_settings_db_connection()
