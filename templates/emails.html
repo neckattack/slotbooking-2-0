@@ -371,12 +371,12 @@
           <div class="compose-main">
             <div class="row"><label>Empf.</label><input id="compose_to" placeholder="Empfänger" /></div>
             <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
-            <div style="margin:4px 0 6px; display:flex; align-items:center; justify-content:flex-end; gap:6px; font-size:11px; color:#6b7280;">
-              <button id="btn_attach" type="button" class="px-2 py-1 rounded-full border border-slate-300 bg-white text-slate-800 text-xs inline-flex items-center gap-1 hover:bg-slate-50" title="Anhang hinzufügen">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                  <path d="M21.44 11.05 12 20.5a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95L9.88 18.38a2 2 0 0 1-2.83-2.83L15.07 7.5"/>
-                </svg>
-                <span>Anhang hinzufügen</span>
+            <div style="margin:4px 0 6px; display:flex; align-items:center; justify-content:flex-end; gap:8px; font-size:11px; color:#6b7280;">
+              <button id="btn_translate" type="button" class="inline-flex items-center justify-center" style="border:none; background:transparent; padding:2px; cursor:pointer; color:#4b5563;" title="Entwurf in Kontaktsprache übersetzen">
+                <span>${window.getIconSvg ? window.getIconSvg('languages', { size: 18 }) : '🌐'}</span>
+              </button>
+              <button id="btn_attach" type="button" class="inline-flex items-center justify-center" style="border:none; background:transparent; padding:2px; cursor:pointer; color:#4b5563;" title="Anhang hinzufügen">
+                <span>${window.getIconSvg ? window.getIconSvg('paperclip', { size: 18 }) : '📎'}</span>
               </button>
               <input id="compose_attachments" type="file" multiple style="display:none;" />
               <span id="compose_attachments_list" class="sub" style="font-size:11px; color:#6b7280; max-width:60%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>
@@ -3111,6 +3111,7 @@ function ensureInboxContextMenu(){
           const qcReply = document.getElementById('qc_reply');
           const qcReplyMode = document.getElementById('qc_reply_mode');
           const qcTimeline = document.getElementById('qc_timeline');
+          const qcTone = document.getElementById('qc_tone');
           const topicDetailPanel = document.getElementById('contact_topic_detail_panel');
 
           function renderQuickCard(data){
@@ -3315,7 +3316,9 @@ function ensureInboxContextMenu(){
               qcTopics.innerHTML = '<span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span>';
               qcReply.innerHTML = '<span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span>';
               qcReplyMode.innerHTML = '<span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Lade...</span>';
-              qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span>';
+              if(qcTone){
+                qcTone.innerHTML = '<span style="font-weight:500;">Ton &amp; Stil:</span> <span class="muted">Lade...</span>';
+              }
               qcTimeline.innerHTML = '<span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span>';
               fetch(`/api/contacts/${t.contact_id}/quick-card`, { headers: getAuthHeaders() })
                 .then(res => parseJsonSafe(res))
@@ -4091,6 +4094,7 @@ function ensureInboxContextMenu(){
     const proposeBtn = document.getElementById('btn_propose');
     const sendBtn = document.getElementById('btn_send');
     const attachBtn = document.getElementById('btn_attach');
+    const translateBtn = document.getElementById('btn_translate');
     const attachInput = document.getElementById('compose_attachments');
     const attachList = document.getElementById('compose_attachments_list');
     if(sendBtn){
@@ -4106,6 +4110,43 @@ function ensureInboxContextMenu(){
           return;
         }
         attachList.textContent = files.map(f => `📎 ${f.name}`).join('  ·  ');
+      });
+    }
+    if(translateBtn){
+      translateBtn.addEventListener('click', async () => {
+        try{
+          const editor = document.getElementById('compose_editor');
+          const status = document.getElementById('compose_status');
+          if(!editor || !currentUid){
+            if(status) status.textContent = 'Keine E-Mail ausgewählt.';
+            return;
+          }
+          const htmlNow = (editor.innerHTML || '').trim();
+          if(!htmlNow){
+            if(status) status.textContent = 'Nichts zum Übersetzen.';
+            return;
+          }
+          if(status) status.textContent = 'Übersetze Entwurf …';
+          const res = await fetch('/api/emails/translate-draft', {
+            method:'POST',
+            headers:{...getAuthHeaders(), 'Content-Type':'application/json'},
+            body: JSON.stringify({ uid: currentUid, html: htmlNow })
+          });
+          const data = await parseJsonSafe(res);
+          if(!data.__ok){
+            throw new Error(data.error || 'Übersetzung fehlgeschlagen');
+          }
+          const translated = data.html || '';
+          if(translated){
+            editor.innerHTML = translated;
+            if(status) status.textContent = 'Entwurf übersetzt.';
+          } else if(status){
+            status.textContent = 'Keine Übersetzung erhalten.';
+          }
+        }catch(e){
+          const status = document.getElementById('compose_status');
+          if(status) status.textContent = 'Fehler bei Übersetzung: ' + e.message;
+        }
       });
     }
     if(proposeBtn){
