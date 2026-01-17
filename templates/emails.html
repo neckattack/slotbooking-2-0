@@ -3819,21 +3819,50 @@ function ensureInboxContextMenu(){
       if(!isComposeEmpty()) return; // nichts überschreiben, falls schon Inhalt da ist
 
       // Kontaktname & E-Mail aus dem aktuellen Kontext
-      const name = (currentContactName || '').trim();
+      const fullName = (currentContactName || '').trim();
       const email = (currentContactEmail || '').trim();
-      const displayName = name || (email ? email.split('@')[0] : 'Kunde');
+      const displayName = fullName || (email ? email.split('@')[0] : 'Kunde');
 
       // Aus Reply-Prefs (falls geladen) ableiten, ob eher Du oder Sie benutzt wird.
-      let greetingWord = 'Hallo';
+      let salMode = null;
       try{
-        const sal = (currentReplyPrefs && currentReplyPrefs.salutation_mode || '').toLowerCase();
-        if(sal === 'sie'){
-          greetingWord = 'Guten Tag';
-        }
+        salMode = (currentReplyPrefs && currentReplyPrefs.salutation_mode || '').toLowerCase() || null;
       }catch(_e_sal){}
 
-      const greetingHtml = `<p>${greetingWord} ${escapeHtml(displayName)},</p>`;
-      const closingHtml = '<p>Viele Grüße</p>';
+      // Für Du-Anrede den Vornamen verwenden, falls möglich.
+      let firstName = '';
+      if(fullName){
+        const parts = fullName.split(/\s+/).filter(Boolean);
+        if(parts.length > 0){
+          firstName = parts[0];
+        }
+      }
+      const nameForTemplate = salMode === 'du' ? (firstName || displayName) : displayName;
+
+      // Begrüßung aus Reply-Prefs, falls vorhanden; sonst einfacher Fallback
+      let greetingText = '';
+      if(currentReplyPrefs && currentReplyPrefs.greeting_template){
+        let tpl = String(currentReplyPrefs.greeting_template || '');
+        tpl = tpl.replace(/<\s*Name\s*>/gi, nameForTemplate || '');
+        greetingText = tpl;
+      } else {
+        let greetingWord = 'Hallo';
+        if(salMode === 'sie'){
+          greetingWord = 'Guten Tag';
+        }
+        greetingText = `${greetingWord} ${nameForTemplate || displayName},`;
+      }
+
+      // Abschluss aus Reply-Prefs, falls vorhanden; sonst Fallback.
+      let closingText = '';
+      if(currentReplyPrefs && currentReplyPrefs.closing_template){
+        closingText = String(currentReplyPrefs.closing_template || '');
+      } else {
+        closingText = 'Viele Grüße';
+      }
+
+      const greetingHtml = `<p>${escapeHtml(greetingText)}</p>`;
+      const closingHtml = `<p>${escapeHtml(closingText)}</p>`;
 
       // Optional vorbereitete Signatur aus den Einstellungen anhängen
       let signatureBlock = '';
