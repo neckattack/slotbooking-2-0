@@ -3116,6 +3116,7 @@ function ensureInboxContextMenu(){
           window.quickCardCache = window.quickCardCache || {};
 
           const qcBox = document.getElementById('contact_quick_card');
+          const qcName = document.getElementById('qc_name');
           const qcNow = document.getElementById('qc_now');
           const qcTopics = document.getElementById('qc_topics');
           const qcReply = document.getElementById('qc_reply');
@@ -3339,7 +3340,9 @@ function ensureInboxContextMenu(){
                 })
                 .catch(err => {
                   console.error('Quick-Card konnte nicht geladen werden:', err);
-                  qcName.innerHTML = '<span class="muted">Keine Profildaten verfügbar</span>';
+                  if(qcName){
+                    qcName.innerHTML = '<span class="muted">Keine Profildaten verfügbar</span>';
+                  }
                   qcNow.innerHTML = '<span class="muted">Keine aktuellen Hinweise</span>';
                   qcTopics.innerHTML = '<span class="muted">Keine offenen Themen</span>';
                   qcReply.innerHTML = '';
