@@ -3861,6 +3861,19 @@ function ensureInboxContextMenu(){
         closingText = 'Viele Grüße';
       }
 
+      // Eigener Name als Platzhalterersatz (z.B. "LG <Eigenes Name>")
+      try{
+        const user = getCurrentUser && getCurrentUser();
+        let selfName = '';
+        if(user){
+          selfName = (user.first_name || user.name || user.full_name || '').trim();
+        }
+        if(selfName){
+          closingText = closingText.replace(/<\s*Eigenes\s+Name\s*>/gi, selfName)
+                                   .replace(/<\s*Eigener\s+Name\s*>/gi, selfName);
+        }
+      }catch(_e_self){}
+
       const greetingHtml = `<p>${escapeHtml(greetingText)}</p>`;
       const closingHtml = `<p>${escapeHtml(closingText)}</p>`;
 
