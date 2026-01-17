@@ -1484,11 +1484,15 @@ function ensureInboxContextMenu(){
       //  - all: keine Einschränkung
       //  - unanswered: Mails ohne is_replied
       //  - answered: Mails, die bereits beantwortet wurden (is_replied === 1)
+      // Wichtig: Bei aktiver Suche (q != '') KEIN Antwort-Filtering, damit alle
+      // Suchtreffer sichtbar sind, unabhängig von beantwortet/unbeantwortet.
       let answerFiltered = baseFiltered;
-      if(inboxAnswerFilter === 'unanswered'){
-        answerFiltered = baseFiltered.filter(it => !it.is_replied);
-      } else if(inboxAnswerFilter === 'answered'){
-        answerFiltered = baseFiltered.filter(it => !!it.is_replied);
+      if(!q){
+        if(inboxAnswerFilter === 'unanswered'){
+          answerFiltered = baseFiltered.filter(it => !it.is_replied);
+        } else if(inboxAnswerFilter === 'answered'){
+          answerFiltered = baseFiltered.filter(it => !!it.is_replied);
+        }
       }
 
       const filtered = answerFiltered.filter(it => {
