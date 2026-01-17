@@ -2504,22 +2504,15 @@ function ensureInboxContextMenu(){
                   const esc = snippet.replace(/\n/g, '<br>');
                   const wrapped = `<span class="reply-snippet" data-topic-id="${tId}" data-opt-id="${oId}">${esc}</span>`;
 
-                  // Versuchen, die Antwort zwischen Begrüßung und Abschluss zu platzieren.
-                  // Wir suchen nach einem Absatz mit typischer Abschlussformel und fügen
-                  // das Snippet direkt DAVOR ein. Falls nichts gefunden wird, ans Ende anhängen.
-                  let inserted = false;
-                  const paras = editor.querySelectorAll('p');
-                  for(const p of paras){
-                    const txt = (p.textContent || '').toLowerCase();
-                    if(txt.includes('viele grüße') || txt.includes('mit freundlichen grüßen')){
-                      p.insertAdjacentHTML('beforebegin', `<p>${wrapped}</p>`);
-                      inserted = true;
-                      break;
-                    }
+                  // Bevorzugt: Immer direkt vor dem Abschluss-Absatz (data-role="closing") einfügen.
+                  let closingP = editor.querySelector('p[data-role="closing"]');
+                  if(closingP){
+                    closingP.insertAdjacentHTML('beforebegin', `<p>${wrapped}</p>`);
+                    return;
                   }
-                  if(!inserted){
-                    editor.insertAdjacentHTML('beforeend', `<p>${wrapped}</p>`);
-                  }
+
+                  // Fallback, falls kein markierter Abschluss vorhanden ist: wie bisher ans Ende anhängen.
+                  editor.insertAdjacentHTML('beforeend', `<p>${wrapped}</p>`);
                 }
 
                 let topicsHtml = '';
@@ -3878,8 +3871,8 @@ function ensureInboxContextMenu(){
         }
       }catch(_e_self){}
 
-      const greetingHtml = `<p>${escapeHtml(greetingText)}</p>`;
-      const closingHtml = `<p>${escapeHtml(closingText)}</p>`;
+      const greetingHtml = `<p data-role="greeting">${escapeHtml(greetingText)}</p>`;
+      const closingHtml = `<p data-role="closing">${escapeHtml(closingText)}</p>`;
 
       // Optional vorbereitete Signatur aus den Einstellungen anhängen
       let signatureBlock = '';
