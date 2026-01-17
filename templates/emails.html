@@ -373,10 +373,20 @@
             <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
             <div style="margin:4px 0 6px; display:flex; align-items:center; justify-content:flex-end; gap:8px; font-size:11px; color:#6b7280;">
               <button id="btn_translate" type="button" class="inline-flex items-center justify-center" style="border:none; background:transparent; padding:2px; cursor:pointer; color:#4b5563;" title="Entwurf in Kontaktsprache übersetzen">
-                <span>${window.getIconSvg ? window.getIconSvg('languages', { size: 18 }) : '🌐'}</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <path d="m5 8 6 6"/>
+                  <path d="m4 14 6-6 2-3"/>
+                  <path d="M2 5h12"/>
+                  <path d="M7 2h1"/>
+                  <path d="m16 13 3 5 3-5"/>
+                  <path d="M19 11v1"/>
+                  <path d="M19 18v1"/>
+                </svg>
               </button>
               <button id="btn_attach" type="button" class="inline-flex items-center justify-center" style="border:none; background:transparent; padding:2px; cursor:pointer; color:#4b5563;" title="Anhang hinzufügen">
-                <span>${window.getIconSvg ? window.getIconSvg('paperclip', { size: 18 }) : '📎'}</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <path d="M21.44 11.05 12 20.5a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95L9.88 18.38a2 2 0 0 1-2.83-2.83L15.07 7.5"/>
+                </svg>
               </button>
               <input id="compose_attachments" type="file" multiple style="display:none;" />
               <span id="compose_attachments_list" class="sub" style="font-size:11px; color:#6b7280; max-width:60%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>

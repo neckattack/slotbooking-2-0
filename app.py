@@ -2437,18 +2437,86 @@ def api_emails_send(current_user):
                     # Raise the more specific error
                     raise e2
 
-        # Nach erfolgreichem Versand optional Ursprungs-Mail als beantwortet markieren
+        # Nach erfolgreichem Versand Ursprungs-Mail als beantwortet markieren (DB + IMAP-Flag \Answered)
         if reply_to_uid:
             try:
                 conn_reply = get_settings_db_connection()
-                cur_reply = conn_reply.cursor()
+                cur_reply = conn_reply.cursor(dictionary=True)
+                # 1) DB-Flag setzen und Message-ID + Account/FOLDER holen
                 cur_reply.execute(
-                    "UPDATE emails SET is_replied=1 WHERE id=%s AND user_email=%s",
+                    "SELECT id, message_id, account_id, folder FROM emails WHERE id=%s AND user_email=%s",
                     (reply_to_uid, user_email),
                 )
-                conn_reply.commit()
+                row_orig = cur_reply.fetchone()
+                if row_orig:
+                    cur_reply.execute(
+                        "UPDATE emails SET is_replied=1 WHERE id=%s AND user_email=%s",
+                        (reply_to_uid, user_email),
+                    )
+                    conn_reply.commit()
                 cur_reply.close()
                 conn_reply.close()
+
+                # 2) Best-Effort: IMAP-Flag \Answered anhand der Message-ID setzen
+                import imaplib
+                if row_orig and row_orig.get('message_id') and row_orig.get('account_id'):
+                    orig_message_id = row_orig['message_id']
+                    orig_account_id = row_orig['account_id']
+                    folder_db = (row_orig.get('folder') or 'inbox').lower()
+
+                    try:
+                        conn_acc = get_settings_db_connection()
+                        cur_acc = conn_acc.cursor(dictionary=True)
+                        cur_acc.execute(
+                            "SELECT imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security "
+                            "FROM email_accounts WHERE id=%s AND user_email=%s AND is_active=1",
+                            (orig_account_id, user_email),
+                        )
+                        acc = cur_acc.fetchone()
+                        cur_acc.close()
+                        conn_acc.close()
+
+                        if acc and acc.get('imap_host') and acc.get('imap_user'):
+                            from encryption_utils import decrypt_password
+
+                            host = acc['imap_host']
+                            port = int(acc.get('imap_port', 993))
+                            imap_user = acc['imap_user']
+                            pw = decrypt_password(acc['imap_pass_encrypted']) if acc['imap_pass_encrypted'] else ''
+
+                            if host and imap_user and pw:
+                                # Einfaches Folder-Mapping wie in api_emails_seen
+                                if folder_db == 'sent':
+                                    folder_imap = 'Sent'
+                                elif folder_db == 'archive':
+                                    folder_imap = 'Archive'
+                                else:
+                                    folder_imap = 'INBOX'
+
+                                M = imaplib.IMAP4_SSL(host, port, timeout=15)
+                                M.login(imap_user, pw)
+                                try:
+                                    try:
+                                        sel_typ, _ = M.select(f'"{folder_imap}"')
+                                    except imaplib.IMAP4.error:
+                                        sel_typ, _ = M.select(folder_imap)
+                                    if sel_typ == 'OK':
+                                        search_crit = f'(HEADER Message-ID "{orig_message_id}")'
+                                        typ, data = M.uid('search', None, search_crit)
+                                        if typ == 'OK' and data and data[0]:
+                                            for u in data[0].split():
+                                                M.uid('store', u, '+FLAGS.SILENT', '(\\Answered)')
+                                finally:
+                                    try:
+                                        M.close()
+                                    except Exception:
+                                        pass
+                                    M.logout()
+                    except Exception as e_imap:
+                        try:
+                            app.logger.warning(f"[Send] Could not set IMAP \\Answered flag: {e_imap}")
+                        except Exception:
+                            pass
             except Exception as e_upd:
                 app.logger.warning(f"[Send] Could not mark original email as replied (id={reply_to_uid}): {e_upd}")
 
