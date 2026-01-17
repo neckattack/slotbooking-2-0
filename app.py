@@ -3857,11 +3857,205 @@ def api_contacts_reply_prefs_get(current_user, contact_id):
             (contact_id, user_email),
         )
         row = cursor.fetchone()
-        cursor.close()
-        conn.close()
 
         if not row:
+            cursor.close()
+            conn.close()
             return jsonify({'error': 'Contact not found'}), 404
+
+        # Wenn irgendein Kernfeld fehlt, einmalig versuchen, per History-/LLM-Analyse
+        # sinnvolle Defaults zu setzen. Dies entspricht im Kern der Logik im
+        # Debug-Endpoint, schreibt aber die Werte in contacts.reply_*.
+        def _has_any_value(r: dict) -> bool:
+            return any([
+                r.get('reply_length_level') is not None,
+                r.get('reply_formality_level') is not None,
+                bool((r.get('reply_salutation_mode') or '').strip()),
+                bool((r.get('reply_persona_mode') or '').strip()),
+                bool((r.get('reply_greeting_template') or '').strip()),
+                bool((r.get('reply_closing_template') or '').strip()),
+            ])
+
+        needs_init = not _has_any_value(row)
+
+        if needs_init:
+            contact_email = row.get('contact_email') or ''
+            like_addr = f"%{contact_email}%" if contact_email else '%'
+
+            cur_h = conn.cursor(dictionary=True)
+            cur_h.execute(
+                """
+                SELECT body_text, body_html, from_addr, to_addrs, received_at
+                FROM emails
+                WHERE user_email = %s
+                  AND (to_addrs LIKE %s OR from_addr LIKE %s)
+                ORDER BY received_at DESC
+                LIMIT 20
+                """,
+                (user_email, like_addr, like_addr),
+            )
+            rows_em = cur_h.fetchall()
+
+            import re as _re_hist
+            import html as _html_hist
+            import json as _json_hist
+
+            def _html_to_text_hist(s: str) -> str:
+                if not s:
+                    return ''
+                s = _re_hist.sub(r'<\s*br\s*/?>', '\n', s, flags=_re_hist.IGNORECASE)
+                s = _re_hist.sub(r'</\s*p\s*>', '\n\n', s, flags=_re_hist.IGNORECASE)
+                s = _re_hist.sub(r'</\s*div\s*>', '\n', s, flags=_re_hist.IGNORECASE)
+                s = _re_hist.sub(r'</\s*li\s*>', '\n', s, flags=_re_hist.IGNORECASE)
+                s = _re_hist.sub(r'<[^>]+>', '', s)
+                s = _html_hist.unescape(s)
+                s = _re_hist.sub(r'\n\s*\n\s*\n+', '\n\n', s)
+                return s.strip()
+
+            snippets = []
+            for r in rows_em or []:
+                body = (r.get('body_text') or '').strip()
+                if not body:
+                    html_body = (r.get('body_html') or '').strip()
+                    if html_body:
+                        body = _html_to_text_hist(html_body)
+                if not body:
+                    continue
+                from_a = (r.get('from_addr') or '').strip()
+                to_a = (r.get('to_addrs') or '').strip()
+                direction = 'outgoing' if user_email and user_email in (from_a or '') else 'incoming'
+                snippets.append({
+                    'direction': direction,
+                    'from': from_a,
+                    'to': to_a,
+                    'text': body,
+                })
+
+            if snippets:
+                length_level = None
+                formality_level = None
+                salutation_mode = None
+                persona_mode = None
+                greeting_template = None
+                closing_template = None
+
+                try:
+                    contact_hint = contact_email or 'Kontakt'
+                    lines = [
+                        "Analysiere den folgenden Auszug einer E-Mail-Konversation zwischen UNS (wir/unser Team) und dem Kontakt " + contact_hint + ".",
+                        "Bestimme bitte:",
+                        "- ob wir den Kontakt typischerweise mit Du oder Sie anreden (salutation_mode)",
+                        "- ob wir eher in Ich- oder Wir-Form schreiben (persona_mode)",
+                        "- wie lang unsere Antworten typischerweise sind (length_level 1-5)",
+                        "- wie formell der Stil ist (formality_level 1-5)",
+                        "- einen typischen Begruessungssatz (greeting_template)",
+                        "- einen typischen Abschlusssatz (closing_template).",
+                        "Gib NUR ein JSON-Objekt ohne Erklaertext zurueck, z.B.:",
+                        '{"salutation_mode":"du","persona_mode":"ich","length_level":3,"formality_level":3,"greeting_template":"Hallo <Name>,","closing_template":"Viele Gruesse"}',
+                        "",
+                        "Konversation (neueste zuerst):",
+                    ]
+                    for s in snippets[:8]:
+                        prefix = "OUTGOING" if s['direction'] == 'outgoing' else "INCOMING"
+                        lines.append(f"[{prefix}] {s['text']}")
+
+                    prompt_text = "\n\n".join(lines)
+
+                    analysis_text, timed_out = _agent_respond_with_timeout(
+                        prompt_text,
+                        channel="email_style",
+                        user_email=user_email,
+                        timeout_s=10,
+                        agent_settings=None,
+                        contact_profile=None,
+                    )
+
+                    if not timed_out and analysis_text:
+                        try:
+                            parsed = _json_hist.loads(analysis_text.strip())
+                        except Exception:
+                            m = _re_hist.search(r"\{.*\}", analysis_text, flags=_re_hist.DOTALL)
+                            parsed = _json_hist.loads(m.group(0)) if m else {}
+
+                        if isinstance(parsed, dict):
+                            sm = (parsed.get('salutation_mode') or '').lower() or None
+                            if sm in ('du', 'sie'):
+                                salutation_mode = sm
+                            pm = (parsed.get('persona_mode') or '').lower() or None
+                            if pm in ('ich', 'wir'):
+                                persona_mode = pm
+                            ll = parsed.get('length_level')
+                            if isinstance(ll, int) and 1 <= ll <= 5:
+                                length_level = ll
+                            fl = parsed.get('formality_level')
+                            if isinstance(fl, int) and 1 <= fl <= 5:
+                                formality_level = fl
+                            gt = (parsed.get('greeting_template') or '').strip() or None
+                            ct = (parsed.get('closing_template') or '').strip() or None
+                            greeting_template = gt
+                            closing_template = ct
+
+                except Exception as e_llm:
+                    try:
+                        app.logger.warning(f"[Contact Reply Prefs GET history] LLM error: {e_llm}")
+                    except Exception:
+                        pass
+
+                # Wenn der LLM nichts geliefert hat, nicht schreiben
+                if any(v is not None for v in [length_level, formality_level, salutation_mode, persona_mode, greeting_template, closing_template]):
+                    cur_u = conn.cursor()
+                    cur_u.execute(
+                        """
+                        UPDATE contacts
+                        SET reply_length_level = COALESCE(reply_length_level, %s),
+                            reply_formality_level = COALESCE(reply_formality_level, %s),
+                            reply_salutation_mode = COALESCE(reply_salutation_mode, %s),
+                            reply_persona_mode = COALESCE(reply_persona_mode, %s),
+                            reply_greeting_template = COALESCE(reply_greeting_template, %s),
+                            reply_closing_template = COALESCE(reply_closing_template, %s),
+                            reply_style_source = CASE
+                                WHEN reply_style_source IS NULL OR reply_style_source = '' OR reply_style_source = 'default'
+                                THEN 'history_llm'
+                                ELSE reply_style_source
+                            END
+                        WHERE id=%s AND user_email=%s
+                        """,
+                        (
+                            length_level,
+                            formality_level,
+                            salutation_mode,
+                            persona_mode,
+                            greeting_template,
+                            closing_template,
+                            contact_id,
+                            user_email,
+                        ),
+                    )
+                    conn.commit()
+                    cur_u.close()
+
+            cur_h.close()
+
+            # Nach möglichem Update Kontakt-Daten neu laden
+            cursor.execute(
+                """
+                SELECT id, contact_email, name,
+                       reply_greeting_template,
+                       reply_closing_template,
+                       reply_length_level,
+                       reply_formality_level,
+                       reply_salutation_mode,
+                       reply_persona_mode,
+                       reply_style_source
+                FROM contacts
+                WHERE id=%s AND user_email=%s
+                """,
+                (contact_id, user_email),
+            )
+            row = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
 
         prefs = {
             'contact_id': row['id'],
