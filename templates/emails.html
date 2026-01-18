@@ -1564,13 +1564,13 @@ function ensureInboxContextMenu(){
         div.innerHTML = `
   <div class="group" style="position:relative; display:flex; align-items:center; justify-content:space-between; gap:8px;">
     <div style="flex:1 1 auto; min-width:0; padding-right:80px;">
-      <div class="subject">${escapeHtml(it.subject || '(ohne Betreff)')}</div>
+      <div class="subject" style="display:flex; align-items:center; gap:6px;">
+        ${attachIcon ? `<span class="item-attach-indicator" title="Anhang vorhanden" style="display:inline-flex; align-items:center; justify-content:center; color:#4b5563;">${attachIcon}</span>` : ''}
+        <span>${escapeHtml(it.subject || '(ohne Betreff)')}</span>
+      </div>
       <div class="meta flex items-center justify-between text-xs text-slate-500">
         <span>${fromLabel}</span>
-        <span>
-          ${attachIcon ? `<span style="margin-right:6px; vertical-align:middle; display:inline-flex; align-items:center; justify-content:center;">${attachIcon}</span>` : ''}
-          ${dateLabel}${isAnswered ? ' ↩︎' : ''}
-        </span>
+        <span>${dateLabel}${isAnswered ? ' ↩︎' : ''}</span>
       </div>
     </div>
     <div class="item-actions-wrapper" style="position:absolute; top:-16px; bottom:-16px; right:-24px; left:auto; display:flex; align-items:center; justify-content:flex-end;">
