@@ -2293,6 +2293,16 @@ function ensureInboxContextMenu(){
           </div>
           <div class="detail-splitter" id="detail_splitter">⋮⋮</div>
           <div class="profile" id="profile_panel" data-contact-id="${t.contact_id || ''}">
+            <div id="contact_profile_new_block" class="sub" style="margin-bottom:12px; padding:8px 10px; border-radius:6px; background:#eef2ff; border:1px solid #e5e7eb; font-size:13px; display:none;">
+              <div style="font-weight:600; margin-bottom:4px;">Kundenprofil (neu, Reply-Stil)</div>
+              <div class="kv"><span>Anrede</span><b id="cpn_salutation_text">–</b></div>
+              <div class="kv"><span>Stil-Quelle</span><b id="cpn_style_source">–</b></div>
+              <div class="kv"><span>Länge</span><b id="cpn_length">–</b></div>
+              <div class="kv"><span>Formality</span><b id="cpn_formality">–</b></div>
+              <div class="kv"><span>Persona</span><b id="cpn_persona">–</b></div>
+              <div class="kv"><span>Begrüßung</span><b id="cpn_greeting">–</b></div>
+              <div class="kv"><span>Abschluss</span><b id="cpn_closing">–</b></div>
+            </div>
             <h3>Kundenprofil</h3>
             <div class="grid">
               <!-- Linke Spalte: Stammdaten zum Kontakt -->
@@ -3613,6 +3623,14 @@ function ensureInboxContextMenu(){
       const dbgPersonaEl = document.getElementById('compose_debug_persona');
       const dbgWarningsEl = document.getElementById('compose_debug_warnings');
       const dbgHistoryEl = document.getElementById('compose_debug_history');
+      const cpnBlock = document.getElementById('contact_profile_new_block');
+      const cpnSalEl = document.getElementById('cpn_salutation_text');
+      const cpnSourceEl = document.getElementById('cpn_style_source');
+      const cpnLenEl = document.getElementById('cpn_length');
+      const cpnFormEl = document.getElementById('cpn_formality');
+      const cpnPersEl = document.getElementById('cpn_persona');
+      const cpnGreetEl = document.getElementById('cpn_greeting');
+      const cpnCloseEl = document.getElementById('cpn_closing');
       const lenInput = document.getElementById('cmp_length');
       const formInput = document.getElementById('cmp_formality');
       const lenLabel = document.getElementById('cmp_length_label');
@@ -3693,6 +3711,45 @@ function ensureInboxContextMenu(){
 
         if(labelEl){
           labelEl.textContent = formatReplyPrefsLabel(currentReplyPrefs, emailSummary && emailSummary.contact_name, emailSummary && emailSummary.from);
+        }
+
+        // Neue Kundenprofil-Kachel (oben im Kundenprofil) befüllen, falls vorhanden
+        if(cpnBlock){
+          cpnBlock.style.display = 'block';
+          if(cpnSalEl){
+            const sm = (currentReplyPrefs.salutation_mode || '').toLowerCase();
+            cpnSalEl.textContent = sm === 'du' ? 'Du' : (sm === 'sie' ? 'Sie' : '–');
+          }
+          if(cpnSourceEl){
+            const src = (currentReplyPrefs.style_source || '').toLowerCase();
+            let label = src || '(unbekannt)';
+            if(src === 'history_llm') label = 'aus E-Mail-Historie (KI)';
+            else if(src === 'manual') label = 'manuell angepasst';
+            else if(src === 'default') label = 'Standard-Einstellungen';
+            cpnSourceEl.textContent = label;
+          }
+          if(cpnLenEl){
+            const v = currentReplyPrefs.length_level != null ? currentReplyPrefs.length_level : null;
+            cpnLenEl.textContent = v != null ? cmpLabelForLength(v) : '–';
+          }
+          if(cpnFormEl){
+            const v = currentReplyPrefs.formality_level != null ? currentReplyPrefs.formality_level : null;
+            cpnFormEl.textContent = v != null ? cmpLabelForFormality(v) : '–';
+          }
+          if(cpnPersEl){
+            const pm = (currentReplyPrefs.persona_mode || '').toLowerCase();
+            if(pm === 'ich') cpnPersEl.textContent = 'Ich-Perspektive';
+            else if(pm === 'wir') cpnPersEl.textContent = 'Wir-Perspektive';
+            else cpnPersEl.textContent = '–';
+          }
+          if(cpnGreetEl){
+            const gt = currentReplyPrefs.greeting_template || '';
+            cpnGreetEl.textContent = gt ? gt : '–';
+          }
+          if(cpnCloseEl){
+            const ct = currentReplyPrefs.closing_template || '';
+            cpnCloseEl.textContent = ct ? ct : '–';
+          }
         }
 
         // Debug-Felder: Rohwerte aus Kontakt + Reply-Prefs anzeigen
