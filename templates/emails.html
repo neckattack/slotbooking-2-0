@@ -2179,8 +2179,7 @@ function ensureInboxContextMenu(){
       rowEl.classList.add('active');
       currentUid = uid;
 
-      // Automatisches "Gelesen nach 2s" ist vorerst deaktiviert, um zu vermeiden,
-      // dass Mails ohne explizite User-Aktion als gelesen markiert werden.
+      // Vorbereitungen für Auto-Read-Timer zurücksetzen
       if(autoReadTimer){
         clearTimeout(autoReadTimer);
         autoReadTimer = null;
@@ -3469,7 +3468,7 @@ function ensureInboxContextMenu(){
                 method: 'POST',
                 headers: getAuthHeaders()
               });
-              const data = await parseJsonSafe(res);
+              const data = await res.json();
               
               if(data.__ok && data.summary){
                 if(summaryDiv){
@@ -3559,19 +3558,38 @@ function ensureInboxContextMenu(){
           };
         }
         
-        // Zweiter Auto-Read-Timer ebenfalls deaktiviert: gelesen/ungelesen wird aktuell
-        // nur noch durch explizite Aktionen (Kontextmenü / Read-Toggle) gesetzt.
-        if(autoReadTimer){
-          clearTimeout(autoReadTimer);
-          autoReadTimer = null;
-        }
-        autoReadUid = uid;
-      }catch(e){
-        detail.innerHTML = `<div class="sub">Fehler: ${e}</div>`;
-      }
-    }
+        // Auto-Read: Wenn die Mail 2s im Detail betrachtet wird, als gelesen markieren (DB + IMAP)
+        try{
+          if(autoReadTimer){
+            clearTimeout(autoReadTimer);
+            autoReadTimer = null;
+          }
+          autoReadUid = uid;
+          autoReadTimer = setTimeout(async () => {
+            try{
+              // Nur ausführen, wenn diese Mail noch aktiv ist
+              if(autoReadUid !== uid) return;
+              if(!inboxEmails || !inboxEmails.length) return;
+              const email = inboxEmails.find(e => String(e.uid) === String(uid));
+              if(email && email.is_read) return;
+              await fetch('/api/emails/seen', {
+                method: 'POST',
+                headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uid: uid, seen: true })
+              });
+              if(email){ email.is_read = 1; }
+              // UI aktualisieren
+              try{ renderInboxList(); }catch(_e_r1){}
+            }catch(_e_auto){}
+          }, 2000);
+        }catch(_e_timer){}
 
-    function formatReplyPrefsLabel(prefs, contactName, contactEmail){
+        function formatReplyPrefsLabel(prefs, contactName, contactEmail){
+          try{
+            if(!prefs){
+              return 'Antwortstil: wird heuristisch aus bisherigen E-Mails abgeleitet (zuerst unsere Antworten, dann eingehende Mails).';
+            }
+            const parts = [];
       try{
         if(!prefs){
           return 'Antwortstil: wird heuristisch aus bisherigen E-Mails abgeleitet (zuerst unsere Antworten, dann eingehende Mails).';
