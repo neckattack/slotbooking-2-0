@@ -1495,13 +1495,13 @@ function ensureInboxContextMenu(){
         }
       }
 
-      const filtered = answerFiltered.filter(it => {
-        if(!q) return true;
-        const fromStr = ((it.from_addr || it.from || '') + '').toLowerCase();
-        const subjectStr = ((it.subject || '') + '').toLowerCase();
-        const toStr = ((it.to || it.to_addrs || '') + '').toLowerCase();
-        return fromStr.includes(q) || subjectStr.includes(q) || toStr.includes(q);
-      });
+      // Wichtig: Wenn eine Suche aktiv ist (q != ''), haben wir die eigentliche
+      // Textsuche bereits im Backend gemacht (/api/emails/search sucht in
+      // From/To/Subject/Body). In diesem Fall sollen wir die vom Server
+      // gelieferten Ergebnisse NICHT noch einmal clientseitig nach From/To/
+      // Betreff filtern, sonst gehen Treffer verloren, die nur im Body
+      // vorkommen (z.B. "kasia" im Mailtext).
+      const filtered = q ? answerFiltered.slice() : answerFiltered;
       if(!filtered.length){
         // Toggle-Leiste sichtbar lassen, nur darunter einen Hinweis anzeigen
         if(toggle){
