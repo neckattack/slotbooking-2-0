@@ -121,7 +121,7 @@
       min-height:0;
       overflow:auto;
     }
-    /* Antwortstil-Panel: volle Spaltenbreite für die Slider im modernen Card-Look */
+    /* Antwortstil-Panel: volle Spaltenbreite für die Slider im modernen Card-Look (Compose-UI) */
     #compose_reply_prefs_block { width:100%; box-sizing:border-box; border-radius:14px; border:1px solid #e5e7eb; background:#f9fafb; padding:10px 14px 12px; }
     /* Label und Slider sollen die ganze Spaltenbreite nutzen */
     #compose_reply_prefs_block label {
@@ -374,12 +374,10 @@
         </div>
           </div>
           <div class="compose-main">
-            <div class="row" style="align-items:center;">
+            <div class="row" style="position:relative; align-items:center;">
               <label>Empf.</label>
               <input id="compose_to" placeholder="Empfänger" />
-            </div>
-            <div class="row" style="justify-content:flex-end; font-size:10px; color:#6b7280; gap:8px; margin-top:-6px; margin-bottom:2px;">
-              <div style="display:flex; align-items:center; gap:6px;">
+              <div style="position:absolute; right:10px; top:50%; transform:translateY(-50%); font-size:10px; color:#6b7280; display:flex; align-items:center; gap:6px;">
                 <button id="compose_cc_toggle" type="button" style="border:0; background:transparent; padding:0; cursor:pointer; color:inherit;">Cc</button>
                 <button id="compose_bcc_toggle" type="button" style="border:0; background:transparent; padding:0; cursor:pointer; color:inherit;">Bcc</button>
               </div>
@@ -2181,7 +2179,8 @@ function ensureInboxContextMenu(){
       rowEl.classList.add('active');
       currentUid = uid;
 
-      // Vorbereitungen für Auto-Read-Timer zurücksetzen
+      // Automatisches "Gelesen nach 2s" ist vorerst deaktiviert, um zu vermeiden,
+      // dass Mails ohne explizite User-Aktion als gelesen markiert werden.
       if(autoReadTimer){
         clearTimeout(autoReadTimer);
         autoReadTimer = null;
@@ -2525,18 +2524,6 @@ function ensureInboxContextMenu(){
         } catch(_e) {
           // Splitter ist Komfort-Feature – Fehler hier ignorieren
         }
-
-        // Header-Büroklammer: ersten Anhang herunterladen (falls vorhanden)
-        try{
-          const attBtn = document.getElementById('detail_attachments_btn');
-          if(attBtn && t.has_attachments){
-            attBtn.addEventListener('click', (ev) => {
-              ev.stopPropagation();
-              const url = `/api/emails/${t.id}/attachments/0/download`;
-              window.open(url, '_blank');
-            });
-          }
-        }catch(_e_att){}
 
         // Antwort-Vorbereitung (KI) laden
         try {
@@ -3482,7 +3469,7 @@ function ensureInboxContextMenu(){
                 method: 'POST',
                 headers: getAuthHeaders()
               });
-              const data = await res.json();
+              const data = await parseJsonSafe(res);
               
               if(data.__ok && data.summary){
                 if(summaryDiv){
@@ -3572,38 +3559,19 @@ function ensureInboxContextMenu(){
           };
         }
         
-        // Auto-Read: Wenn die Mail 2s im Detail betrachtet wird, als gelesen markieren (DB + IMAP)
-        try{
-          if(autoReadTimer){
-            clearTimeout(autoReadTimer);
-            autoReadTimer = null;
-          }
-          autoReadUid = uid;
-          autoReadTimer = setTimeout(async () => {
-            try{
-              // Nur ausführen, wenn diese Mail noch aktiv ist
-              if(autoReadUid !== uid) return;
-              if(!inboxEmails || !inboxEmails.length) return;
-              const email = inboxEmails.find(e => String(e.uid) === String(uid));
-              if(email && email.is_read) return;
-              await fetch('/api/emails/seen', {
-                method: 'POST',
-                headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uid: uid, seen: true })
-              });
-              if(email){ email.is_read = 1; }
-              // UI aktualisieren
-              try{ renderInboxList(); }catch(_e_r1){}
-            }catch(_e_auto){}
-          }, 2000);
-        }catch(_e_timer){}
+        // Zweiter Auto-Read-Timer ebenfalls deaktiviert: gelesen/ungelesen wird aktuell
+        // nur noch durch explizite Aktionen (Kontextmenü / Read-Toggle) gesetzt.
+        if(autoReadTimer){
+          clearTimeout(autoReadTimer);
+          autoReadTimer = null;
+        }
+        autoReadUid = uid;
+      }catch(e){
+        detail.innerHTML = `<div class="sub">Fehler: ${e}</div>`;
+      }
+    }
 
-        function formatReplyPrefsLabel(prefs, contactName, contactEmail){
-          try{
-            if(!prefs){
-              return 'Antwortstil: wird heuristisch aus bisherigen E-Mails abgeleitet (zuerst unsere Antworten, dann eingehende Mails).';
-            }
-            const parts = [];
+    function formatReplyPrefsLabel(prefs, contactName, contactEmail){
       try{
         if(!prefs){
           return 'Antwortstil: wird heuristisch aus bisherigen E-Mails abgeleitet (zuerst unsere Antworten, dann eingehende Mails).';
