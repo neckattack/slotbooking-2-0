@@ -5386,11 +5386,12 @@ def api_contacts_quick_card(current_user, contact_id):
                     conn.close()
                     return jsonify({**cached_data, 'from_cache': True}), 200
 
-        # Basis-Kontaktdaten laden (inkl. erkannter Sprache)
+        # Basis-Kontaktdaten laden (inkl. erkannter Sprache und Reply-Stil-Anrede)
         cursor.execute(
             """
             SELECT id, name, contact_email, category, salutation, sentiment, profile_summary_full,
-                   language_code, language_confidence, language_source
+                   language_code, language_confidence, language_source,
+                   reply_salutation_mode
             FROM contacts
             WHERE id = %s AND user_email = %s
             """,
@@ -5463,6 +5464,18 @@ def api_contacts_quick_card(current_user, contact_id):
                 display_name = ''
 
         cat = contact.get('category') or ''
+
+        # Anrede vorrangig aus Reply-Stil (reply_salutation_mode) ableiten, falls salutation noch leer ist.
+        try:
+            sal = (contact.get('salutation') or '').strip()
+            reply_sal_mode = (contact.get('reply_salutation_mode') or '').strip().lower()
+            if not sal and reply_sal_mode in ('du', 'sie'):
+                # Im Quick-Card-Objekt setzen; Persistenz in contacts kann in einem separaten Schritt ergänzt werden.
+                contact['salutation'] = 'Du' if reply_sal_mode == 'du' else 'Sie'
+        except Exception:
+            # Bei Fehlern Anrede einfach unverändert lassen
+            pass
+
         # Falls Kategorie fehlt/unklar, aber gleiche Domain wie Nutzer: als Kollege/Mitarbeiter interpretieren
         try:
             contact_email = contact_email_raw.lower()
