@@ -121,17 +121,12 @@
       min-height:0;
       overflow:auto;
     }
-    /* Antwortstil-Panel: volle Spaltenbreite für die Slider im modernen Card-Look (Compose-UI) */
+    /* Antwortstil-Panel: volle Spaltenbreite für die Slider im modernen Card-Look */
     #compose_reply_prefs_block { width:100%; box-sizing:border-box; border-radius:14px; border:1px solid #e5e7eb; background:#f9fafb; padding:10px 14px 12px; }
-    /* Label und Slider sollen die ganze Spaltenbreite nutzen */
-    #compose_reply_prefs_block label {
-      width:100%;
-    }
     #compose_reply_prefs_block input[type="range"] {
       width:100%;
-      max-width:100%;
       display:block;
-      margin:0; /* Innenabstand nur über Padding der Card, kein zusätzlicher linker/rechter Rand */
+      margin:0; /* leichter Innenabstand links/rechts durch Padding der Card */
     }
     #compose_reply_prefs_block label > span {
       display:block;
