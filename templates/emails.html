@@ -2307,8 +2307,8 @@ function ensureInboxContextMenu(){
               <div class="kv"><span>Begrüßung</span><b id="cpn_greeting">–</b></div>
               <div class="kv"><span>Abschluss</span><b id="cpn_closing">–</b></div>
             </div>
-            <h3>Kundenprofil</h3>
-            <div class="grid">
+            <h3 style="display:none;">Kundenprofil (alt)</h3>
+            <div class="grid" style="display:none;">
               <!-- Linke Spalte: Stammdaten zum Kontakt -->
               <div>
                 <div class="kv"><span>Name</span><b>${escapeHtml(contactName)}</b></div>
@@ -2340,14 +2340,14 @@ function ensureInboxContextMenu(){
                 </div>
               </div>
               <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:8px;">
-                <div id="contact_quick_card" class="sub" style="flex:1; max-width:48%; font-size:16px; padding:10px 12px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
+                <div id="contact_quick_card" class="sub" style="display:none; flex:1; max-width:48%; font-size:16px; padding:10px 12px; border-radius:6px; background:#f9fafb; border:1px solid #e5e7eb;">
                   <div id="qc_now" style="margin-bottom:2px;"><span style="font-weight:500;">Jetzt relevant:</span> <span class="muted">Lade...</span></div>
                   <div id="qc_topics" style="margin-bottom:2px;"><span style="font-weight:500;">Offene Themen:</span> <span class="muted">Lade...</span></div>
                   <div id="qc_reply" style="margin-bottom:2px;"><span style="font-weight:500;">Empfohlene Antwortstrategie:</span> <span class="muted">Lade...</span></div>
                   <div id="qc_reply_mode" style="margin-bottom:2px;"><span style="font-weight:500;">Antwort-Modus:</span> <span class="muted">Lade...</span></div>
                   <div id="qc_timeline" style="margin-top:4px;"><span style="font-weight:500;">Timeline:</span> <span class="muted">Lade...</span></div>
                 </div>
-                <div id="reply_prep_topics" class="sub" style="flex:0 0 380px; font-size:13px; padding:8px 10px; border-radius:6px; background:#f9fafb; border:1px dashed #d1d5db; max-height:260px; overflow:auto;"></div>
+                <div id="reply_prep_topics" class="sub" style="flex:1; font-size:13px; padding:8px 10px; border-radius:6px; background:#f9fafb; border:1px dashed #d1d5db; max-height:260px; overflow:auto;"></div>
               </div>
               <div id="contact_reply_prefs_status" class="sub" style="font-size:11px; margin:4px 0 8px 0; color:#6b7280;">
                 Antwortstil: Lade Einstellungen…
