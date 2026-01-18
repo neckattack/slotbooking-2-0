@@ -4576,7 +4576,7 @@ def api_contacts_generate_profile(current_user, contact_id):
         # Get all emails from this contact (including from/to info for KPI calculation)
         cursor.execute(
             """
-            SELECT id, subject, body_text, body_html, received_at, from_addr, to_addrs
+            SELECT id, subject, body_text, body_html, received_at
             FROM emails 
             WHERE contact_id = %s AND user_email = %s 
             ORDER BY received_at DESC
@@ -4999,9 +4999,8 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
             # 5. Grobe Kontakt-Kategorie (nur Heuristik, kein hartes CRM-Feld)
             try:
                 contact_email_l = (contact_email or '').lower()
-                user_email_l = (user_email_addr or '').lower()
-                contact_domain = contact_email_l.split('@')[-1] if '@' in contact_email_l else ''
-                user_domain = user_email_l.split('@')[-1] if '@' in user_email_l else ''
+                user_domain = (user_email_addr or '').split('@', 1)[1].lower() if (user_email_addr and '@' in user_email_addr) else ''
+                contact_domain = contact_email_l.split('@', 1)[1] if ('@' in contact_email_l) else ''
 
                 # Newsletter / Spam-Heuristik überwiegend aus Absenderadresse
                 newsletter_like = any(pat in contact_email_l for pat in [
@@ -5461,11 +5460,47 @@ def api_contacts_quick_card(current_user, contact_id):
             contact_email = contact_email_raw.lower()
             user_domain = (user_email or '').split('@', 1)[1].lower() if (user_email and '@' in user_email) else ''
             contact_domain = contact_email.split('@', 1)[1] if ('@' in contact_email) else ''
+
+            # Newsletter / Spam-Heuristik überwiegend aus Absenderadresse
+            newsletter_like = any(pat in contact_email for pat in [
+                'newsletter', 'news@', 'no-reply', 'noreply', 'mailer@', 'bounce@'
+            ])
+
+            # Nutzungsfrequenz erneut berechnen (robust, falls oben nicht gesetzt)
+            emails_per_day = None
+            if len(email_rows) > 1:
+                first_date = email_rows[-1].get('received_at')
+                last_date = email_rows[0].get('received_at')
+                if first_date and last_date:
+                    days_diff = max(1, (last_date - first_date).days)
+                    emails_per_day = len(email_rows) / days_diff if days_diff > 0 else None
+
+            # Entscheidungslogik
+            if newsletter_like:
+                cat = 'Spam/Werbung'
+            elif contact_domain and user_domain and contact_domain == user_domain:
+                # Gleiche Domain wie der User → sehr wahrscheinlich Kollege/Mitarbeiter
+                cat = 'Kollege/Mitarbeiter'
+            elif emails_per_day is not None and emails_per_day > 0.2:
+                # Regelmäßiger Kontakt, keine Newsletter-Muster
+                cat = 'Kunde (aktiv)'
+            elif len(email_rows) >= 3:
+                # Mehrere Mails, aber seltener → normaler Kunde
+                cat = 'Kunde'
+            else:
+                cat = 'Unklar'
+
+            # Wenn der Kontakt als Kollege/Mitarbeiter eingestuft ist und die
+            # Anrede nicht eindeutig auf "Sie" steht, interpretieren wir die
+            # bevorzugte Anrede pragmatisch als "Du".
+            if cat == 'Kollege/Mitarbeiter':
+                if contact.get('salutation') != 'Sie':
+                    contact['salutation'] = 'Du'
         except Exception:
-            contact_domain = ''
-            user_domain = ''
-        if (not cat or cat == 'Unklar') and user_domain and contact_domain and contact_domain == user_domain:
-            cat = 'Kollege/Mitarbeiter'
+            # Heuristik ist nur Zusatz-Info – bei Fehlern neutral bleiben
+            if not cat:
+                cat = 'Unklar'
+        
         # Wenn Kategorie immer noch leer/unklar ist, zeige nur den Namen ohne Suffix
         if not cat or cat == 'Unklar':
             who_line = display_name
@@ -6142,6 +6177,7 @@ def api_email_reply_prep(current_user, email_id):
         topics_payload = []
         if contact_id and not skip_history:
             import datetime as _dt
+
             six_months_ago = _dt.datetime.utcnow() - _dt.timedelta(days=180)
 
             # Alle offenen Topics des Kontakts mit E-Mail-Stats der letzten 6 Monate
@@ -6358,7 +6394,7 @@ def api_emails_smtp_debug():
         'tcp': {},
         'smtp': {}
     }
-    if not host:
+    if not (host and user and pw):
         return jsonify({'ok': False, 'error': 'SMTP_HOST/SMTP_SERVER fehlt', 'info': info}), 400
     # DNS
     try:
@@ -6594,7 +6630,7 @@ def api_emails_seen(current_user):
                     else:
                         folder_imap = 'INBOX'
 
-                    M = imaplib.IMAP4_SSL(host, port, timeout=15)
+                    M = imaplib.IMAP4_SSL(host, port)
                     M.login(imap_user, pw)
                     try:
                         try:
@@ -7176,6 +7212,16 @@ def api_auth_login():
             }
         }), 200
     except Exception as e:
+        app.logger.error(f"[Login] error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/auth/me', methods=['GET'])
+@require_auth
+def api_auth_me(current_user):
+    """Get current user info from JWT token. Requires Authorization header."""
+    try:
+        conn = get_users_db_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             "SELECT id, email, role, first_name, last_name, active, created_at, last_login "
