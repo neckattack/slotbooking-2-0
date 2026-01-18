@@ -5382,8 +5382,18 @@ def api_contacts_quick_card(current_user, contact_id):
         # Basis-Kontaktdaten laden (inkl. erkannter Sprache)
         cursor.execute(
             """
-            SELECT id, name, contact_email, category, salutation, sentiment, profile_summary_full,
-                   language_code, language_confidence, language_source
+            SELECT id,
+                   name,
+                   contact_email,
+                   category,
+                   salutation,
+                   sentiment,
+                   profile_summary_full,
+                   language_code,
+                   language_confidence,
+                   language_source,
+                   urgency_level,
+                   importance_level
             FROM contacts
             WHERE id = %s AND user_email = %s
             """,
@@ -5689,119 +5699,6 @@ def api_contacts_quick_card(current_user, contact_id):
             except Exception:
                 pass
 
-        # Heuristik für Dringlichkeit (urgency) und Wichtigkeit (importance) pro Kontakt
-        urgency_level = None  # 1 (sehr niedrig) bis 5 (sehr hoch)
-        importance_level = None
-        urgency_reason = None
-        importance_reason = None
-
-        try:
-            import re as _re_quick
-
-            # Basis-Level
-            urgency_level = 2
-            importance_level = 2
-
-            # 1) Einfluss des Importance-Buckets (Regelwerk)
-            if importance_bucket:
-                bucket_l = str(importance_bucket).lower()
-                if 'high' in bucket_l or 'hoch' in bucket_l or 'vip' in bucket_l:
-                    importance_level = 5
-                    importance_reason = 'Kontakt durch Regeln als sehr wichtig markiert.'
-                elif 'medium' in bucket_l or 'mittel' in bucket_l:
-                    importance_level = max(importance_level, 3)
-                    if not importance_reason:
-                        importance_reason = 'Kontakt durch Regeln als mittel-wichtig markiert.'
-                elif 'low' in bucket_l or 'niedrig' in bucket_l:
-                    importance_level = min(importance_level, 2)
-                    importance_reason = 'Kontakt durch Regeln als eher weniger wichtig markiert.'
-
-            # 2) Keyword-Heuristiken aus Betreffzeilen der letzten E-Mails
-            subj_text = "\n".join(
-                (e.get('subject') or '').lower() for e in (email_rows or []) if e.get('subject')
-            )
-
-            if subj_text:
-                # Dringlichkeit: typische Formulierungen wie "dringend", "urgent", "heute noch"
-                urgency_patterns_high = [
-                    r"\bdringend\b",
-                    r"\burgent\b",
-                    r"\basap\b",
-                    r"heute noch",
-                    r"sofort",
-                    r"bis (heute|morgen)",
-                    r"deadline",
-                ]
-                urgency_patterns_mid = [
-                    r"so schnell wie m[öo]glich",
-                    r"baldm[öo]glichst",
-                ]
-
-                high_hits = sum(len(_re_quick.findall(p, subj_text)) for p in urgency_patterns_high)
-                mid_hits = sum(len(_re_quick.findall(p, subj_text)) for p in urgency_patterns_mid)
-
-                if high_hits > 0:
-                    urgency_level = 5
-                    urgency_reason = 'Betreffzeilen enthalten starke Dringlichkeits-Signale.'
-                elif mid_hits > 0:
-                    urgency_level = max(urgency_level, 3)
-                    urgency_reason = 'Betreffzeilen enthalten moderate Dringlichkeits-Signale.'
-
-                # Wichtigkeit: geschäftskritische Begriffe (Rechnung, Vertrag, Kündigung, Zahlung ...)
-                importance_patterns_high = [
-                    r"rechnung",
-                    r"invoice",
-                    r"zahlung",
-                    r"payment",
-                    r"vertrag",
-                    r"agreement",
-                    r"kündigung",
-                    r"termination",
-                    r"gutschrift",
-                    r"refund",
-                    r"storno",
-                ]
-                importance_patterns_mid = [
-                    r"angebot",
-                    r"quote",
-                    r"bestellung",
-                    r"order",
-                    r"projekt",
-                ]
-
-                imp_high_hits = sum(len(_re_quick.findall(p, subj_text)) for p in importance_patterns_high)
-                imp_mid_hits = sum(len(_re_quick.findall(p, subj_text)) for p in importance_patterns_mid)
-
-                if imp_high_hits > 0:
-                    importance_level = 5
-                    importance_reason = 'Betreffzeilen deuten auf geschäftskritische Themen hin.'
-                elif imp_mid_hits > 0 and importance_level < 4:
-                    importance_level = 3
-                    if not importance_reason:
-                        importance_reason = 'Betreffzeilen deuten auf operative/business-relevante Themen hin.'
-
-            # 3) Recency: sehr frische offene Themen machen die Dringlichkeit etwas höher
-            if open_topics:
-                try:
-                    newest = open_topics[0]
-                    lm = newest.get('last_mentioned_at') or newest.get('created_at')
-                    if lm:
-                        days_open = (_dt.datetime.utcnow() - lm.replace(tzinfo=None)).days
-                        if days_open <= 1:
-                            urgency_level = max(urgency_level, 3)
-                            if not urgency_reason:
-                                urgency_reason = 'Es gibt sehr frische offene Themen mit dem Kontakt.'
-                        elif days_open <= 3:
-                            urgency_level = max(urgency_level, 2)
-                except Exception:
-                    pass
-
-        except Exception as _e_urg_imp:
-            try:
-                app.logger.warning(f"[QuickCard] urgency/importance heuristic failed: {_e_urg_imp}")
-            except Exception:
-                pass
-
         # Sprache für Payload aufbereiten
         lang_code = (contact.get('language_code') or '').lower() if contact.get('language_code') else ''
         lang_conf = contact.get('language_confidence')
@@ -5843,10 +5740,8 @@ def api_contacts_quick_card(current_user, contact_id):
             'language_confidence': lang_conf,
             'language_source': lang_source,
             'language_label': lang_label,
-            'urgency_level': urgency_level,
-            'importance_level': importance_level,
-            'urgency_reason': urgency_reason,
-            'importance_reason': importance_reason,
+            'urgency_level': contact.get('urgency_level'),
+            'importance_level': contact.get('importance_level'),
         }
 
         # Kurzprofil in contact_profile_cache.short_profile_json cachen (best effort)
