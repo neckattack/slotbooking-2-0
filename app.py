@@ -586,7 +586,8 @@ def api_emails_search(current_user):
             f"""
             SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
                    e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.is_replied, e.starred,
-                   e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
+                   e.has_attachments, e.urgency_level, e.importance_level,
+                   c.name as contact_name, c.contact_email, c.email_count as contact_email_count
             FROM emails e
             LEFT JOIN contacts c ON e.contact_id = c.id
             WHERE {where_sql}
@@ -621,6 +622,8 @@ def api_emails_search(current_user):
                 'is_replied': email_row.get('is_replied', 0),
                 'starred': email_row['starred'],
                 'has_attachments': email_row['has_attachments'],
+                'urgency_level': email_row.get('urgency_level'),
+                'importance_level': email_row.get('importance_level'),
                 'contact_name': email_row['contact_name'],
                 'contact_email': email_row['contact_email'],
                 'contact_email_count': email_row['contact_email_count'],
@@ -3500,7 +3503,8 @@ def api_emails_list(current_user):
                 """
                 SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
                        e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.is_replied, e.starred,
-                       e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
+                       e.has_attachments, e.urgency_level, e.importance_level,
+                       c.name as contact_name, c.contact_email, c.email_count as contact_email_count
                 FROM emails e
                 LEFT JOIN contacts c ON e.contact_id = c.id
                 WHERE e.user_email = %s AND e.account_id = %s
@@ -3517,7 +3521,8 @@ def api_emails_list(current_user):
                     """
                     SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
                            e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.is_replied, e.starred,
-                           e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
+                           e.has_attachments, e.urgency_level, e.importance_level,
+                           c.name as contact_name, c.contact_email, c.email_count as contact_email_count
                     FROM emails e
                     LEFT JOIN contacts c ON e.contact_id = c.id
                     WHERE e.user_email = %s AND e.account_id = %s AND e.folder IN (%s, %s, %s)
@@ -3531,7 +3536,8 @@ def api_emails_list(current_user):
                     """
                     SELECT e.id, e.message_id, e.from_addr, e.from_name, e.to_addrs, e.subject,
                            e.body_text, e.body_html, e.received_at, e.folder, e.is_read, e.is_replied, e.starred,
-                           e.has_attachments, c.name as contact_name, c.contact_email, c.email_count as contact_email_count
+                           e.has_attachments, e.urgency_level, e.importance_level,
+                           c.name as contact_name, c.contact_email, c.email_count as contact_email_count
                     FROM emails e
                     LEFT JOIN contacts c ON e.contact_id = c.id
                     WHERE e.user_email = %s AND e.account_id = %s AND e.folder = %s
@@ -3594,6 +3600,8 @@ def api_emails_list(current_user):
                 'is_replied': email_row.get('is_replied', 0),
                 'starred': email_row['starred'],
                 'has_attachments': email_row['has_attachments'],
+                'urgency_level': email_row.get('urgency_level'),
+                'importance_level': email_row.get('importance_level'),
                 'contact_name': email_row['contact_name'],
                 'contact_email': email_row['contact_email'],
                 'contact_email_count': email_row['contact_email_count']
