@@ -5382,18 +5382,9 @@ def api_contacts_quick_card(current_user, contact_id):
         # Basis-Kontaktdaten laden (inkl. erkannter Sprache)
         cursor.execute(
             """
-            SELECT id,
-                   name,
-                   contact_email,
-                   category,
-                   salutation,
-                   sentiment,
-                   profile_summary_full,
-                   language_code,
-                   language_confidence,
-                   language_source,
-                   urgency_level,
-                   importance_level
+            SELECT id, name, contact_email, category, salutation, sentiment, profile_summary_full,
+                   language_code, language_confidence, language_source,
+                   urgency_level, importance_level
             FROM contacts
             WHERE id = %s AND user_email = %s
             """,
