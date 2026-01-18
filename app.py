@@ -3047,8 +3047,9 @@ def api_emails_sync(current_user):
 
         for uid in uids_to_fetch:
             try:
-                # FLAGS gemeinsam mit der Nachricht laden, damit wir den Gelesen-Status (\Seen) auswerten können
-                typ, msg_data = M.fetch(uid, '(FLAGS RFC822)')
+                # FLAGS gemeinsam mit der Nachricht laden, aber mit BODY.PEEK[],
+                # damit das reine Synchronisieren nicht das IMAP-Flag \Seen setzt.
+                typ, msg_data = M.fetch(uid, '(FLAGS BODY.PEEK[])')
                 if typ != 'OK':
                     continue
 
