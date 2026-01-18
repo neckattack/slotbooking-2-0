@@ -2825,8 +2825,10 @@ function ensureInboxContextMenu(){
                 // Buttons sowohl im Haupt-Topics-Block als auch im gespiegelten Compose-Block aktivieren
                 wireReplyPrepButtons(prepTopics);
                 wireReplyPrepButtons(composeTopics);
-                wireReplyManualButtons(prepTopics);
-                wireReplyManualButtons(composeTopics);
+                if(typeof wireReplyManualButtons === 'function'){
+                  wireReplyManualButtons(prepTopics);
+                  wireReplyManualButtons(composeTopics);
+                }
 
                 // Rote X-Schaltflächen in Themenblöcken
                 prepTopics.querySelectorAll('.reply-prep-close').forEach(closeBtn => {
@@ -3143,7 +3145,9 @@ function ensureInboxContextMenu(){
           const topicDetailPanel = document.getElementById('contact_topic_detail_panel');
 
           function renderQuickCard(data){
-            if(!qcBox || !qcNow || !qcTopics || !qcReply || !qcReplyMode || !qcTimeline){
+            // Wenn einzelne Container (z.B. qcName) in diesem Layout nicht vorhanden sind,
+            // Quick-Card-Rendering überspringen, um JS-Fehler zu vermeiden.
+            if(!qcBox || !qcName || !qcNow || !qcTopics || !qcReply || !qcReplyMode || !qcTimeline){
               return;
             }
             if(!data.__ok){
