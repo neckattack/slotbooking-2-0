@@ -5096,6 +5096,7 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
         conn.close()
 
         return jsonify({
+            '__ok': True,  # Frontend erwartet dieses Flag
             'ok': True,
             'summary': summary,
             'email_count': len(emails),
