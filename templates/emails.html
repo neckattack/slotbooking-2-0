@@ -2400,7 +2400,7 @@ function ensureInboxContextMenu(){
             </div>
           </div>
         `;
-        // Header-Büroklammer: ersten Anhang direkt herunterladen (einfacher Start)
+        // Header-Büroklammer: ersten Anhang direkt herunterladen (mit Auth, als Datei-Download)
         try {
           const attBtn = document.getElementById('detail_attachments_btn');
           if (attBtn && t.has_attachments && t.id) {
@@ -2417,8 +2417,32 @@ function ensureInboxContextMenu(){
                   return;
                 }
                 const first = data.attachments[0];
-                const url = `/api/emails/${t.id}/attachments/${first.idx}/download`;
-                window.open(url, '_blank');
+                const downloadUrl = `/api/emails/${t.id}/attachments/${first.idx}/download`;
+
+                // Download mit Auth-Header als Blob holen und direkt speichern
+                const dlRes = await fetch(downloadUrl, { headers: getAuthHeaders() });
+                if (!dlRes.ok) {
+                  if (status) status.textContent = 'Download fehlgeschlagen.';
+                  return;
+                }
+                const blob = await dlRes.blob();
+                const contentDisposition = dlRes.headers.get('Content-Disposition') || '';
+                let filename = first.filename || 'attachment';
+                try {
+                  const match = contentDisposition.match(/filename="?([^";]+)"?/i);
+                  if (match && match[1]) {
+                    filename = match[1];
+                  }
+                } catch (_e_fn) {}
+
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
                 if (status) status.textContent = '';
               } catch (e) {
                 const status = document.getElementById('compose_status');
