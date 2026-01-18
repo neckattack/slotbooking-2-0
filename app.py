@@ -7292,8 +7292,10 @@ def api_user_email_settings_get():
         row = cursor.fetchone()
         cursor.close()
         conn.close()
+        # Wenn noch keine Settings existieren, nicht als Fehler (404), sondern als
+        # "exists: false" mit 200 zurückgeben, damit das Frontend normal weiterlädt.
         if not row:
-            return jsonify({'exists': False}), 404
+            return jsonify({'exists': False}), 200
         # Don't return encrypted passwords, just confirm they exist
         return jsonify({
             'exists': True,
