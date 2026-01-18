@@ -535,6 +535,150 @@ def api_emails_inbox(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/emails/<int:email_id>/attachments/0/download', methods=['GET'])
+@require_auth
+def api_email_first_attachment_download(current_user, email_id):
+    """Lädt den ersten Anhang einer E-Mail direkt vom IMAP-Server und liefert ihn als Download.
+
+    Hinweis: Es wird nichts dauerhaft gespeichert, sondern on-the-fly aus der Originalmail gestreamt.
+    """
+    import imaplib, email as email_mod
+    from email.header import decode_header
+
+    user_email = current_user.get('user_email')
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # E-Mail inkl. Account- und Folder-Info laden
+        cursor.execute(
+            "SELECT id, message_id, account_id, folder FROM emails WHERE id=%s AND user_email=%s",
+            (email_id, user_email),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Email not found'}), 404
+
+        account_id = row['account_id']
+        message_id = row['message_id']
+        folder_db = (row.get('folder') or 'inbox').lower()
+
+        # IMAP Settings für diesen Account holen
+        cursor.execute(
+            "SELECT imap_host, imap_port, imap_user, imap_pass_encrypted, imap_security "
+            "FROM email_accounts WHERE id=%s AND user_email=%s AND is_active=1",
+            (account_id, user_email),
+        )
+        acc = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not acc or not acc.get('imap_host') or not acc.get('imap_user'):
+            return jsonify({'error': 'IMAP settings not configured'}), 400
+
+        from encryption_utils import decrypt_password
+
+        host = acc['imap_host']
+        port = int(acc.get('imap_port', 993))
+        imap_user = acc['imap_user']
+        pw = decrypt_password(acc['imap_pass_encrypted']) if acc['imap_pass_encrypted'] else ''
+        if not (host and imap_user and pw):
+            return jsonify({'error': 'IMAP credentials incomplete'}), 400
+
+        # Einfaches Folder-Mapping wie in api_emails_sync / send
+        if folder_db == 'sent':
+            folder_imap = 'Sent'
+        elif folder_db == 'archive':
+            folder_imap = 'Archive'
+        else:
+            folder_imap = 'INBOX'
+
+        M = imaplib.IMAP4_SSL(host, port, timeout=15)
+        M.login(imap_user, pw)
+        try:
+            try:
+                sel_typ, _ = M.select(f'"{folder_imap}"')
+            except imaplib.IMAP4.error:
+                sel_typ, _ = M.select(folder_imap)
+            if sel_typ != 'OK':
+                M.close()
+                M.logout()
+                return jsonify({'error': f'IMAP SELECT failed for {folder_imap}'}), 500
+
+            # Mail per Message-ID suchen
+            if not message_id:
+                return jsonify({'error': 'Message-ID missing'}), 400
+            search_crit = f'(HEADER Message-ID "{message_id}")'
+            typ, data = M.uid('search', None, search_crit)
+            if typ != 'OK' or not data or not data[0]:
+                return jsonify({'error': 'Email not found on IMAP server'}), 404
+
+            uid = data[0].split()[0]
+            typ, msg_data = M.uid('fetch', uid, '(BODY.PEEK[])')
+            if typ != 'OK' or not msg_data or not msg_data[0]:
+                return jsonify({'error': 'Could not fetch email body from IMAP'}), 500
+
+            # msg_data[0] kann Tuple oder Bytes sein; wir brauchen die Raw-Bytes
+            tup = msg_data[0]
+            raw_email = tup[1] if isinstance(tup, tuple) else tup
+            msg = email_mod.message_from_bytes(raw_email)
+
+            # Ersten Anhang suchen
+            attachments = []
+            if msg.is_multipart():
+                for part in msg.walk():
+                    filename = part.get_filename()
+                    if not filename:
+                        continue
+                    attachments.append((filename, part))
+
+            if not attachments:
+                return jsonify({'error': 'No attachments found'}), 404
+
+            filename, part = attachments[0]
+
+            # Dateiname decodieren
+            def _decode_filename(name):
+                if not name:
+                    return 'attachment'
+                try:
+                    decoded = decode_header(name)
+                    parts = []
+                    for text, enc in decoded:
+                        if isinstance(text, bytes):
+                            parts.append(text.decode(enc or 'utf-8', errors='ignore'))
+                        else:
+                            parts.append(str(text))
+                    return ''.join(parts) or 'attachment'
+                except Exception:
+                    return name
+
+            safe_name = _decode_filename(filename)
+            payload = part.get_payload(decode=True) or b''
+            content_type = part.get_content_type() or 'application/octet-stream'
+
+            from flask import Response
+            resp = Response(payload, mimetype=content_type)
+            resp.headers['Content-Disposition'] = f'attachment; filename="{safe_name}"'
+            return resp
+
+        finally:
+            try:
+                M.close()
+            except Exception:
+                pass
+            M.logout()
+
+    except Exception as e:
+        try:
+            app.logger.error(f"[Attachment Download] Error: {e}")
+        except Exception:
+            pass
+        return jsonify({'error': 'Could not download attachment'}), 500
+
 @app.route('/api/emails/search', methods=['GET'])
 @require_auth
 def api_emails_search(current_user):

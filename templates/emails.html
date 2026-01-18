@@ -2526,6 +2526,18 @@ function ensureInboxContextMenu(){
           // Splitter ist Komfort-Feature – Fehler hier ignorieren
         }
 
+        // Header-Büroklammer: ersten Anhang herunterladen (falls vorhanden)
+        try{
+          const attBtn = document.getElementById('detail_attachments_btn');
+          if(attBtn && t.has_attachments){
+            attBtn.addEventListener('click', (ev) => {
+              ev.stopPropagation();
+              const url = `/api/emails/${t.id}/attachments/0/download`;
+              window.open(url, '_blank');
+            });
+          }
+        }catch(_e_att){}
+
         // Antwort-Vorbereitung (KI) laden
         try {
           const prepBlock = document.getElementById('reply_prep_block');
