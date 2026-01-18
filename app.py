@@ -4544,7 +4544,9 @@ def api_contacts_notes_delete(current_user, contact_id, note_id):
 def api_contacts_generate_profile(current_user, contact_id):
     """Generate AI profile summary for a contact"""
     user_email = current_user.get('user_email')
-    
+    # KPI-Container optional; dieser Endpoint liefert primär die Text-Summary.
+    kpis = {}
+
     try:
         conn = get_settings_db_connection()
         cursor = conn.cursor(dictionary=True)
@@ -5306,6 +5308,7 @@ Nutze eine sachliche, professionelle Sprache. Gliedere mit klaren Überschriften
         conn.close()
 
         return jsonify({
+            '__ok': True,
             'ok': True,
             'summary_full': full_summary,
             'email_count': len(emails),
