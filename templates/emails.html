@@ -2294,7 +2294,11 @@ function ensureInboxContextMenu(){
           <div class="detail-splitter" id="detail_splitter">⋮⋮</div>
           <div class="profile" id="profile_panel" data-contact-id="${t.contact_id || ''}">
             <div id="contact_profile_new_block" class="sub" style="margin-bottom:12px; padding:8px 10px; border-radius:6px; background:#eef2ff; border:1px solid #e5e7eb; font-size:13px; display:none;">
-              <div style="font-weight:600; margin-bottom:4px;">Kundenprofil (neu, Reply-Stil)</div>
+              <div style="font-weight:600; margin-bottom:6px;">Kundenprofil (neu, Reply-Stil)</div>
+              <div class="kv"><span>Name</span><b>${escapeHtml(contactName)}</b></div>
+              <div class="kv"><span>E‑Mail</span><b>${escapeHtml(contactEmail)}</b></div>
+              <div class="kv"><span>E-Mails</span><b><a href="#" id="cpn_view_all_contact_emails" data-contact-id="${t.contact_id || ''}" style="color:#0369a1; text-decoration:underline;">${emailCount} Nachricht${emailCount !== 1 ? 'en' : ''} anzeigen</a></b></div>
+              <div class="kv"><span>Relevanz</span><b id="cpn_importance">–</b></div>
               <div class="kv"><span>Anrede</span><b id="cpn_salutation_text">–</b></div>
               <div class="kv"><span>Stil-Quelle</span><b id="cpn_style_source">–</b></div>
               <div class="kv"><span>Länge</span><b id="cpn_length">–</b></div>
@@ -3624,6 +3628,7 @@ function ensureInboxContextMenu(){
       const dbgWarningsEl = document.getElementById('compose_debug_warnings');
       const dbgHistoryEl = document.getElementById('compose_debug_history');
       const cpnBlock = document.getElementById('contact_profile_new_block');
+      const cpnImpEl = document.getElementById('cpn_importance');
       const cpnSalEl = document.getElementById('cpn_salutation_text');
       const cpnSourceEl = document.getElementById('cpn_style_source');
       const cpnLenEl = document.getElementById('cpn_length');
@@ -3716,6 +3721,17 @@ function ensureInboxContextMenu(){
         // Neue Kundenprofil-Kachel (oben im Kundenprofil) befüllen, falls vorhanden
         if(cpnBlock){
           cpnBlock.style.display = 'block';
+          if(cpnImpEl){
+            const impBadge = document.getElementById('contact_importance_badge');
+            const impLink = document.getElementById('contact_importance_link');
+            cpnImpEl.textContent = impBadge && impBadge.textContent ? impBadge.textContent : '–';
+            if (impLink) {
+              const cpnImpLink = document.createElement('a');
+              cpnImpLink.href = impLink.href;
+              cpnImpLink.textContent = 'Bearbeiten';
+              cpnImpEl.appendChild(cpnImpLink);
+            }
+          }
           if(cpnSalEl){
             const sm = (currentReplyPrefs.salutation_mode || '').toLowerCase();
             cpnSalEl.textContent = sm === 'du' ? 'Du' : (sm === 'sie' ? 'Sie' : '–');
