@@ -5356,11 +5356,12 @@ def api_contacts_quick_card(current_user, contact_id):
                 cached = row_cache['short_profile_json']
                 if isinstance(cached, dict) and cached:
                     cached_data = dict(cached)
-                    if 'importance_bucket' not in cached_data:
-                        try:
-                            # Kontakt-E-Mail laden
+
+                    # importance_bucket ggf. aus Rules ergänzen
+                    try:
+                        if 'importance_bucket' not in cached_data:
                             cursor.execute(
-                                "SELECT contact_email FROM contacts WHERE id=%s AND user_email=%s",
+                                "SELECT contact_email, reply_salutation_mode FROM contacts WHERE id=%s AND user_email=%s",
                                 (contact_id, user_email),
                             )
                             c_row = cursor.fetchone()
@@ -5377,11 +5378,22 @@ def api_contacts_quick_card(current_user, contact_id):
                                     row_imp = cursor.fetchone()
                                     if row_imp and row_imp.get('bucket'):
                                         cached_data['importance_bucket'] = row_imp['bucket']
-                        except Exception as _e_imp_cache:
-                            try:
-                                app.logger.warning(f"[QuickCard Cache] importance_bucket enrich failed: {_e_imp_cache}")
-                            except Exception:
-                                pass
+
+                        # Anrede aus reply_salutation_mode nachziehen, falls im Cache noch leer/"Unklar" ist
+                        sal_cached = (cached_data.get('salutation') or '').strip()
+                        reply_sal_mode = ''
+                        try:
+                            reply_sal_mode = (c_row.get('reply_salutation_mode') or '').strip().lower() if c_row else ''
+                        except Exception:
+                            reply_sal_mode = ''
+                        if (not sal_cached or sal_cached.lower() == 'unklar') and reply_sal_mode in ('du', 'sie'):
+                            cached_data['salutation'] = 'Du' if reply_sal_mode == 'du' else 'Sie'
+                    except Exception as _e_imp_cache:
+                        try:
+                            app.logger.warning(f"[QuickCard Cache] enrich failed: {_e_imp_cache}")
+                        except Exception:
+                            pass
+
                     cursor.close()
                     conn.close()
                     return jsonify({**cached_data, 'from_cache': True}), 200
