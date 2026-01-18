@@ -5049,18 +5049,30 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                 # Heuristik ist nur Zusatz-Info – bei Fehlern neutral bleiben
                 if not kpis.get('category'):
                     kpis['category'] = 'Unklar'
-            
-            return kpis
-        
-        # Calculate KPIs
-        kpis = calculate_kpis(emails, contact['contact_email'], user_email)
-        
-        # Save to database with KPIs (inkl. Kategorie)
+        # Falls ein Reply-Stil existiert, hat dessen Du/Sie-Entscheidung Vorrang vor der
+        # heuristisch berechneten KPI-Anrede. So bleiben Antwortstil, KPIs und Quick-Card
+        # konsistent.
+        try:
+            cursor.execute(
+                "SELECT reply_salutation_mode FROM contacts WHERE id=%s AND user_email=%s",
+                (contact_id, user_email),
+            )
+            rs_row = cursor.fetchone()
+            if rs_row:
+                rs_mode = (rs_row.get('reply_salutation_mode') or '').strip().lower()
+                if rs_mode in ('du', 'sie'):
+                    kpis['salutation'] = 'Du' if rs_mode == 'du' else 'Sie'
+        except Exception as _e_kpi_sal:
+            try:
+                app.logger.warning(f"[Generate Profile] Failed to align salutation with reply_salutation_mode: {_e_kpi_sal}")
+            except Exception:
+                pass
+
+        # KPIs (inkl. salutation) im Kontakt speichern
         cursor.execute(
             """
             UPDATE contacts 
-            SET profile_summary = %s, 
-                profile_updated_at = NOW(),
+            SET profile_summary = %s,
                 salutation = %s,
                 sentiment = %s,
                 email_length_preference = %s,
@@ -5069,23 +5081,25 @@ Sei präzise, geschäftlich und hilfreich. Max 220 Wörter."""
                 kpis_updated_at = NOW()
             WHERE id = %s
             """,
-            (summary,
-             kpis.get('salutation'),
-             kpis.get('sentiment'),
-             kpis.get('email_length_preference'),
-             kpis.get('communication_frequency'),
-             kpis.get('category'),
-             contact_id)
+            (
+                summary,
+                kpis.get('salutation'),
+                kpis.get('sentiment'),
+                kpis.get('email_length_preference'),
+                kpis.get('communication_frequency'),
+                kpis.get('category'),
+                contact_id,
+            ),
         )
         conn.commit()
         cursor.close()
         conn.close()
-        
+
         return jsonify({
             'ok': True,
             'summary': summary,
             'email_count': len(emails),
-            'kpis': kpis
+            'kpis': kpis,
         }), 200
 
     except Exception as e:
