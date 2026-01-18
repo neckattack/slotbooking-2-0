@@ -2430,13 +2430,18 @@ function ensureInboxContextMenu(){
           }
         } catch (_e_badge) {}
 
-        // Event handler for "View all contact emails" button
+        // Event handler for "View all contact emails" buttons (oben in Neukachel + unten im Kundenprofil)
         const viewAllBtn = document.getElementById('view_all_contact_emails');
-        if(viewAllBtn && t.contact_id){
-          viewAllBtn.onclick = () => {
+        const viewAllBtnNew = document.getElementById('cpn_view_all_contact_emails');
+        const wireViewAll = (btn) => {
+          if(!btn || !t.contact_id) return;
+          btn.onclick = (ev) => {
+            ev.preventDefault();
             openContactDetailModal(t.contact_id, contactName, contactEmail);
           };
-        }
+        };
+        wireViewAll(viewAllBtn);
+        wireViewAll(viewAllBtnNew);
 
         // Vertikalen Splitter zwischen Mailinhalt und Profil aktivieren
         try {
