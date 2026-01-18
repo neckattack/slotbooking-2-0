@@ -369,7 +369,16 @@
         </div>
           </div>
           <div class="compose-main">
-            <div class="row"><label>Empf.</label><input id="compose_to" placeholder="Empfänger" /></div>
+            <div class="row" style="position:relative; align-items:center;">
+              <label>Empf.</label>
+              <input id="compose_to" placeholder="Empfänger" />
+              <div style="position:absolute; right:0; top:50%; transform:translateY(-50%); font-size:11px; color:#6b7280; display:flex; align-items:center; gap:8px;">
+                <button id="compose_cc_toggle" type="button" style="border:0; background:transparent; padding:0; cursor:pointer; color:inherit;">Cc</button>
+                <button id="compose_bcc_toggle" type="button" style="border:0; background:transparent; padding:0; cursor:pointer; color:inherit;">Bcc</button>
+              </div>
+            </div>
+            <div class="row" id="compose_cc_row" style="display:none;"><label>Cc</label><input id="compose_cc" placeholder="Cc" /></div>
+            <div class="row" id="compose_bcc_row" style="display:none;"><label>Bcc</label><input id="compose_bcc" placeholder="Bcc" /></div>
             <div class="row"><label>Betreff</label><input id="compose_subject" placeholder="Betreff" /></div>
             <div style="margin:4px 0 6px; display:flex; align-items:center; justify-content:flex-end; gap:8px; font-size:11px; color:#6b7280;">
               <button id="btn_translate" type="button" class="inline-flex items-center justify-center" style="border:none; background:transparent; padding:2px; cursor:pointer; color:#4b5563;" title="Entwurf in Kontaktsprache übersetzen">
@@ -2306,19 +2315,34 @@ function ensureInboxContextMenu(){
           </div>
           <div class="detail-splitter" id="detail_splitter">⋮⋮</div>
           <div class="profile" id="profile_panel" data-contact-id="${t.contact_id || ''}">
-            <div id="contact_profile_new_block" class="sub" style="margin-bottom:12px; padding:8px 10px; border-radius:6px; background:#eef2ff; border:1px solid #e5e7eb; font-size:13px; display:none;">
-              <div style="font-weight:600; margin-bottom:6px;">Kundenprofil (neu, Reply-Stil)</div>
-              <div class="kv"><span>Name</span><b>${escapeHtml(contactName)}</b></div>
-              <div class="kv"><span>E‑Mail</span><b>${escapeHtml(contactEmail)}</b></div>
-              <div class="kv"><span>E-Mails</span><b><a href="#" id="cpn_view_all_contact_emails" data-contact-id="${t.contact_id || ''}" style="color:#0369a1; text-decoration:underline;">${emailCount} Nachricht${emailCount !== 1 ? 'en' : ''} anzeigen</a></b></div>
-              <div class="kv"><span>Relevanz</span><b id="cpn_importance">–</b></div>
-              <div class="kv"><span>Anrede</span><b id="cpn_salutation_text">–</b></div>
-              <div class="kv"><span>Stil-Quelle</span><b id="cpn_style_source">–</b></div>
-              <div class="kv"><span>Länge</span><b id="cpn_length">–</b></div>
-              <div class="kv"><span>Formality</span><b id="cpn_formality">–</b></div>
-              <div class="kv"><span>Persona</span><b id="cpn_persona">–</b></div>
-              <div class="kv"><span>Begrüßung</span><b id="cpn_greeting">–</b></div>
-              <div class="kv"><span>Abschluss</span><b id="cpn_closing">–</b></div>
+            <div id="contact_profile_new_block" class="sub" style="margin-bottom:12px; padding:12px 14px; border-radius:10px; background:#eef2ff; border:1px solid #e5e7eb; font-size:13px; display:none; box-shadow:0 8px 20px rgba(15,23,42,0.06);">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:8px;">
+                <div style="font-weight:600; font-size:13px; color:#111827;">Kundenprofil (neu, Reply-Stil)</div>
+                <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; padding:2px 8px; border-radius:999px; background:#e0e7ff; color:#3730a3;">Live aus Reply-Prefs</div>
+              </div>
+              <div style="display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1.2fr); gap:12px; align-items:flex-start;">
+                <div>
+                  <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#6b7280; margin-bottom:4px;">Kontakt</div>
+                  <div style="display:flex; flex-direction:column; gap:2px;">
+                    <div class="kv"><span style="color:#6b7280;">Name</span><b>${escapeHtml(contactName)}</b></div>
+                    <div class="kv"><span style="color:#6b7280;">E‑Mail</span><b>${escapeHtml(contactEmail)}</b></div>
+                    <div class="kv"><span style="color:#6b7280;">E-Mails</span><b><a href="#" id="cpn_view_all_contact_emails" data-contact-id="${t.contact_id || ''}" style="color:#0369a1; text-decoration:underline;">${emailCount} Nachricht${emailCount !== 1 ? 'en' : ''} anzeigen</a></b></div>
+                    <div class="kv"><span style="color:#6b7280;">Relevanz</span><b id="cpn_importance">–</b></div>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#6b7280; margin-bottom:4px;">Reply-Stil</div>
+                  <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); column-gap:10px; row-gap:2px;">
+                    <div class="kv"><span style="color:#6b7280;">Anrede</span><b id="cpn_salutation_text">–</b></div>
+                    <div class="kv"><span style="color:#6b7280;">Persona</span><b id="cpn_persona">–</b></div>
+                    <div class="kv"><span style="color:#6b7280;">Länge</span><b id="cpn_length">–</b></div>
+                    <div class="kv"><span style="color:#6b7280;">Formality</span><b id="cpn_formality">–</b></div>
+                    <div class="kv" style="grid-column:1 / -1;"><span style="color:#6b7280;">Stil-Quelle</span><b id="cpn_style_source">–</b></div>
+                    <div class="kv" style="grid-column:1 / -1;"><span style="color:#6b7280;">Begrüßung</span><b id="cpn_greeting">–</b></div>
+                    <div class="kv" style="grid-column:1 / -1;"><span style="color:#6b7280;">Abschluss</span><b id="cpn_closing">–</b></div>
+                  </div>
+                </div>
+              </div>
             </div>
             <h3 style="display:none;">Kundenprofil (alt)</h3>
             <div class="grid" style="display:none;">
@@ -4134,6 +4158,8 @@ function ensureInboxContextMenu(){
     async function sendDraft(){
       const status = document.getElementById('compose_status');
       const toInput = document.getElementById('compose_to');
+      const ccInput = document.getElementById('compose_cc');
+      const bccInput = document.getElementById('compose_bcc');
       const subjInput = document.getElementById('compose_subject');
       const editor = document.getElementById('compose_editor');
       const attachInput = document.getElementById('compose_attachments');
@@ -4143,6 +4169,8 @@ function ensureInboxContextMenu(){
       try{
         const formData = new FormData();
         formData.append('to', toInput.value);
+        if(ccInput && ccInput.value){ formData.append('cc', ccInput.value); }
+        if(bccInput && bccInput.value){ formData.append('bcc', bccInput.value); }
         formData.append('subject', subjInput.value || '');
         formData.append('html', editor.innerHTML || '');
         formData.append('account_id', String(currentAccountId));
@@ -4225,6 +4253,10 @@ function ensureInboxContextMenu(){
     const translateBtn = document.getElementById('btn_translate');
     const attachInput = document.getElementById('compose_attachments');
     const attachList = document.getElementById('compose_attachments_list');
+    const ccToggle = document.getElementById('compose_cc_toggle');
+    const bccToggle = document.getElementById('compose_bcc_toggle');
+    const ccRow = document.getElementById('compose_cc_row');
+    const bccRow = document.getElementById('compose_bcc_row');
     if(sendBtn){
       sendBtn.addEventListener('click', sendDraft);
     }
@@ -4238,6 +4270,18 @@ function ensureInboxContextMenu(){
           return;
         }
         attachList.textContent = files.map(f => `📎 ${f.name}`).join('  ·  ');
+      });
+    }
+    if(ccToggle && ccRow){
+      ccToggle.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ccRow.style.display = ccRow.style.display === 'none' ? 'flex' : 'none';
+      });
+    }
+    if(bccToggle && bccRow){
+      bccToggle.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        bccRow.style.display = bccRow.style.display === 'none' ? 'flex' : 'none';
       });
     }
     if(translateBtn){

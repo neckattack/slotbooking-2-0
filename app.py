@@ -2431,6 +2431,8 @@ def api_emails_send(current_user):
     if request.content_type and request.content_type.startswith('multipart/form-data'):
         form = request.form
         to_addr = form.get('to')
+        cc_addr = form.get('cc') or ''
+        bcc_addr = form.get('bcc') or ''
         subject = form.get('subject') or ''
         html = form.get('html') or ''
         account_id = form.get('account_id')
@@ -2439,6 +2441,8 @@ def api_emails_send(current_user):
     else:
         data = request.get_json(silent=True) or {}
         to_addr = data.get('to')
+        cc_addr = data.get('cc') or ''
+        bcc_addr = data.get('bcc') or ''
         subject = data.get('subject') or ''
         html = data.get('html') or ''
         account_id = data.get('account_id')
@@ -2533,10 +2537,14 @@ def api_emails_send(current_user):
         msg['Subject'] = subject
         msg['From'] = from_addr
         msg['To'] = to_addr
+        # CC/BCC als Header setzen (BCC nur in Empfängerliste, nicht zwingend im Header notwendig)
+        if cc_addr:
+            msg['Cc'] = cc_addr
         part = MIMEText(html, 'html', 'utf-8')
         msg.attach(part)
 
         # Anhänge anfügen
+        has_attachments_flag = 0
         for f in files:
             try:
                 payload = MIMEBase('application', 'octet-stream')
@@ -2544,14 +2552,30 @@ def api_emails_send(current_user):
                 encoders.encode_base64(payload)
                 payload.add_header('Content-Disposition', 'attachment', filename=f.filename)
                 msg.attach(payload)
+                has_attachments_flag = 1
             except Exception as e_att:
                 app.logger.warning(f"[Send] Attachment '{getattr(f, 'filename', '?')}' could not be attached: {e_att}")
+
+        # Gesamtempfängerliste (To + Cc + Bcc) bestimmen
+        def _split_addrs(raw: str):
+            if not raw:
+                return []
+            parts = []
+            for part in raw.split(','):
+                p = (part or '').strip()
+                if p:
+                    parts.append(p)
+            return parts
+
+        rcpt_to = _split_addrs(to_addr) + _split_addrs(cc_addr) + _split_addrs(bcc_addr)
+        if not rcpt_to:
+            rcpt_to = [to_addr]
 
         def _send_ssl():
             app.logger.debug(f"[Send] Trying SSL on {smtp_host}:{smtp_port}")
             with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=12) as server:
                 server.login(smtp_user, smtp_pass)
-                server.sendmail(smtp_user, [to_addr], msg.as_string())
+                server.sendmail(from_addr, rcpt_to, msg.as_string())
             app.logger.info(f"[Send] Email sent successfully via SSL")
 
         def _send_starttls():
@@ -2708,7 +2732,7 @@ def api_emails_send(current_user):
                     html[:100000] if html else '',
                     received_at,
                     'sent',
-                    0,
+                    has_attachments_flag,
                     1,
                     0,
                 ),
