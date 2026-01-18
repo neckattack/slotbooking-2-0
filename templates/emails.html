@@ -2282,7 +2282,10 @@ function ensureInboxContextMenu(){
         detail.innerHTML = `
           <div class="detail-scroll">
             <div style="position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 4px 8px 0; background:#f9fafb; border-bottom:1px solid #e5e7eb;">
-              <h2 style="margin:0;">${escapeHtml(t.subject || '')}</h2>
+              <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                <h2 style="margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(t.subject || '')}</h2>
+                ${t.has_attachments ? `<button id="detail_attachments_btn" title="Anhänge anzeigen" style="border:0; background:transparent; padding:4px; display:inline-flex; align-items:center; justify-content:center; border-radius:999px; cursor:pointer; color:#4b5563;">${window.getIconSvg ? window.getIconSvg('paperclip', { size: 16 }) : '📎'}</button>` : ''}
+              </div>
               <button id="toggle_compose_btn" title="Antwort öffnen" style="background:#111827; color:#ffffff; border:0; padding:8px 14px; border-radius:8px; font-size:13px; white-space:nowrap;">Antwort</button>
             </div>
             <div class="meta">Von: ${escapeHtml(t.from||'')} · An: ${escapeHtml(t.to||'')} · ${escapeHtml(t.date||'')}</div>
@@ -2373,6 +2376,16 @@ function ensureInboxContextMenu(){
             </div>
           </div>
         `;
+        // Temporärer Click-Handler für die Büroklammer im Header
+        try{
+          const attBtn = document.getElementById('detail_attachments_btn');
+          if(attBtn && t.has_attachments){
+            attBtn.addEventListener('click', (ev) => {
+              ev.stopPropagation();
+              alert('Diese E-Mail hat Anhänge. Das direkte Anzeigen/Herunterladen wird aktuell noch nicht unterstützt – die Dateien bleiben in deinem Mail-Client (z.B. Outlook).');
+            });
+          }
+        }catch(_e_att_btn){}
         // Kopfzeile im KONTAKT-PROFIL (Relevanz, Typ, Stimmung, Anrede) als Text setzen
         try {
           const importanceEl = document.getElementById('contact_importance_badge');
