@@ -2400,6 +2400,33 @@ function ensureInboxContextMenu(){
             </div>
           </div>
         `;
+        // Header-Büroklammer: ersten Anhang direkt herunterladen (einfacher Start)
+        try {
+          const attBtn = document.getElementById('detail_attachments_btn');
+          if (attBtn && t.has_attachments && t.id) {
+            attBtn.addEventListener('click', async (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              try {
+                const status = document.getElementById('compose_status');
+                if (status) status.textContent = 'Lade Anhang …';
+                const res = await fetch(`/api/emails/${t.id}/attachments`, { headers: getAuthHeaders() });
+                const data = await parseJsonSafe(res);
+                if (!data || !data.attachments || !data.attachments.length) {
+                  if (status) status.textContent = 'Keine herunterladbaren Anhänge gefunden.';
+                  return;
+                }
+                const first = data.attachments[0];
+                const url = `/api/emails/${t.id}/attachments/${first.idx}/download`;
+                window.open(url, '_blank');
+                if (status) status.textContent = '';
+              } catch (e) {
+                const status = document.getElementById('compose_status');
+                if (status) status.textContent = 'Fehler beim Laden des Anhangs.';
+              }
+            });
+          }
+        } catch(_e_attach_hdr) {}
         // Kopfzeile im KONTAKT-PROFIL (Relevanz, Typ, Stimmung, Anrede) als Text setzen
         try {
           const importanceEl = document.getElementById('contact_importance_badge');

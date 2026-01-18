@@ -3749,6 +3749,279 @@ def api_emails_get(current_user, email_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/emails/<int:email_id>/attachments', methods=['GET'])
+@require_auth
+def api_email_attachments_list(current_user, email_id):
+    """Listet Attachments einer E-Mail über IMAP auf.
+
+    Liefert eine schlanke Liste mit Index, Dateiname, Content-Type und Größe (Bytes),
+    basierend auf der Originalnachricht auf dem IMAP-Server.
+    """
+    import imaplib, email as _email_mod
+    from encryption_utils import decrypt_password
+
+    user_email = current_user.get('user_email')
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT e.id, e.message_id, e.folder, e.account_id, e.user_email,
+                   a.imap_host, a.imap_port, a.imap_user, a.imap_pass_encrypted, a.imap_security
+            FROM emails e
+            JOIN email_accounts a ON e.account_id = a.id
+            WHERE e.id = %s AND e.user_email = %s AND a.user_email = %s AND a.is_active = 1
+            """,
+            (email_id, user_email, user_email),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not row:
+            return jsonify({'error': 'Email oder Account nicht gefunden'}), 404
+
+        message_id = (row.get('message_id') or '').strip()
+        if not message_id:
+            return jsonify({'error': 'Message-ID fehlt; Attachments können nicht geladen werden'}), 400
+
+        host = row.get('imap_host')
+        port = int(row.get('imap_port') or 993)
+        imap_user = row.get('imap_user')
+        imap_pass = decrypt_password(row.get('imap_pass_encrypted')) if row.get('imap_pass_encrypted') else ''
+        imap_security = (row.get('imap_security') or 'ssl').lower()
+
+        if not (host and imap_user and imap_pass):
+            return jsonify({'error': 'IMAP-Konfiguration unvollständig'}), 400
+
+        folder_db = (row.get('folder') or 'inbox').lower()
+        folder_imap = 'INBOX'
+        fu = folder_db.upper()
+        if 'SENT' in fu:
+            folder_imap = 'Sent'
+        elif 'ARCHIVE' in fu or 'ARCHIV' in fu:
+            folder_imap = 'Archive'
+        elif 'SPAM' in fu or 'JUNK' in fu:
+            folder_imap = 'Junk'
+        else:
+            folder_imap = 'INBOX' if folder_db in ('inbox', '', None) else folder_db
+
+        # Mit IMAP verbinden und Nachricht per Message-ID suchen
+        if imap_security == 'starttls':
+            M = imaplib.IMAP4_SSL(host, port, timeout=15)
+        else:
+            M = imaplib.IMAP4_SSL(host, port, timeout=15)
+
+        try:
+            M.login(imap_user, imap_pass)
+            try:
+                try:
+                    sel_typ, _ = M.select(f'"{folder_imap}"')
+                except imaplib.IMAP4.error:
+                    sel_typ, _ = M.select(folder_imap)
+            except imaplib.IMAP4.error as e_sel:
+                M.close()
+                M.logout()
+                return jsonify({'error': f'IMAP SELECT fehlgeschlagen: {e_sel}'}), 500
+
+            if sel_typ != 'OK':
+                M.close()
+                M.logout()
+                return jsonify({'error': f'IMAP SELECT Status {sel_typ}'}), 500
+
+            # Suche nach exakter Message-ID im Header
+            search_crit = f'HEADER Message-ID "{message_id}"'
+            typ, data = M.search(None, search_crit)
+            if typ != 'OK' or not data or not data[0]:
+                M.close()
+                M.logout()
+                return jsonify({'error': 'Nachricht auf IMAP-Server nicht gefunden'}), 404
+
+            uids = data[0].split()
+            uid = uids[0]
+            typ, msg_data = M.fetch(uid, '(BODY.PEEK[])')
+            if typ != 'OK' or not msg_data:
+                M.close()
+                M.logout()
+                return jsonify({'error': 'IMAP FETCH fehlgeschlagen'}), 500
+
+            tup = msg_data[0]
+            raw_email = tup[1] if isinstance(tup, tuple) else tup
+            msg = _email_mod.message_from_bytes(raw_email)
+
+            attachments = []
+            idx = 0
+            for part in msg.walk():
+                filename = part.get_filename()
+                if not filename:
+                    continue
+                try:
+                    payload = part.get_payload(decode=True) or b''
+                    size_bytes = len(payload)
+                except Exception:
+                    payload = b''
+                    size_bytes = 0
+                attachments.append({
+                    'idx': idx,
+                    'filename': filename,
+                    'content_type': part.get_content_type() or 'application/octet-stream',
+                    'size': size_bytes,
+                })
+                idx += 1
+
+            M.close()
+            M.logout()
+
+            return jsonify({'__ok': True, 'attachments': attachments}), 200
+
+    except Exception as e:
+        try:
+            M.close()
+            M.logout()
+        except Exception:
+            pass
+        app.logger.error(f"[Attachments List] Error for email_id={email_id}: {e}")
+        return jsonify({'error': 'Fehler beim Laden der Attachments'}), 500
+
+
+@app.route('/api/emails/<int:email_id>/attachments/<int:idx>/download', methods=['GET'])
+@require_auth
+def api_email_attachment_download(current_user, email_id, idx):
+    """Lädt einen konkreten Anhang einer E-Mail über IMAP herunter."""
+    import imaplib, email as _email_mod
+    from flask import make_response
+    from encryption_utils import decrypt_password
+
+    user_email = current_user.get('user_email')
+
+    try:
+        conn = get_settings_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT e.id, e.message_id, e.folder, e.account_id, e.user_email,
+                   a.imap_host, a.imap_port, a.imap_user, a.imap_pass_encrypted, a.imap_security
+            FROM emails e
+            JOIN email_accounts a ON e.account_id = a.id
+            WHERE e.id = %s AND e.user_email = %s AND a.user_email = %s AND a.is_active = 1
+            """,
+            (email_id, user_email, user_email),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not row:
+            return jsonify({'error': 'Email oder Account nicht gefunden'}), 404
+
+        message_id = (row.get('message_id') or '').strip()
+        if not message_id:
+            return jsonify({'error': 'Message-ID fehlt; Attachment kann nicht geladen werden'}), 400
+
+        host = row.get('imap_host')
+        port = int(row.get('imap_port') or 993)
+        imap_user = row.get('imap_user')
+        imap_pass = decrypt_password(row.get('imap_pass_encrypted')) if row.get('imap_pass_encrypted') else ''
+        imap_security = (row.get('imap_security') or 'ssl').lower()
+
+        if not (host and imap_user and imap_pass):
+            return jsonify({'error': 'IMAP-Konfiguration unvollständig'}), 400
+
+        folder_db = (row.get('folder') or 'inbox').lower()
+        folder_imap = 'INBOX'
+        fu = folder_db.upper()
+        if 'SENT' in fu:
+            folder_imap = 'Sent'
+        elif 'ARCHIVE' in fu or 'ARCHIV' in fu:
+            folder_imap = 'Archive'
+        elif 'SPAM' in fu or 'JUNK' in fu:
+            folder_imap = 'Junk'
+        else:
+            folder_imap = 'INBOX' if folder_db in ('inbox', '', None) else folder_db
+
+        if imap_security == 'starttls':
+            M = imaplib.IMAP4_SSL(host, port, timeout=15)
+        else:
+            M = imaplib.IMAP4_SSL(host, port, timeout=15)
+
+        try:
+            M.login(imap_user, imap_pass)
+            try:
+                try:
+                    sel_typ, _ = M.select(f'"{folder_imap}"')
+                except imaplib.IMAP4.error:
+                    sel_typ, _ = M.select(folder_imap)
+            except imaplib.IMAP4.error as e_sel:
+                M.close()
+                M.logout()
+                return jsonify({'error': f'IMAP SELECT fehlgeschlagen: {e_sel}'}), 500
+
+            if sel_typ != 'OK':
+                M.close()
+                M.logout()
+                return jsonify({'error': f'IMAP SELECT Status {sel_typ}'}), 500
+
+            search_crit = f'HEADER Message-ID "{message_id}"'
+            typ, data = M.search(None, search_crit)
+            if typ != 'OK' or not data or not data[0]:
+                M.close()
+                M.logout()
+                return jsonify({'error': 'Nachricht auf IMAP-Server nicht gefunden'}), 404
+
+            uids = data[0].split()
+            uid = uids[0]
+            typ, msg_data = M.fetch(uid, '(BODY.PEEK[])')
+            if typ != 'OK' or not msg_data:
+                M.close()
+                M.logout()
+                return jsonify({'error': 'IMAP FETCH fehlgeschlagen'}), 500
+
+            tup = msg_data[0]
+            raw_email = tup[1] if isinstance(tup, tuple) else tup
+            msg = _email_mod.message_from_bytes(raw_email)
+
+            # Gewünschten Attachment-Part finden
+            current_idx = 0
+            target_part = None
+            target_filename = None
+            for part in msg.walk():
+                filename = part.get_filename()
+                if not filename:
+                    continue
+                if current_idx == idx:
+                    target_part = part
+                    target_filename = filename
+                    break
+                current_idx += 1
+
+            if target_part is None:
+                M.close()
+                M.logout()
+                return jsonify({'error': 'Attachment-Index nicht gefunden'}), 404
+
+            payload = target_part.get_payload(decode=True) or b''
+            content_type = target_part.get_content_type() or 'application/octet-stream'
+
+            M.close()
+            M.logout()
+
+            resp = make_response(payload)
+            resp.headers['Content-Type'] = content_type
+            # Content-Disposition mit einfachem Filename, Sonderzeichen werden vom Browser gehandhabt
+            resp.headers['Content-Disposition'] = f'attachment; filename="{target_filename}"'
+            return resp
+
+    except Exception as e:
+        try:
+            M.close()
+            M.logout()
+        except Exception:
+            pass
+        app.logger.error(f"[Attachment Download] Error for email_id={email_id}, idx={idx}: {e}")
+        return jsonify({'error': 'Fehler beim Herunterladen des Attachments'}), 500
+
+
 @app.route('/api/contacts/list', methods=['GET'])
 @require_auth
 def api_contacts_list(current_user):
