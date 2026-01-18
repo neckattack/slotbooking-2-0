@@ -4193,7 +4193,10 @@ def api_contacts_reply_prefs_debug(current_user, contact_id):
                    reply_formality_level,
                    reply_salutation_mode,
                    reply_persona_mode,
-                   reply_style_source
+                   reply_style_source,
+                   language_code,
+                   language_confidence,
+                   language_source
             FROM contacts
             WHERE id=%s AND user_email=%s
             """,
@@ -4608,7 +4611,10 @@ def api_contacts_reply_prefs_get(current_user, contact_id):
                        reply_formality_level,
                        reply_salutation_mode,
                        reply_persona_mode,
-                       reply_style_source
+                       reply_style_source,
+                       language_code,
+                       language_confidence,
+                       language_source
                 FROM contacts
                 WHERE id=%s AND user_email=%s
                 """,
@@ -4618,6 +4624,26 @@ def api_contacts_reply_prefs_get(current_user, contact_id):
 
         cursor.close()
         conn.close()
+
+        # Sprache aus dem Kontakt für die Preferences ableiten
+        lang_code = ''
+        lang_conf = None
+        lang_source = ''
+        lang_label = None
+        try:
+            if row.get('language_code'):
+                lang_code = (row.get('language_code') or '').lower()
+            lang_conf = row.get('language_confidence')
+            lang_source = row.get('language_source') or ''
+            if lang_code:
+                if lang_code.startswith('de'):
+                    lang_label = 'Deutsch'
+                elif lang_code.startswith('en'):
+                    lang_label = 'Englisch'
+                else:
+                    lang_label = lang_code
+        except Exception:
+            pass
 
         prefs = {
             'contact_id': row['id'],
@@ -4630,6 +4656,10 @@ def api_contacts_reply_prefs_get(current_user, contact_id):
             'salutation_mode': row.get('reply_salutation_mode'),
             'persona_mode': row.get('reply_persona_mode'),
             'style_source': row.get('reply_style_source'),
+            'language_code': lang_code,
+            'language_confidence': lang_conf,
+            'language_source': lang_source,
+            'language_label': lang_label,
         }
 
         return jsonify({'ok': True, 'preferences': prefs}), 200

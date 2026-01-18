@@ -2326,6 +2326,7 @@ function ensureInboxContextMenu(){
                     <div class="kv"><span style="color:#6b7280;">E‑Mail</span><b>${escapeHtml(contactEmail)}</b></div>
                     <div class="kv"><span style="color:#6b7280;">E-Mails</span><b><a href="#" id="cpn_view_all_contact_emails" data-contact-id="${t.contact_id || ''}" style="color:#0369a1; text-decoration:underline;">${emailCount} Nachricht${emailCount !== 1 ? 'en' : ''} anzeigen</a></b></div>
                     <div class="kv"><span style="color:#6b7280;">Relevanz</span><b id="cpn_importance">–</b></div>
+                    <div class="kv"><span style="color:#6b7280;">Sprache</span><b id="cpn_language">–</b></div>
                   </div>
                 </div>
                 <div>
@@ -3813,7 +3814,9 @@ function ensureInboxContextMenu(){
           formality_level: typeof prefs.formality_level === 'number' ? prefs.formality_level : null,
           salutation_mode: prefs.salutation_mode || null,
           persona_mode: prefs.persona_mode || null,
-          style_source: prefs.style_source || 'default'
+          style_source: prefs.style_source || 'default',
+          language_code: (prefs.language_code || '').toString().trim().toLowerCase() || null,
+          language_label: (prefs.language_label || '').toString().trim() || null
         };
 
         // Slider-Werte setzen
@@ -3836,6 +3839,39 @@ function ensureInboxContextMenu(){
         cmpSelectedPers = (currentReplyPrefs.persona_mode || '').toLowerCase() || null;
         cmpSetToggleActive(persIch, cmpSelectedPers === 'ich');
         cmpSetToggleActive(persWir, cmpSelectedPers === 'wir');
+
+        // Zusammenfassendes Label inkl. Sprache setzen
+        if(labelEl){
+          const parts = [];
+          // Bestehende Stilbeschreibung
+          try{
+            const len = currentReplyPrefs.length_level;
+            const form = currentReplyPrefs.formality_level;
+            if(typeof len === 'number'){
+              parts.push('L e4nge ' + cmpLabelForLength(len));
+            }
+            if(typeof form === 'number'){
+              parts.push('Formalit e4t ' + cmpLabelForFormality(form));
+            }
+          }catch(_e_lenform){}
+
+          // Sprache aus Preferences anh e4ngen
+          try{
+            const langLabel = currentReplyPrefs.language_label;
+            const langCode = currentReplyPrefs.language_code;
+            if(langLabel || langCode){
+              parts.push('Sprache ' + (langLabel || langCode));
+            }
+          }catch(_e_lang_lbl){}
+
+          if(parts.length){
+            labelEl.textContent = parts.join('  b7 ');
+            labelEl.style.display = 'block';
+          } else {
+            labelEl.textContent = '';
+            labelEl.style.display = 'none';
+          }
+        }
 
         if(labelEl){
           labelEl.textContent = formatReplyPrefsLabel(currentReplyPrefs, emailSummary && emailSummary.contact_name, emailSummary && emailSummary.from);
