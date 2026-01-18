@@ -1476,9 +1476,10 @@ def api_emails_agent_compose(current_user):
                         "- wie lang unsere Antworten typischerweise sind (length_level 1-5)",
                         "- wie formell der Stil ist (formality_level 1-5)",
                         "- einen typischen Begruessungssatz (greeting_template)",
-                        "- einen typischen Abschlusssatz (closing_template).",
+                        "- einen typischen Abschlusssatz (closing_template)",
+                        "- in welcher Sprache der Kontakt und unsere Antworten ueberwiegend sind (language_code, z.B. 'de' oder 'en').",
                         "Gib NUR ein JSON-Objekt ohne Erklaertext zurueck, z.B.:",
-                        '{"salutation_mode":"du","persona_mode":"ich","length_level":3,"formality_level":3,"greeting_template":"Hallo <Name>,","closing_template":"Viele Gruesse"}',
+                        '{"salutation_mode":"du","persona_mode":"ich","length_level":3,"formality_level":3,"greeting_template":"Hallo <Name>,","closing_template":"Viele Gruesse","language_code":"de"}',
                         "",
                         "Konversation (neueste zuerst):",
                     ]
@@ -4503,6 +4504,7 @@ def api_contacts_reply_prefs_get(current_user, contact_id):
                 persona_mode = None
                 greeting_template = None
                 closing_template = None
+                language_code = None
 
                 try:
                     contact_hint = contact_email or 'Kontakt'
@@ -4559,6 +4561,16 @@ def api_contacts_reply_prefs_get(current_user, contact_id):
                             ct = (parsed.get('closing_template') or '').strip() or None
                             greeting_template = gt
                             closing_template = ct
+                            lc = (parsed.get('language_code') or '').strip().lower() or None
+                            if lc:
+                                # Nur sehr einfache Normalisierung auf kurze Sprachcodes
+                                if lc.startswith('de'):
+                                    language_code = 'de'
+                                elif lc.startswith('en'):
+                                    language_code = 'en'
+                                else:
+                                    # Andere Codes (fr, es, ...) unveraendert uebernehmen
+                                    language_code = lc[:8]
 
                 except Exception as e_llm:
                     try:
@@ -4567,7 +4579,7 @@ def api_contacts_reply_prefs_get(current_user, contact_id):
                         pass
 
                 # Wenn der LLM nichts geliefert hat, nicht schreiben
-                if any(v is not None for v in [length_level, formality_level, salutation_mode, persona_mode, greeting_template, closing_template]):
+                if any(v is not None for v in [length_level, formality_level, salutation_mode, persona_mode, greeting_template, closing_template, language_code]):
                     cur_u = conn.cursor()
                     cur_u.execute(
                         """
@@ -4582,7 +4594,9 @@ def api_contacts_reply_prefs_get(current_user, contact_id):
                                 WHEN reply_style_source IS NULL OR reply_style_source = '' OR reply_style_source = 'default'
                                 THEN 'history_llm'
                                 ELSE reply_style_source
-                            END
+                            END,
+                            language_code = COALESCE(language_code, %s),
+                            language_source = COALESCE(language_source, %s)
                         WHERE id=%s AND user_email=%s
                         """,
                         (
@@ -4592,6 +4606,8 @@ def api_contacts_reply_prefs_get(current_user, contact_id):
                             persona_mode,
                             greeting_template,
                             closing_template,
+                            language_code,
+                            'history_llm',
                             contact_id,
                             user_email,
                         ),
