@@ -1554,8 +1554,23 @@ def api_emails_agent_compose(current_user):
                         salutation_mode = salutation_mode or 'du'
                         formality_level = formality_level or (2 if du_hits - sie_hits < 3 else 1)
                     else:
+                        # Unentschieden im Deutschen: neutraler Stil, Anrede bleibt offen.
                         salutation_mode = salutation_mode or None
                         formality_level = formality_level or 3
+
+                    # Zusätzliche Heuristik: rein englische Konversationen kennen kein "Sie".
+                    # Wenn der Text klar englisch wirkt und keine starken "Sie"-Signale
+                    # vorhanden sind, setzen wir standardmäßig Du.
+                    if salutation_mode is None:
+                        english_keywords = [
+                            "hi ", "hello", "dear ", "kind regards",
+                            "best regards", "thank you", "thanks",
+                        ]
+                        eng_hits = sum(
+                            1 for kw in english_keywords if kw in all_text
+                        )
+                        if eng_hits >= 2 and sie_hits == 0:
+                            salutation_mode = 'du'
 
                 if persona_mode is None:
                     # Einfache Heuristik: wenn in unseren ausgehenden Mails haeufig "wir" vorkommt,
@@ -1581,16 +1596,22 @@ def api_emails_agent_compose(current_user):
                         reply_persona_mode = %s,
                         reply_greeting_template = COALESCE(reply_greeting_template, %s),
                         reply_closing_template = COALESCE(reply_closing_template, %s),
-                        reply_style_source = %s
+                        reply_style_source = %s,
+                        salutation = COALESCE(salutation, %s)
                     WHERE id = %s AND user_email = %s
                     """,
                     (
                         length_level,
                         formality_level,
                         salutation_mode,
+                        persona_mode,
                         greeting_template,
                         closing_template,
                         'history_llm' if greeting_template or closing_template else 'history',
+                        # Menschlich lesbare Anrede nur für Du/Sie setzen, falls noch leer
+                        'Du' if salutation_mode == 'du' else (
+                            'Sie' if salutation_mode == 'sie' else None
+                        ),
                         contact_id,
                         user_email,
                     ),
@@ -5713,6 +5734,38 @@ def api_contacts_quick_card(current_user, contact_id):
             }
             lang_label = mapping.get(lang_code, lang_code)
 
+        # Einfache Heuristik für Dringlichkeit und Wichtigkeit
+        # Dringlichkeit: basiert auf offenen Themen und deren Alter
+        urgency_level = 1
+        if open_topics:
+            # Jüngstes offenes Thema
+            lm = open_topics[0].get('last_mentioned_at') or open_topics[0].get('created_at')
+            days = None
+            if lm:
+                try:
+                    days = (_dt.datetime.utcnow() - lm.replace(tzinfo=None)).days
+                except Exception:
+                    days = None
+            if days is None:
+                urgency_level = 3
+            elif days <= 1:
+                urgency_level = 5
+            elif days <= 3:
+                urgency_level = 4
+            elif days <= 7:
+                urgency_level = 3
+            else:
+                urgency_level = 2
+
+        # Wichtigkeit: kombiniert Importance-Bucket und Kontakt-Intensität
+        importance_level = 3
+        if importance_bucket == 'focus':
+            importance_level = 5
+        elif importance_bucket == 'unwichtig':
+            importance_level = 2
+        else:
+            importance_level = 3
+
         payload = {
             'contact_id': contact_id,
             'name': display_name,
@@ -5726,6 +5779,8 @@ def api_contacts_quick_card(current_user, contact_id):
             'timeline_topics': timeline_topics,
             'profile_text_raw': quick_profile_text,
             'importance_bucket': importance_bucket,
+            'urgency_level': urgency_level,
+            'importance_level': importance_level,
             'language_code': lang_code,
             'language_confidence': lang_conf,
             'language_source': lang_source,
