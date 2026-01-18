@@ -5383,8 +5383,7 @@ def api_contacts_quick_card(current_user, contact_id):
         cursor.execute(
             """
             SELECT id, name, contact_email, category, salutation, sentiment, profile_summary_full,
-                   language_code, language_confidence, language_source,
-                   urgency_level, importance_level
+                   language_code, language_confidence, language_source
             FROM contacts
             WHERE id = %s AND user_email = %s
             """,
@@ -5731,8 +5730,6 @@ def api_contacts_quick_card(current_user, contact_id):
             'language_confidence': lang_conf,
             'language_source': lang_source,
             'language_label': lang_label,
-            'urgency_level': contact.get('urgency_level'),
-            'importance_level': contact.get('importance_level'),
         }
 
         # Kurzprofil in contact_profile_cache.short_profile_json cachen (best effort)
@@ -7179,16 +7176,6 @@ def api_auth_login():
             }
         }), 200
     except Exception as e:
-        app.logger.error(f"[Login] error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/auth/me', methods=['GET'])
-@require_auth
-def api_auth_me(current_user):
-    """Get current user info from JWT token. Requires Authorization header."""
-    try:
-        conn = get_users_db_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             "SELECT id, email, role, first_name, last_name, active, created_at, last_login "
