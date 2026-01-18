@@ -2174,8 +2174,6 @@ function ensureInboxContextMenu(){
       rowEl.classList.add('active');
       currentUid = uid;
 
-      // Automatisches "Gelesen nach 2s" ist vorerst deaktiviert, um zu vermeiden,
-      // dass Mails ohne explizite User-Aktion als gelesen markiert werden.
       if(autoReadTimer){
         clearTimeout(autoReadTimer);
         autoReadTimer = null;
@@ -3614,7 +3612,43 @@ function ensureInboxContextMenu(){
           clearTimeout(autoReadTimer);
           autoReadTimer = null;
         }
+
+        // Auto-Read: Mail nach 2 Sekunden Ansicht automatisch als gelesen markieren
+        if(autoReadTimer){
+          clearTimeout(autoReadTimer);
+          autoReadTimer = null;
+        }
         autoReadUid = uid;
+        try {
+          // Nur ungelesene Mails automatisch markieren
+          if(!t.is_read){
+            autoReadTimer = setTimeout(async () => {
+              try{
+                // Sicherstellen, dass der User immer noch auf derselben Mail ist
+                if(autoReadUid !== uid){
+                  return;
+                }
+                await fetch('/api/emails/seen', {
+                  method: 'POST',
+                  headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ uid: uid, seen: true })
+                });
+                // Lokale Liste aktualisieren
+                try{
+                  if(Array.isArray(inboxEmails)){
+                    const item = inboxEmails.find(e => e.uid === uid);
+                    if(item){ item.is_read = 1; }
+                  }
+                }catch(_e_upd_local){}
+                // Aktuelle Zeilenklasse aktualisieren
+                try{
+                  const row = document.querySelector(`.item[data-uid="${uid}"]`);
+                  if(row){ row.classList.remove('unseen'); }
+                }catch(_e_row){}
+              }catch(_e_seen_auto){}
+            }, 2000);
+          }
+        } catch(_e_auto_init){}
       }catch(e){
         detail.innerHTML = `<div class="sub">Fehler: ${e}</div>`;
       }
